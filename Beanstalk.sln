@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Console", "Console\Console.csproj", "{A3A53983-54FA-48B9-9001-AF73D87E7B0B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Beanstalk", "Beanstalk\Beanstalk.csproj", "{A6686CAE-4C28-4757-A5D3-9F3FBF5DC112}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A3A53983-54FA-48B9-9001-AF73D87E7B0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3A53983-54FA-48B9-9001-AF73D87E7B0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3A53983-54FA-48B9-9001-AF73D87E7B0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3A53983-54FA-48B9-9001-AF73D87E7B0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6686CAE-4C28-4757-A5D3-9F3FBF5DC112}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6686CAE-4C28-4757-A5D3-9F3FBF5DC112}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6686CAE-4C28-4757-A5D3-9F3FBF5DC112}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6686CAE-4C28-4757-A5D3-9F3FBF5DC112}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
