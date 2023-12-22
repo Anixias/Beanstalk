@@ -42,6 +42,11 @@ public sealed class TokenType
 		Operators.Add(text, type);
 		return type;
 	}
+
+	public static readonly TokenType EndOfFile = new("eof")
+	{
+		IsInvalid = true
+	};
 	
 	public static readonly TokenType Identifier = new("identifier")
 	{
@@ -80,7 +85,8 @@ public sealed class TokenType
 
 	public static readonly TokenType InvalidNumberLiteral = new("invalid number literal")
 	{
-		IsLiteral = true
+		IsLiteral = true,
+		IsInvalid = true
 	};
 
 	public static readonly TokenType StringLiteral = new("string literal")
@@ -93,8 +99,13 @@ public sealed class TokenType
 		IsLiteral = true
 	};
 	
+	public static readonly TokenType KeywordImport = CreateKeyword("import");
+	public static readonly TokenType KeywordModule = CreateKeyword("module");
 	public static readonly TokenType KeywordEntry = CreateKeyword("entry");
+	public static readonly TokenType KeywordLet = CreateKeyword("let");
+	public static readonly TokenType KeywordVar = CreateKeyword("var");
 
+	public static readonly TokenType OpColon = CreateOperator(":");
 	public static readonly TokenType OpSemicolon = CreateOperator(";");
 	public static readonly TokenType OpLeftParen = CreateOperator("(");
 	public static readonly TokenType OpRightParen = CreateOperator(")");
@@ -109,6 +120,7 @@ public sealed class TokenType
 	public static readonly TokenType OpEquals = CreateOperator("=");
 	public static readonly TokenType OpPlus = CreateOperator("+");
 	public static readonly TokenType OpMinus = CreateOperator("-");
+	public static readonly TokenType OpStarStar = CreateOperator("**");
 	public static readonly TokenType OpStar = CreateOperator("*");
 	public static readonly TokenType OpDivide = CreateOperator("/");
 	public static readonly TokenType OpQuestion = CreateOperator("?");

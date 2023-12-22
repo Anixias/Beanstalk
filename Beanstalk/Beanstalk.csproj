@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Libraries\Fixed Point Math\" />
+      <PackageReference Include="LLVMSharp" Version="16.0.0" />
     </ItemGroup>
 
 </Project>

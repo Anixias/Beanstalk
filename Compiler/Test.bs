@@ -1,0 +1,20 @@
+import bs.collections.List
+import bs.*
+
+module test
+
+module a
+{
+    module b
+    {
+        module c
+        {
+            entry()
+            {
+                let pi = 3.14159265358979323p
+                var x = 2.0p ** pi
+                x += 3.0p
+            }
+        }
+    }
+}

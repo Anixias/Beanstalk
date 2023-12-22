@@ -6,4 +6,5 @@ public interface IBuffer
 	int Length { get; }
 	string GetText();
 	string GetText(TextRange range);
+    (int, int) GetLineColumn(int position);
 }

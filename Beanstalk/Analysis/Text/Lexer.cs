@@ -4,10 +4,10 @@ using FixedPointMath;
 
 namespace Beanstalk.Analysis.Text;
 
-public sealed class Lexer(IBuffer source) : ILexer
+public class Lexer(IBuffer source) : ILexer
 {
 	private IBuffer Source { get; } = source;
-
+	
 	public ScanResult? ScanToken(int position)
 	{
 		if (position >= Source.Length)
@@ -111,7 +111,7 @@ public sealed class Lexer(IBuffer source) : ILexer
 
 	private ScanResult ScanNumber(int position)
 	{
-		// 123, 123.456, 123.456f, 123.456x, 123u, 8i64, 0xAF80, 0b10110011, 2e3, 2e-3, 3.14e+3f
+		// 123, 123.456, 123.456s, 123.456x, 123u, 8i64, 0xAF80, 0b10110011, 2e3, 2e-3, 3.14e+3f
 		var end = position;
 
 		if (position <= Source.Length - 2)
@@ -227,6 +227,11 @@ public sealed class Lexer(IBuffer source) : ILexer
 						case 'X':
 							end++;
 							value = Fixed.TryParse(valueString, out var fixedValue) ? fixedValue : null;
+							break;
+						case 'p':
+						case 'P':
+							end++;
+							value = Precise.TryParse(valueString, out var preciseValue) ? preciseValue : null;
 							break;
 						default:
 							value = double.TryParse(valueString, out var defaultValue) ? defaultValue : null;
@@ -379,6 +384,11 @@ public sealed class Lexer(IBuffer source) : ILexer
 						case 'X':
 							end++;
 							value = Fixed.TryParse(valueString, out var fixedValue) ? fixedValue : null;
+							break;
+						case 'p':
+						case 'P':
+							end++;
+							value = Precise.TryParse(valueString, out var preciseValue) ? preciseValue : null;
 							break;
 						default:
 							if (int.TryParse(valueString, out var intValue))
