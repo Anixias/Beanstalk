@@ -3,30 +3,20 @@ using System.Runtime.InteropServices;
 
 namespace FixedPointMath;
 
-public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
+public readonly partial struct Fixed(long rawValue) : IEquatable<Fixed>, IComparable<Fixed>
 {
 	[StructLayout(LayoutKind.Explicit)]
-	private readonly struct LongULong
+	private readonly struct ToUnsigned(long sourceValue)
 	{
-		[FieldOffset(0)] public readonly long sourceValue;
-		[FieldOffset(0)] public readonly ulong castedValue = default!;
-
-		public LongULong(long sourceValue)
-		{
-			this.sourceValue = sourceValue;
-		}
+		[FieldOffset(0)] public readonly long sourceValue = sourceValue;
+		[FieldOffset(0)] public readonly ulong castedValue;
 	}
 	
 	[StructLayout(LayoutKind.Explicit)]
-	private readonly struct ULongLong
+	private readonly struct ToSigned(ulong sourceValue)
 	{
-		[FieldOffset(0)] public readonly ulong sourceValue;
-		[FieldOffset(0)] public readonly long castedValue = default!;
-
-		public ULongLong(ulong sourceValue)
-		{
-			this.sourceValue = sourceValue;
-		}
+		[FieldOffset(0)] public readonly ulong sourceValue = sourceValue;
+		[FieldOffset(0)] public readonly long castedValue;
 	}
 	
 	public static readonly Fixed Epsilon = new(1L);
@@ -59,16 +49,10 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 	private const long RawLog2Min = -0x2000000000L;
 	private const int LutSize = (int)(RawPiOver2 >> 15);
 
-	public long RawValue { get; }
+	public long RawValue { get; } = rawValue;
 
-	public Fixed(long rawValue)
+	public Fixed(int value) : this(value * RawOne)
 	{
-		RawValue = rawValue;
-	}
-
-	public Fixed(int value)
-	{
-		RawValue = value * RawOne;
 	}
 
 	public static Fixed Parse(string number)
@@ -176,8 +160,8 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 
 	public static Fixed Floor(Fixed value)
 	{
-		var rawValueCast = new LongULong(value.RawValue);
-		var flooredValue = new ULongLong(rawValueCast.castedValue & 0xFFFF_FFFF_0000_0000uL);
+		var rawValueCast = new ToUnsigned(value.RawValue);
+		var flooredValue = new ToSigned(rawValueCast.castedValue & 0xFFFF_FFFF_0000_0000uL);
 		return new Fixed(flooredValue.castedValue);
 	}
 
@@ -280,15 +264,15 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 		var rightLow = rightRaw & 0x0000_0000_FFFF_FFFFL;
 		var rightHigh = rightRaw >> DecimalPlaces;
 
-		var leftLowCast = new LongULong(leftLow);
-		var rightLowCast = new LongULong(rightLow);
+		var leftLowCast = new ToUnsigned(leftLow);
+		var rightLowCast = new ToUnsigned(rightLow);
 		
 		var lowLow = leftLowCast.castedValue * rightLowCast.castedValue;
 		var lowHigh = leftLow * rightHigh;
 		var highLow = leftHigh * rightLow;
 		var highHigh = leftHigh * rightHigh;
 
-		var lowResult = new ULongLong(lowLow >> DecimalPlaces).castedValue;
+		var lowResult = new ToSigned(lowLow >> DecimalPlaces).castedValue;
 		var highResult = highHigh << DecimalPlaces;
 
 		var overflow = false;
@@ -339,13 +323,13 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 	{
 		var result = 0;
 		
-		while ((value & 0xF000_0000_0000_0000) == 0)
+		while ((value & 0xF000_0000_0000_0000uL) == 0)
 		{
 			result += 4;
 			value <<= 4;
 		}
 		
-		while ((value & 0x8000_0000_0000_0000) == 0)
+		while ((value & 0x8000_0000_0000_0000uL) == 0)
 		{
 			result += 1;
 			value <<= 1;
@@ -362,8 +346,8 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 		if (rightRaw == 0L)
 			throw new DivideByZeroException();
 
-		var remainder = new LongULong(leftRaw >= 0L ? leftRaw : -leftRaw).castedValue;
-		var divisor = new LongULong(rightRaw >= 0L ? rightRaw : -rightRaw).castedValue;
+		var remainder = new ToUnsigned(leftRaw >= 0L ? leftRaw : -leftRaw).castedValue;
+		var divisor = new ToUnsigned(rightRaw >= 0L ? rightRaw : -rightRaw).castedValue;
 		var quotient = 0uL;
 		var bitPos = BitCount / 2 + 1;
 
@@ -514,7 +498,7 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 		if (rawValue < 0L)
 			throw new ArgumentOutOfRangeException(nameof(value));
 
-		var number = new LongULong(rawValue).castedValue;
+		var number = new ToUnsigned(rawValue).castedValue;
 		var result = 0uL;
 		var bit = 1uL << (BitCount - 2);
 
@@ -561,7 +545,7 @@ public readonly partial struct Fixed : IEquatable<Fixed>, IComparable<Fixed>
 		if (number > result)
 			result++;
 
-		return new Fixed(new ULongLong(result).castedValue);
+		return new Fixed(new ToSigned(result).castedValue);
 	}
 
 	private static long ClampSinValue(long angle, out bool flipHorizontal, out bool flipVertical)
