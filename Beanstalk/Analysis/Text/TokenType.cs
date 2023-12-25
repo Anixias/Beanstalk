@@ -123,6 +123,15 @@ public sealed class TokenType
 	public static readonly TokenType KeywordReturn = CreateKeyword("return");
 	public static readonly TokenType KeywordIf = CreateKeyword("if");
 	public static readonly TokenType KeywordElse = CreateKeyword("else");
+	public static readonly TokenType KeywordNew = CreateKeyword("new");
+	public static readonly TokenType KeywordConstructor = CreateKeyword("constructor");
+	public static readonly TokenType KeywordDestructor = CreateKeyword("destructor");
+	public static readonly TokenType KeywordStruct = CreateKeyword("struct");
+	public static readonly TokenType KeywordInterface = CreateKeyword("interface");
+	public static readonly TokenType KeywordImplicit = CreateKeyword("implicit");
+	public static readonly TokenType KeywordExplicit = CreateKeyword("explicit");
+	public static readonly TokenType KeywordCast = CreateKeyword("cast");
+	public static readonly TokenType KeywordOperator = CreateKeyword("operator");
 	
 	// Native data types
 	public static readonly TokenType KeywordInt = CreateKeyword("int");

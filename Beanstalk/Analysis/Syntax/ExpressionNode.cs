@@ -259,3 +259,53 @@ public sealed class WithExpression : ExpressionNode
 	{
 	}
 }
+
+public abstract class OperationExpression : ExpressionNode
+{
+	public readonly Token? op;
+	
+	protected OperationExpression(Token? op, TextRange range) : base(range)
+	{
+		this.op = op;
+	}
+}
+
+public sealed class BinaryOperationExpression : OperationExpression
+{
+	public readonly Parameter left;
+	public readonly BinaryExpression.Operation operation;
+	public readonly Parameter right;
+
+	public BinaryOperationExpression(Parameter left, BinaryExpression.Operation operation, Token op, Parameter right,
+		TextRange range) : base(op, range)
+	{
+		this.left = left;
+		this.operation = operation;
+		this.right = right;
+	}
+}
+
+public sealed class UnaryOperationExpression : OperationExpression
+{
+	public UnaryExpression.Operation operation;
+	public readonly Parameter operand;
+	public readonly bool isPrefix;
+
+	public UnaryOperationExpression(UnaryExpression.Operation operation, Token op, Parameter operand, bool isPrefix,
+		TextRange range) : base(op, range)
+	{
+		this.operation = operation;
+		this.operand = operand;
+		this.isPrefix = isPrefix;
+	}
+}
+
+public sealed class PrimaryOperationExpression : OperationExpression
+{
+	public readonly Parameter operand;
+
+	public PrimaryOperationExpression(Parameter operand) : base(null, operand.range)
+	{
+		this.operand = operand;
+	}
+}

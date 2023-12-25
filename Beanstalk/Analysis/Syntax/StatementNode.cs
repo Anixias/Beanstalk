@@ -181,3 +181,63 @@ public sealed class ReturnStatement : StatementNode
 		this.expression = expression;
 	}
 }
+
+public sealed class StructDeclarationStatement : StatementNode
+{
+	public readonly Token identifier;
+	public readonly ImmutableArray<StatementNode> statements;
+
+	public StructDeclarationStatement(Token identifier, IEnumerable<StatementNode> statements, TextRange range) :
+		base(range)
+
+	{
+		this.identifier = identifier;
+		this.statements = statements.ToImmutableArray();
+	}
+}
+
+public sealed class InterfaceDeclarationStatement : StatementNode
+{
+	public readonly Token identifier;
+	public readonly ImmutableArray<StatementNode> statements;
+
+	public InterfaceDeclarationStatement(Token identifier, IEnumerable<StatementNode> statements, TextRange range) :
+		base(range)
+
+	{
+		this.identifier = identifier;
+		this.statements = statements.ToImmutableArray();
+	}
+}
+
+public sealed class CastDeclarationStatement : StatementNode
+{
+	public readonly bool isImplicit;
+	public readonly Parameter parameter;
+	public readonly Type returnType;
+	public readonly StatementNode body;
+
+	public CastDeclarationStatement(bool isImplicit, Parameter parameter, Type returnType, StatementNode body, TextRange range) :
+		base(range)
+	{
+		this.isImplicit = isImplicit;
+		this.parameter = parameter;
+		this.returnType = returnType;
+		this.body = body;
+	}
+}
+
+public sealed class OperatorDeclarationStatement : StatementNode
+{
+	public readonly OperationExpression operation;
+	public readonly Type returnType;
+	public readonly StatementNode body;
+
+	public OperatorDeclarationStatement(OperationExpression operation, Type returnType, StatementNode body, TextRange range) :
+		base(range)
+	{
+		this.operation = operation;
+		this.returnType = returnType;
+		this.body = body;
+	}
+}

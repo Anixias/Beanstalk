@@ -160,7 +160,7 @@ internal static class Program
 
 		var optimizationLevel = programArgs.Value.OptimizationLevel ?? 0;
 
-		var workingDirectory = "";
+		string workingDirectory;
 		var files = new List<(string, string)>();
 
 		if (File.Exists(inputPath))

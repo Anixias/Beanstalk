@@ -279,7 +279,7 @@ public static class Parser
 		{
 			do
 			{
-				parameters.Add(ParseParameter(tokens, ref position));
+				parameters.Add(ParseParameter(tokens, ref position, false));
 			} while (Match(tokens, ref position, TokenType.OpComma));
 		}
 		
@@ -319,7 +319,7 @@ public static class Parser
 		{
 			do
 			{
-				parameters.Add(ParseParameter(tokens, ref position));
+				parameters.Add(ParseParameter(tokens, ref position, true));
 			} while (Match(tokens, ref position, TokenType.OpComma));
 		}
 		
@@ -345,6 +345,130 @@ public static class Parser
 			startToken.Range.Join(body.range));
 	}
 
+	private static bool TryParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out CastDeclarationStatement? castDeclaration)
+	{
+		var validEntryTokens = new[] { TokenType.KeywordImplicit, TokenType.KeywordExplicit };
+		
+		castDeclaration = null;
+		if (!validEntryTokens.Contains(Peek(tokens, position)))
+			return false;
+
+		castDeclaration = ParseCastDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static CastDeclarationStatement ParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var castTypeToken = Consume(tokens, ref position, null, TokenType.KeywordImplicit, TokenType.KeywordExplicit);
+		Consume(tokens, ref position, null, TokenType.KeywordCast);
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+		var parameter = ParseParameter(tokens, ref position, false);
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+		Consume(tokens, ref position, null, TokenType.OpReturnType);
+		var returnType = ParseType(tokens, ref position);
+
+		StatementNode body;
+
+		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
+		{
+			var expression = ParseExpression(tokens, ref position);
+			body = new ReturnStatement(expression, expression.range);
+		}
+		else
+		{
+			body = ParseBlockStatement(tokens, ref position);
+		}
+
+		return new CastDeclarationStatement(castTypeToken.Type == TokenType.KeywordImplicit, parameter, returnType,
+			body, castTypeToken.Range.Join(body.range));
+	}
+
+	private static bool TryParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out OperatorDeclarationStatement? operatorDeclaration)
+	{
+		operatorDeclaration = null;
+		if (Peek(tokens, position) != TokenType.KeywordOperator)
+			return false;
+
+		operatorDeclaration = ParseOperatorDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static OperatorDeclarationStatement ParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordOperator);
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+		var operationExpression = ParseOperationExpression(tokens, ref position);
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+		Consume(tokens, ref position, null, TokenType.OpReturnType);
+		var returnType = ParseType(tokens, ref position);
+
+		StatementNode body;
+
+		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
+		{
+			var expression = ParseExpression(tokens, ref position);
+			body = new ReturnStatement(expression, expression.range);
+		}
+		else
+		{
+			body = ParseBlockStatement(tokens, ref position);
+		}
+
+		return new OperatorDeclarationStatement(operationExpression, returnType, body,
+			startToken.Range.Join(body.range));
+	}
+
+	private static OperationExpression ParseOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	{
+		return ParseBinaryOperationExpression(tokens, ref position);
+	}
+	
+	private static OperationExpression ParseBinaryOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var left = ParsePrefixUnaryOperationExpression(tokens, ref position);
+
+		if (TokenAt(tokens, position) is not { } op || GetBinaryOperation(op.Type) is not { } operation)
+			return left;
+
+		position++;
+
+		if (left is not PrimaryOperationExpression primaryLeft)
+		{
+			throw new ParseException("Cannot define operator overload with multiple operators", left.op, left.range);
+		}
+
+		var right = new PrimaryOperationExpression(ParseParameter(tokens, ref position, false));
+		return new BinaryOperationExpression(primaryLeft.operand, operation, op, right.operand,
+			left.range.Join(right.range));
+	}
+
+	private static OperationExpression ParsePrefixUnaryOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	{
+		if (TokenAt(tokens, position) is not { } op || GetPrefixUnaryOperation(op.Type) is not { } operation)
+			return ParsePostfixUnaryOperationExpression(tokens, ref position);
+
+		if (operation == UnaryExpression.Operation.Await)
+			throw new ParseException("Cannot overload 'await' operator", op);
+		
+		position++;
+		var operand = ParseParameter(tokens, ref position, false);
+		return new UnaryOperationExpression(operation, op, operand, true, op.Range.Join(operand.range));
+	}
+
+	private static OperationExpression ParsePostfixUnaryOperationExpression(IReadOnlyList<Token> tokens,
+		ref int position)
+	{
+		var operand = ParseParameter(tokens, ref position, false);
+		
+		if (TokenAt(tokens, position) is not { } op || GetPostfixUnaryOperation(op.Type) is not { } operation)
+			return new PrimaryOperationExpression(operand);
+		
+		position++;
+		return new UnaryOperationExpression(operation, op, operand, false, operand.range.Join(op.Range));
+	}
+
 	private static List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position,
 		List<ParseException> diagnostics)
 	{
@@ -353,7 +477,12 @@ public static class Parser
 			TokenType.EndOfFile,
 			TokenType.KeywordModule,
 			TokenType.KeywordEntry,
-			TokenType.KeywordFun
+			TokenType.KeywordFun,
+			TokenType.KeywordImplicit,
+			TokenType.KeywordExplicit,
+			//TokenType.KeywordMutable,
+			//TokenType.KeywordStruct,
+			//TokenType.KeywordInterface
 		};
 		
 		var statements = new List<StatementNode>();
@@ -392,6 +521,16 @@ public static class Parser
 		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 		{
 			return functionDeclaration;
+		}
+			
+		if (TryParseCastDeclaration(tokens, ref position, out var castDeclaration))
+		{
+			return castDeclaration;
+		}
+			
+		if (TryParseOperatorDeclaration(tokens, ref position, out var operationDeclaration))
+		{
+			return operationDeclaration;
 		}
 
 		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
@@ -537,6 +676,62 @@ public static class Parser
 			elseBranch = ParseStatement(tokens, ref position);
 
 		return new IfStatement(condition, thenBranch, elseBranch, startToken.Range.Join(condition.range));
+	}
+
+	private static BinaryExpression.Operation? GetBinaryOperation(TokenType op)
+	{
+		if (op == TokenType.OpPlus)
+			return BinaryExpression.Operation.Add;
+		
+		if (op == TokenType.OpMinus)
+			return BinaryExpression.Operation.Subtract;
+		
+		if (op == TokenType.OpStarStar)
+			return BinaryExpression.Operation.Power;
+		
+		if (op == TokenType.OpStar)
+			return BinaryExpression.Operation.Multiply;
+		
+		if (op == TokenType.OpSlash)
+			return BinaryExpression.Operation.Divide;
+		
+		if (op == TokenType.OpPercentPercent)
+			return BinaryExpression.Operation.PosMod;
+		
+		if (op == TokenType.OpPercent)
+			return BinaryExpression.Operation.Modulo;
+		
+		if (op == TokenType.OpRotRight)
+			return BinaryExpression.Operation.RotRight;
+		
+		if (op == TokenType.OpRotLeft)
+			return BinaryExpression.Operation.RotLeft;
+		
+		if (op == TokenType.OpRightRight)
+			return BinaryExpression.Operation.ShiftRight;
+		
+		if (op == TokenType.OpLeftLeft)
+			return BinaryExpression.Operation.ShiftLeft;
+		
+		if (op == TokenType.OpGreater)
+			return BinaryExpression.Operation.GreaterThan;
+		
+		if (op == TokenType.OpLess)
+			return BinaryExpression.Operation.LessThan;
+		
+		if (op == TokenType.OpGreaterEqual)
+			return BinaryExpression.Operation.GreaterEqual;
+		
+		if (op == TokenType.OpLessEqual)
+			return BinaryExpression.Operation.LessEqual;
+		
+		if (op == TokenType.OpEqualsEquals)
+			return BinaryExpression.Operation.Equals;
+		
+		if (op == TokenType.OpBangEquals)
+			return BinaryExpression.Operation.NotEquals;
+
+		return null;
 	}
 
 	private static ExpressionNode ParseExpression(IReadOnlyList<Token> tokens, ref int position)
@@ -892,36 +1087,53 @@ public static class Parser
 		return expression;
 	}
 
+	private static UnaryExpression.Operation? GetPrefixUnaryOperation(TokenType op)
+	{
+		if (op == TokenType.OpPlusPlus)
+			return UnaryExpression.Operation.PreIncrement;
+		
+		if (op == TokenType.OpMinusMinus)
+			return UnaryExpression.Operation.PreDecrement;
+		
+		if (op == TokenType.OpPlus)
+			return UnaryExpression.Operation.Identity;
+		
+		if (op == TokenType.OpMinus)
+			return UnaryExpression.Operation.Negate;
+		
+		if (op == TokenType.OpTilde)
+			return UnaryExpression.Operation.BitwiseNegate;
+		
+		if (op == TokenType.OpBang)
+			return UnaryExpression.Operation.LogicalNot;
+		
+		if (op == TokenType.KeywordAwait)
+			return UnaryExpression.Operation.Await;
+
+		return null;
+	}
+
+	private static UnaryExpression.Operation? GetPostfixUnaryOperation(TokenType op)
+	{
+		if (op == TokenType.OpPlusPlus)
+			return UnaryExpression.Operation.PostIncrement;
+		
+		if (op == TokenType.OpMinusMinus)
+			return UnaryExpression.Operation.PostDecrement;
+
+		return null;
+	}
+
 	private static ExpressionNode ParsePrefixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		if (Match(tokens, ref position, out var op, TokenType.OpPlusPlus, TokenType.OpMinusMinus, TokenType.OpPlus,
-			    TokenType.OpMinus, TokenType.OpTilde, TokenType.OpBang, TokenType.KeywordAwait))
-		{
-			var right = ParsePrefixUnaryExpression(tokens, ref position);
-			var range = op.Range.Join(right.range);
-			
-			UnaryExpression.Operation operation;
-			if (op.Type == TokenType.OpPlusPlus)
-				operation = UnaryExpression.Operation.PreIncrement;
-			else if (op.Type == TokenType.OpMinusMinus)
-				operation = UnaryExpression.Operation.PreDecrement;
-			else if (op.Type == TokenType.OpPlus)
-				operation = UnaryExpression.Operation.Identity;
-			else if (op.Type == TokenType.OpMinus)
-				operation = UnaryExpression.Operation.Negate;
-			else if (op.Type == TokenType.OpTilde)
-				operation = UnaryExpression.Operation.BitwiseNegate;
-			else if (op.Type == TokenType.OpBang)
-				operation = UnaryExpression.Operation.LogicalNot;
-			else if (op.Type == TokenType.KeywordAwait)
-				operation = UnaryExpression.Operation.Await;
-			else
-				throw new ParseException("Unexpected operation", op);
-			
-			return new UnaryExpression(right, operation, true, range);
-		}
+		if (TokenAt(tokens, position) is not { } op || GetPrefixUnaryOperation(op.Type) is not { } operation)
+			return ParsePostfixUnaryExpression(tokens, ref position);
 
-		return ParsePostfixUnaryExpression(tokens, ref position);
+		position++;
+		var right = ParsePrefixUnaryExpression(tokens, ref position);
+		var range = op.Range.Join(right.range);
+			
+		return new UnaryExpression(right, operation, true, range);
 	}
 
 	private static bool TryParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position,
@@ -985,22 +1197,28 @@ public static class Parser
 		Consume(tokens, ref position, null, TokenType.OpColon);
 		var type = ParseType(tokens, ref position);
 
-		return new Parameter(identifier, type);
+		return new Parameter(identifier, type, null, identifier.Range.Join(type.range));
 	}
 
-	private static Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position)
+	private static Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position, bool defaultValueAllowed)
 	{
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
+		var range = identifier.Range;
 
 		Type? type = null;
 		if (Match(tokens, ref position, TokenType.OpColon))
+		{
 			type = ParseType(tokens, ref position);
+			range = range.Join(type.range);
+		}
+
+		if (!defaultValueAllowed || !Match(tokens, ref position, TokenType.OpEquals))
+			return new Parameter(identifier, type, null, range);
 		
-		ExpressionNode? defaultExpression = null;
-		if (Match(tokens, ref position, TokenType.OpEquals))
-			defaultExpression = ParseExpression(tokens, ref position);
-		
-		return new Parameter(identifier, type, defaultExpression);
+		var defaultExpression = ParseExpression(tokens, ref position);
+		range = range.Join(defaultExpression.range);
+
+		return new Parameter(identifier, type, defaultExpression, range);
 	}
 
 	private static ExpressionNode ParsePostfixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
@@ -1061,17 +1279,10 @@ public static class Parser
 			}
 			
 			// ++, --
-			if (Match(tokens, ref position, out var op, TokenType.OpPlusPlus, TokenType.OpMinusMinus))
+			if (GetPostfixUnaryOperation(peek) is { } operation)
 			{
-				UnaryExpression.Operation operation;
-				if (op.Type == TokenType.OpPlusPlus)
-					operation = UnaryExpression.Operation.PostIncrement;
-				else if (op.Type == TokenType.OpMinusMinus)
-					operation = UnaryExpression.Operation.PostDecrement;
-				else
-					throw new ParseException("Unexpected operation", op);
-				
-				expression = new UnaryExpression(expression, operation, false, expression.range.Join(op.Range));
+				var endToken = tokens[position++];
+				expression = new UnaryExpression(expression, operation, false, expression.range.Join(endToken.Range));
 				continue;
 			}
 
@@ -1142,7 +1353,7 @@ public static class Parser
 	{
 		if (Match(tokens, ref position, out var literal, TokenType.NumberLiteral, TokenType.StringLiteral,
 			    TokenType.CharLiteral, TokenType.KeywordThis, TokenType.KeywordTrue, TokenType.KeywordFalse,
-			    TokenType.KeywordNull))
+			    TokenType.KeywordNull, TokenType.KeywordNew))
 		{
 			return new TokenExpression(literal);
 		}
