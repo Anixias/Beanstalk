@@ -24,7 +24,81 @@ public class Lexer(IBuffer source) : ILexer
 		if (char.IsLetter(character) || character == '_')
 			return ScanIdentifier(position);
 
+		if (TryScanComment(position) is { } comment)
+			return comment;
+
 		return ScanOperator(position);
+	}
+
+	private ScanResult? TryScanComment(int position)
+	{
+		if (Source[position] != '/')
+			return null;
+		
+		if (position + 1 >= Source.Length)
+			return null;
+
+		return Source[position + 1] switch
+		{
+			'/' => ScanLineComment(position),
+			'*' => ScanMultilineComment(position),
+			_ => null
+		};
+	}
+
+	private ScanResult ScanLineComment(int position)
+	{
+		var end = position + 2;
+		while (end < Source.Length)
+		{
+			var character = Source[end];
+
+			if (character is '\n' or '\r')
+				break;
+			
+			end++;
+		}
+
+		return new ScanResult(new Token(TokenType.LineComment, new TextRange(position, end), Source), end);
+	}
+
+	private ScanResult ScanMultilineComment(int position)
+	{
+		var end = position + 2;
+		var nestLevel = 1;
+		while (end < Source.Length)
+		{
+			if (end + 1 >= Source.Length)
+			{
+				end++;
+				break;
+			}
+
+			var character = Source[end];
+			var next = Source[end + 1];
+
+			if (character == '/' && next == '*')
+			{
+				nestLevel++;
+				end += 2;
+				continue;
+			}
+			
+			if (character == '*' && next == '/')
+			{
+				nestLevel--;
+				end += 2;
+				
+				if (nestLevel <= 0)
+					break;
+				
+				continue;
+			}
+
+			end++;
+		}
+
+		return new ScanResult(new Token(TokenType.MultilineComment, new TextRange(position, end), Source), end);
 	}
 
 	private List<Token> ScanAllTokens()

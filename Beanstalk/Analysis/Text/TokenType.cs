@@ -70,7 +70,7 @@ public sealed class TokenType
 		IsFiltered = true
 	};
 
-	public static readonly TokenType BlockComment = new("block comment")
+	public static readonly TokenType MultilineComment = new("block comment")
 	{
 		IsFiltered = true
 	};
