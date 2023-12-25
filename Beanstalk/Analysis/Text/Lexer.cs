@@ -185,7 +185,7 @@ public class Lexer(IBuffer source) : ILexer
 
 	private ScanResult ScanNumber(int position)
 	{
-		// 123, 123.456, 123.456s, 123.456x, 123u, 8i64, 0xAF80, 0b10110011, 2e3, 2e-3, 3.14e+3f
+		// 1_234, 123.456, 123.456s, 123.456x, 123u, 8i64, 0xAF80, 0b1011_0011, 2e3, 2e-3, 3.14e+3s
 		var end = position;
 
 		if (position <= Source.Length - 2)
@@ -206,22 +206,22 @@ public class Lexer(IBuffer source) : ILexer
 
 		object? value = null;
 		
-		while (end < Source.Length && char.IsDigit(Source[end]))
+		while (end < Source.Length && IsDigit(Source[end]))
 		{
 			end++;
 		}
 
 		if (end < Source.Length)
 		{
-			if (Source[end] == '.' && end + 1 < Source.Length && char.IsDigit(Source[end + 1]))
+			if (Source[end] == '.' && end + 1 < Source.Length && IsDigit(Source[end + 1]))
 			{
 				end++;
-				while (end < Source.Length && char.IsDigit(Source[end]))
+				while (end < Source.Length && IsDigit(Source[end]))
 				{
 					end++;
 				}
 
-				var valueString = Source.GetText(new TextRange(position, end));
+				var valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
 
 				if (end < Source.Length)
 				{
@@ -233,10 +233,10 @@ public class Lexer(IBuffer source) : ILexer
 							if (end < Source.Length && Source[end] is '+' or '-')
 								end++;
 
-							while (end < Source.Length && char.IsDigit(Source[end]))
+							while (end < Source.Length && IsDigit(Source[end]))
 								end++;
 
-							valueString = Source.GetText(new TextRange(position, end));
+							valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
 							if (end < Source.Length)
 							{
 								switch (Source[end])
@@ -324,7 +324,7 @@ public class Lexer(IBuffer source) : ILexer
 			}
 			else
 			{
-				var valueString = Source.GetText(new TextRange(position, end));
+				var valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
 
 				if (end < Source.Length)
 				{
@@ -521,7 +521,7 @@ public class Lexer(IBuffer source) : ILexer
 		}
 		else
 		{
-			var valueString = Source.GetText(new TextRange(position, end));
+			var valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
 			if (int.TryParse(valueString, out var intValue))
 			{
 				value = intValue;
@@ -556,17 +556,27 @@ public class Lexer(IBuffer source) : ILexer
 
 		var token = new Token(TokenType.NumberLiteral, new TextRange(position, end), Source, value);
 		return new ScanResult(token, end);
+
+		bool IsDigit(char c)
+		{
+			return char.IsDigit(c) || c == '_';
+		}
+
+		string RemoveSeparators(string str)
+		{
+			return str.Replace("_", null);
+		}
 	}
 
 	private ScanResult ScanHexadecimal(int position)
 	{
 		var end = position + 2;
-		while (end < Source.Length && char.IsAsciiHexDigit(Source[end]))
+		while (end < Source.Length && IsHexDigit(Source[end]))
 		{
 			end++;
 		}
 
-		var valueString = Source.GetText(new TextRange(position + 2, end));
+		var valueString = RemoveSeparators(Source.GetText(new TextRange(position + 2, end)));
 		object? value = null;
 		
 		var scannedSuffix = false;
@@ -690,17 +700,27 @@ public class Lexer(IBuffer source) : ILexer
 
 		var token = new Token(TokenType.NumberLiteral, new TextRange(position, end), Source, value);
 		return new ScanResult(token, end);
+
+		bool IsHexDigit(char c)
+		{
+			return char.IsAsciiHexDigit(c) || c == '_';
+		}
+
+		string RemoveSeparators(string str)
+		{
+			return str.Replace("_", null);
+		}
 	}
 
 	private ScanResult ScanBinary(int position)
 	{
 		var end = position + 2;
-		while (end < Source.Length && Source[end] is '0' or '1')
+		while (end < Source.Length && Source[end] is '0' or '1' or '_')
 		{
 			end++;
 		}
 
-		var valueString = Source.GetText(new TextRange(position + 2, end));
+		var valueString = RemoveSeparators(Source.GetText(new TextRange(position + 2, end)));
 		object? value = null;
 
 		var scannedSuffix = false;
@@ -937,6 +957,11 @@ public class Lexer(IBuffer source) : ILexer
 
 		var token = new Token(TokenType.NumberLiteral, new TextRange(position, end), Source, value);
 		return new ScanResult(token, end);
+
+		string RemoveSeparators(string str)
+		{
+			return str.Replace("_", null);
+		}
 	}
 
 	public IEnumerator<Token> GetEnumerator()
