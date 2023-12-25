@@ -1203,14 +1203,25 @@ public static class Parser
 			{
 				if (Match(tokens, ref position, out var arrayRightBracket, TokenType.OpRightBracket))
 				{
-					type = new ArrayType(type, type.range.Join(arrayRightBracket.Range));
+					type = new ArrayType(type, null, type.range.Join(arrayRightBracket.Range));
 					continue;
 				}
 
-				var typeParameters = ParseTypeList(tokens, ref position);
-				var genericRightBracket = Consume(tokens, ref position, null, TokenType.OpRightBracket);
-				type = new GenericType(type, typeParameters, type.range.Join(genericRightBracket.Range));
-				continue;
+				try
+				{
+					var typeParameters = ParseTypeList(tokens, ref position);
+					var genericRightBracket = Consume(tokens, ref position, null, TokenType.OpRightBracket);
+					type = new GenericType(type, typeParameters, type.range.Join(genericRightBracket.Range));
+					continue;
+				}
+				catch (ParseException)
+				{
+					// Try again as type[expression] for array allocation
+					var expression = ParseExpression(tokens, ref position);
+					var rightBracket = Consume(tokens, ref position, null, TokenType.OpRightBracket);
+					type = new ArrayType(type, expression, type.range.Join(rightBracket.Range));
+					continue;
+				}
 			}
 
 			if (Match(tokens, ref position, out var question, TokenType.OpQuestion))

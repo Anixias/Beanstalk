@@ -89,13 +89,19 @@ public sealed class MutableType : WrapperType
 
 public sealed class ArrayType : WrapperType
 {
-	public ArrayType(Type baseType, TextRange range) : base(baseType, range)
+	public readonly ExpressionNode? size;
+	
+	public ArrayType(Type baseType, ExpressionNode? size, TextRange range) : base(baseType, range)
 	{
+		this.size = size;
 	}
 
 	public override string ToString()
 	{
-		return $"{baseType}[]";
+		if (size is null)
+			return $"{baseType}[]";
+		
+        return $"{baseType}[{size}]";
 	}
 }
 
