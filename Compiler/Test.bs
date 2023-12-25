@@ -10,6 +10,8 @@ fun fib(n:int) :> int
 	return fib(n - 1) + fib(n - 2)
 }
 
+fun add(x, y) => x + y
+
 entry()
 {
 	let n = 9

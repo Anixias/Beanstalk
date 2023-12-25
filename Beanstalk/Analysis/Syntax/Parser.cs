@@ -964,8 +964,11 @@ public static class Parser
 	private static Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
-		Consume(tokens, ref position, null, TokenType.OpColon);
-		var type = ParseType(tokens, ref position);
+
+		Type? type = null;
+		if (Match(tokens, ref position, TokenType.OpColon))
+			type = ParseType(tokens, ref position);
+		
 		ExpressionNode? defaultExpression = null;
 		if (Match(tokens, ref position, TokenType.OpEquals))
 			defaultExpression = ParseExpression(tokens, ref position);
