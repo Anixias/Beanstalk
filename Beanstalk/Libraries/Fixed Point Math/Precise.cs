@@ -1,10 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FixedPointMath;
 
-public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
+public readonly partial struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 {
 	[StructLayout(LayoutKind.Explicit)]
 	private readonly struct ToUnsigned(Int128 sourceValue)
@@ -27,6 +28,7 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 	private static readonly Int128 RawNegativeOne = -RawOne;
 	private static readonly Int128 RawPi = new(3uL, 2611923443488327892uL);
 	private static readonly Int128 RawLn2 = new(0uL, 12786308645202655667uL);
+	private static readonly Int128 RawE = new(2uL, 13249961062380153451uL);
 
 	public static readonly Precise Epsilon = new(Int128.One);
 	public static readonly Precise MaxValue = new(Int128.MaxValue);
@@ -37,8 +39,9 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 	public static readonly Precise Half = new(RawHalf);
 	public static readonly Precise Pi = new(RawPi);
 	public static readonly Precise PiOver2 = Pi / 2;
-	public static readonly Precise PiTimes2 = Pi * 2;
+	public static readonly Precise Tau = Pi * 2;
 	public static readonly Precise Ln2 = new(RawLn2);
+	public static readonly Precise E = new(RawE);
 
 	private static readonly Precise Log2Max = BitCount - DecimalPlaces - 1;
 	private static readonly Precise Log2Min = DecimalPlaces - BitCount;
@@ -55,10 +58,15 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 	public Precise(long value) : this(value * RawOne)
 	{
 	}
+	
+	[GeneratedRegex(@"\s+")]
+	private static partial Regex WhitespaceRegexImpl();
+	private static readonly Regex WhitespaceRegex = WhitespaceRegexImpl();
 
 	public static Precise Parse(string number)
 	{
-		var groups = number.Split('.', StringSplitOptions.TrimEntries);
+		number = WhitespaceRegex.Replace(number, "");
+		var groups = number.Split('.');
 
 		if (groups.Length > 2)
 			throw new ArgumentException("Cannot have more than one decimal point");
@@ -866,15 +874,15 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 
 	public static implicit operator Precise(Coarse value)
 	{
-		var lower = (ulong)Coarse.Fract(value).Bits << (DecimalPlaces - Coarse.DecimalPlaces);
-		var upper = (ulong)(Coarse.Floor(value).Bits >> Coarse.DecimalPlaces);
+		var lower = (ulong)((long)Coarse.Fract(value).RawValue << (DecimalPlaces - Coarse.DecimalPlaces));
+		var upper = (ulong)((long)Coarse.Floor(value).RawValue >> Coarse.DecimalPlaces);
 		return new Precise(new Int128(upper, lower));
 	}
 
 	public static implicit operator Precise(Fixed value)
 	{
-		var lower = Fixed.Fract(value).Bits << (DecimalPlaces - Fixed.DecimalPlaces);
-		var upper = Fixed.Floor(value).Bits >> Fixed.DecimalPlaces;
+		var lower = (ulong)(Fixed.Fract(value).RawValue << (DecimalPlaces - Fixed.DecimalPlaces));
+		var upper = (ulong)(Fixed.Floor(value).RawValue >> Fixed.DecimalPlaces);
 		return new Precise(new Int128(upper, lower));
 	}
 

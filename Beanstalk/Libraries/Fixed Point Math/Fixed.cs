@@ -3,10 +3,11 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FixedPointMath;
 
-public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
+public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 {
 	[StructLayout(LayoutKind.Explicit)]
 	private readonly struct ToUnsigned(long sourceValue)
@@ -31,8 +32,9 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	public static readonly Fixed Half = new(RawHalf);
 	public static readonly Fixed Pi = new(RawPi);
 	public static readonly Fixed PiOver2 = new(RawPiOver2);
-	public static readonly Fixed PiTimes2 = new(RawPiTimes2);
+	public static readonly Fixed Tau = new(RawTau);
 	public static readonly Fixed Ln2 = new(RawLn2);
+	public static readonly Fixed E = new(RawE);
 
 	private static readonly Fixed Log2Max = BitCount - DecimalPlaces - 1;
 	private static readonly Fixed Log2Min = DecimalPlaces - BitCount;
@@ -42,12 +44,13 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	private const int BitCount = 64;
 	internal const int DecimalPlaces = 32;
 	private const long RawOne = 1L << DecimalPlaces;
-	private const long RawHalf = 0x80000000L;
+	private const long RawHalf = 0x0_80000000L;
 	private const long RawNegativeOne = -(1L << DecimalPlaces);
-	private const long RawPi = 0x3243F6A88L;
-	private const long RawPiOver2 = 0x1921FB544L;
-	private const long RawPiTimes2 = 0x6487ED511L;
-	private const long RawLn2 = 0xB17217F7L;
+	private const long RawPi = 0x3_243F6A88L;
+	private const long RawPiOver2 = 0x1_921FB544L;
+	private const long RawTau = 0x6_487ED511L;
+	private const long RawLn2 = 0x0_B17217F7L;
+	private const long RawE = 0x2_B7E15163L;
 
 	public long RawValue { get; } = rawValue;
 	public ulong Bits => new ToUnsigned(RawValue).castedValue;
@@ -55,10 +58,15 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	public Fixed(int value) : this(value * RawOne)
 	{
 	}
+	
+	[GeneratedRegex(@"\s+")]
+	private static partial Regex WhitespaceRegexImpl();
+	private static readonly Regex WhitespaceRegex = WhitespaceRegexImpl();
 
 	public static Fixed Parse(string number)
 	{
-		var groups = number.Split('.', StringSplitOptions.TrimEntries);
+		number = WhitespaceRegex.Replace(number, "");
+		var groups = number.Split('.');
 
 		if (groups.Length > 2)
 			throw new ArgumentException("Cannot have more than one decimal point");
@@ -854,7 +862,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	public static implicit operator Fixed(Coarse value)
 	{
 		const int shiftSize = DecimalPlaces - Coarse.DecimalPlaces;
-		var rawValue = new ToSigned((ulong)value.Bits << shiftSize).castedValue;
+		var rawValue = (long)value.RawValue << shiftSize;
 		return new Fixed(rawValue);
 	}
 

@@ -1,10 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FixedPointMath;
 
-public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
+public readonly partial struct Coarse(int rawValue) : IFixedPoint<Coarse>
 {
 	[StructLayout(LayoutKind.Explicit)]
 	private readonly struct ToUnsigned(int sourceValue)
@@ -27,9 +28,10 @@ public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 	public static Coarse One => new(RawOne);
 	public static readonly Coarse NegativeOne = new(RawNegativeOne);
 	public static readonly Coarse Half = new(RawHalf);
+	public static readonly Coarse E = new(RawE);
 	public static readonly Coarse Pi = new(RawPi);
 	public static readonly Coarse PiOver2 = new(RawPiOver2);
-	public static readonly Coarse PiTimes2 = new(RawPiTimes2);
+	public static readonly Coarse Tau = new(RawTau);
 	public static readonly Coarse Ln2 = new(RawLn2);
 
 	private static readonly Coarse Log2Max = (Coarse)(BitCount - DecimalPlaces - 1);
@@ -43,16 +45,22 @@ public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 	private const int RawHalf = 0x8000;
 	private const int RawNegativeOne = -(1 << DecimalPlaces);
 	private const int RawPi = 0x3_243F;
+	private const int RawE = 0x2_B7E1;
 	private const int RawPiOver2 = 0x1_921F;
-	private const int RawPiTimes2 = 0x6_487E;
+	private const int RawTau = 0x6_487E;
 	private const int RawLn2 = 0x0_B172;
 
 	public int RawValue { get; } = rawValue;
 	public uint Bits => new ToUnsigned(RawValue).castedValue;
+	
+	[GeneratedRegex(@"\s+")]
+	private static partial Regex WhitespaceRegexImpl();
+	private static readonly Regex WhitespaceRegex = WhitespaceRegexImpl();
 
 	public static Coarse Parse(string number)
 	{
-		var groups = number.Split('.', StringSplitOptions.TrimEntries);
+		number = WhitespaceRegex.Replace(number, "");
+		var groups = number.Split('.');
 
 		if (groups.Length > 2)
 			throw new ArgumentException("Cannot have more than one decimal point");
@@ -868,7 +876,7 @@ public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 
 	public override string ToString()
 	{
-		const int decimalsToRender = 5;
+		const int decimalsToRender = 10;
 		var result = new StringBuilder();
 
 		if (IsZero())
