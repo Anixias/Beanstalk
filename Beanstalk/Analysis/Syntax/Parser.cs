@@ -100,7 +100,8 @@ public static class Parser
 		return IsEndOfFile(tokens, position) ? null : tokens[position];
 	}
 
-	private static Token Consume(IReadOnlyList<Token> tokens, ref int position, string? message, params TokenType[] types)
+	private static Token Consume(IReadOnlyList<Token> tokens, ref int position, string? message,
+		params TokenType[] types)
 	{
 		if (message is null)
 		{
@@ -286,6 +287,62 @@ public static class Parser
 		return new EntryStatement(parameters, body, startToken.Range.Join(body.range));
 	}
 
+	private static bool TryParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out FunctionDeclarationStatement? functionDeclaration)
+	{
+		functionDeclaration = null;
+		if (Peek(tokens, position) != TokenType.KeywordFun)
+			return false;
+
+		functionDeclaration = ParseFunctionDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static FunctionDeclarationStatement ParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
+		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
+
+		var typeParameters = new List<Type>();
+		if (Match(tokens, ref position, TokenType.OpLeftBracket))
+		{
+			typeParameters.AddRange(ParseTypeList(tokens, ref position));
+			Consume(tokens, ref position, null, TokenType.OpRightBracket);
+		}
+		
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+
+		var parameters = new List<Parameter>();
+		if (Peek(tokens, position) != TokenType.OpRightParen)
+		{
+			do
+			{
+				parameters.Add(ParseParameter(tokens, ref position));
+			} while (Match(tokens, ref position, TokenType.OpComma));
+		}
+		
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+
+		Type? returnType = null;
+		if (Match(tokens, ref position, TokenType.OpReturnType))
+			returnType = ParseType(tokens, ref position);
+
+		StatementNode body;
+
+		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
+		{
+			var expression = ParseExpression(tokens, ref position);
+			body = new ReturnStatement(expression, expression.range);
+		}
+		else
+		{
+			body = ParseBlockStatement(tokens, ref position);
+		}
+
+		return new FunctionDeclarationStatement(identifier, typeParameters, parameters, returnType, body,
+			startToken.Range.Join(body.range));
+	}
+
 	private static List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var statements = new List<StatementNode>();
@@ -301,6 +358,12 @@ public static class Parser
 			if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
 			{
 				statements.Add(entryStatement);
+				continue;
+			}
+			
+			if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
+			{
+				statements.Add(functionDeclaration);
 				continue;
 			}
 
@@ -326,37 +389,38 @@ public static class Parser
 
 		while (Peek(tokens, position) != endTokenType)
 		{
-			if (TryParseVarDeclaration(tokens, ref position, out var varDeclaration))
-			{
-				statements.Add(varDeclaration);
-				continue;
-			}
-
-			if (!IsEndOfFile(tokens, position))
-			{
-				var expression = ParseExpression(tokens, ref position);
-				var expressionStatement = new ExpressionStatement(expression, expression.range);
-				statements.Add(expressionStatement);
-				continue;
-			}
-
-			break;
+			statements.Add(ParseStatement(tokens, ref position));
 		}
 		
 		return statements;
 	}
 
-	private static bool TryParseVarDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out VarDeclarationStatement? varDeclaration)
+	private static StatementNode ParseStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
-		varDeclaration = null;
 		var peek = Peek(tokens, position);
+		
+		if (peek == TokenType.KeywordVar || peek == TokenType.KeywordLet || peek == TokenType.KeywordConst)
+		{
+			return ParseVarDeclaration(tokens, ref position);
+		}
+			
+		if (peek == TokenType.KeywordReturn)
+		{
+			return ParseReturnStatement(tokens, ref position);
+		}
+			
+		if (peek == TokenType.KeywordIf)
+		{
+			return ParseIfStatement(tokens, ref position);
+		}
 
-		if (peek != TokenType.KeywordLet && peek != TokenType.KeywordVar && peek != TokenType.KeywordConst)
-			return false;
+		if (peek == TokenType.EndOfFile)
+			throw new ParseException("Expected statement");
+		
+		var expression = ParseExpression(tokens, ref position);
+		var expressionStatement = new ExpressionStatement(expression, expression.range);
+		return expressionStatement;
 
-		varDeclaration = ParseVarDeclaration(tokens, ref position);
-		return true;
 	}
 
 	private static VarDeclarationStatement ParseVarDeclaration(IReadOnlyList<Token> tokens, ref int position)
@@ -420,6 +484,32 @@ public static class Parser
 		}
 
 		throw new ParseException("Expected variable declaration");
+	}
+
+	private static ReturnStatement ParseReturnStatement(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordReturn);
+		var expression = ParseExpression(tokens, ref position);
+
+		return new ReturnStatement(expression, startToken.Range.Join(expression.range));
+	}
+
+	private static IfStatement ParseIfStatement(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordIf);
+		var usesParen = Match(tokens, ref position, TokenType.OpLeftParen);
+		var condition = ParseExpression(tokens, ref position);
+
+		if (usesParen)
+			Consume(tokens, ref position, null, TokenType.OpRightParen);
+
+		var thenBranch = ParseStatement(tokens, ref position);
+
+		StatementNode? elseBranch = null;
+		if (Match(tokens, ref position, TokenType.KeywordElse))
+			elseBranch = ParseStatement(tokens, ref position);
+
+		return new IfStatement(condition, thenBranch, elseBranch, startToken.Range.Join(condition.range));
 	}
 
 	private static ExpressionNode ParseExpression(IReadOnlyList<Token> tokens, ref int position)

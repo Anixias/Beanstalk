@@ -67,6 +67,26 @@ public sealed class EntryStatement : StatementNode
 	}
 }
 
+public sealed class FunctionDeclarationStatement : StatementNode
+{
+	public readonly Token identifier;
+	public readonly ImmutableArray<Type> typeParameters;
+	public readonly ImmutableArray<Parameter> parameters;
+	public readonly Type? returnType;
+	public readonly StatementNode body;
+
+	public FunctionDeclarationStatement(Token identifier, IEnumerable<Type> typeParameters,
+		IEnumerable<Parameter> parameters, Type? returnType, StatementNode body, TextRange range) : base(range)
+
+	{
+		this.identifier = identifier;
+		this.typeParameters = typeParameters.ToImmutableArray();
+		this.parameters = parameters.ToImmutableArray();
+		this.returnType = returnType;
+		this.body = body;
+	}
+}
+
 public sealed class ExpressionStatement : StatementNode
 {
 	public readonly ExpressionNode expression;
@@ -84,6 +104,22 @@ public sealed class BlockStatement : StatementNode
 	public BlockStatement(IEnumerable<StatementNode> statements, TextRange range) : base(range)
 	{
 		this.statements = statements.ToImmutableArray();
+	}
+}
+
+public sealed class IfStatement : StatementNode
+{
+	public readonly ExpressionNode condition;
+	public readonly StatementNode thenBranch;
+	public readonly StatementNode? elseBranch;
+
+	public IfStatement(ExpressionNode condition, StatementNode thenBranch, StatementNode? elseBranch,
+		TextRange range) : base(range)
+
+	{
+		this.condition = condition;
+		this.thenBranch = thenBranch;
+		this.elseBranch = elseBranch;
 	}
 }
 

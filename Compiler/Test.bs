@@ -2,17 +2,16 @@ import bs.io.Console
 
 module fibonacci
 
-/*fun fib(n:int) :> int
+fun fib(n:int) :> int
 {
 	if (n <= 1)
 		return n
 	
 	return fib(n - 1) + fib(n - 2)
-}*/
+}
 
 entry()
 {
-	let values = int[3]
 	let n = 9
 	Console.printLine(fib(n))
 }
