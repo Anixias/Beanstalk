@@ -134,6 +134,12 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool IsNegative()
+	{
+		return IsNegative(this);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static bool IsOddInteger(Fixed value)
 	{
 		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 1;
@@ -152,9 +158,9 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool IsNegative()
+	public bool IsPositive()
 	{
-		return IsNegative(this);
+		return IsPositive(this);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -870,30 +876,59 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		const int decimalsToRender = 10;
 		var result = new StringBuilder();
 
-		if (IsNegative())
-			result.Append('-');
+		if (IsZero())
+			return "0";
 
-		var posValue = Abs(this);
-		var intPart = (int)(posValue.RawValue >> DecimalPlaces);
-		result.Append(intPart);
-		
-		var intermediate = Fract(posValue);
-		if (intermediate.IsZero())
+		if (IsPositive())
 		{
-			return result.ToString();
-		}
+			var intPart = (int)(RawValue >> DecimalPlaces);
+			result.Append(intPart);
 
-		result.Append('.');
-		var ten = (Fixed)10;
-		for (var i = 0; i < decimalsToRender; i++)
+			var intermediate = Fract(this);
+			if (intermediate.IsZero())
+			{
+				return result.ToString();
+			}
+
+			result.Append('.');
+			var ten = (Fixed)10;
+			for (var i = 0; i < decimalsToRender; i++)
+			{
+				intermediate *= ten;
+				var digit = intermediate.RawValue >> DecimalPlaces;
+
+				intermediate = Fract(intermediate);
+				result.Append(digit);
+			}
+
+			return result.ToString().TrimEnd('0');
+		}
+		else
 		{
-			intermediate *= ten;
-			var digit = intermediate.RawValue >> DecimalPlaces;
+			var intPart = (int)(RawValue >> DecimalPlaces);
 
-			intermediate = Fract(intermediate);
-			result.Append(digit);
+			var intermediate = Fract(this);
+			if (intermediate.IsZero())
+			{
+				result.Append(intPart);
+				return result.ToString();
+			}
+
+			intermediate = One - intermediate;
+
+			result.Append(intPart + 1);
+			result.Append('.');
+			var ten = (Fixed)10;
+			for (var i = 0; i < decimalsToRender; i++)
+			{
+				intermediate *= ten;
+				var digit = intermediate.RawValue >> DecimalPlaces;
+
+				intermediate = Fract(intermediate);
+				result.Append(digit);
+			}
+
+			return result.ToString().TrimEnd('0');
 		}
-
-		return result.ToString().TrimEnd('0');
 	}
 }
