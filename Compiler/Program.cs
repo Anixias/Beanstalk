@@ -203,10 +203,13 @@ internal static class Program
 
 	private static async Task<Ast?> CompileFile(string file)
 	{
-		PrintLine($"------------ {file} ------------");
+		var output = new StringBuilder();
+		output.AppendLine($"------------ {file} ------------");
 		var source = await File.ReadAllTextAsync(file);
 		var lexer = new FilteredLexer(new StringBuffer(source));
+		
 		var ast = Parser.Parse(lexer);
+		await Console.Out.WriteLineAsync(output.ToString());
 
 		return ast;
 	}
