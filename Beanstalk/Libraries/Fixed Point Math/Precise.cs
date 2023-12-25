@@ -893,7 +893,7 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 			result.Append('-');
 
 		var posValue = Abs(this);
-		var intPart = (int)(posValue.RawValue >> DecimalPlaces);
+		var intPart = (long)(posValue.RawValue >> DecimalPlaces);
 		result.Append(intPart);
 		
 		var intermediate = Fract(posValue);
