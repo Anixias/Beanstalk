@@ -1,20 +1,17 @@
-import bs.collections.List
-import bs.*
+import bs.io.Console
 
-module test
+module fibonacci
 
-module a
+fun fib(n:int) :> int
 {
-    module b
-    {
-        module c
-        {
-            entry()
-            {
-                let pi = 3.14159265358979323p
-                var x = 2.0p ** pi
-                x += 3.0p
-            }
-        }
-    }
+	if (n <= 1)
+		return n
+	
+	return fib(n - 1) + fib(n - 2)
+}
+
+entry()
+{
+	let n = 9
+	Console.printLine(fib(n))
 }

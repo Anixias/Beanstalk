@@ -1,6 +1,9 @@
-﻿using System.Text;
+﻿using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Text;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
+using FixedPointMath;
 
 namespace Compiler;
 

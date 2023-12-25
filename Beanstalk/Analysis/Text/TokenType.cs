@@ -1,4 +1,6 @@
-﻿namespace Beanstalk.Analysis.Text;
+﻿using System.Collections.Immutable;
+
+namespace Beanstalk.Analysis.Text;
 
 public sealed class TokenType
 {
@@ -104,26 +106,112 @@ public sealed class TokenType
 	public static readonly TokenType KeywordEntry = CreateKeyword("entry");
 	public static readonly TokenType KeywordLet = CreateKeyword("let");
 	public static readonly TokenType KeywordVar = CreateKeyword("var");
+	public static readonly TokenType KeywordConst = CreateKeyword("const");
+	public static readonly TokenType KeywordTrue = CreateKeyword("true");
+	public static readonly TokenType KeywordFalse = CreateKeyword("false");
+	public static readonly TokenType KeywordNull = CreateKeyword("null");
+	public static readonly TokenType KeywordThis = CreateKeyword("this");
+	public static readonly TokenType KeywordMutable = CreateKeyword("mutable");
+	public static readonly TokenType KeywordLambda = CreateKeyword("lambda");
+	public static readonly TokenType KeywordAs = CreateKeyword("as");
+	public static readonly TokenType KeywordIs = CreateKeyword("is");
+	public static readonly TokenType KeywordRef = CreateKeyword("ref");
+	public static readonly TokenType KeywordSwitch = CreateKeyword("switch");
+	public static readonly TokenType KeywordWith = CreateKeyword("with");
+	public static readonly TokenType KeywordAwait = CreateKeyword("await");
+	
+	// Native data types
+	public static readonly TokenType KeywordInt = CreateKeyword("int");
+	public static readonly TokenType KeywordUInt = CreateKeyword("uint");
+	public static readonly TokenType KeywordNInt = CreateKeyword("nint");
+	public static readonly TokenType KeywordNUInt = CreateKeyword("nuint");
+	public static readonly TokenType KeywordInt8 = CreateKeyword("int8");
+	public static readonly TokenType KeywordUInt8 = CreateKeyword("uint8");
+	public static readonly TokenType KeywordInt16 = CreateKeyword("int16");
+	public static readonly TokenType KeywordUInt16 = CreateKeyword("uint16");
+	public static readonly TokenType KeywordInt32 = CreateKeyword("int32");
+	public static readonly TokenType KeywordUInt32 = CreateKeyword("uint32");
+	public static readonly TokenType KeywordInt64 = CreateKeyword("int64");
+	public static readonly TokenType KeywordUInt64 = CreateKeyword("uint64");
+	public static readonly TokenType KeywordInt128 = CreateKeyword("int128");
+	public static readonly TokenType KeywordUInt128 = CreateKeyword("uint128");
+	public static readonly TokenType KeywordSingle = CreateKeyword("single");
+	public static readonly TokenType KeywordDouble = CreateKeyword("double");
+	public static readonly TokenType KeywordQuad = CreateKeyword("quad");
+	public static readonly TokenType KeywordCoarse = CreateKeyword("coarse");
+	public static readonly TokenType KeywordFixed = CreateKeyword("fixed");
+	public static readonly TokenType KeywordPrecise = CreateKeyword("precise");
+	public static readonly TokenType KeywordBool = CreateKeyword("bool");
+	public static readonly TokenType KeywordString = CreateKeyword("string");
+	public static readonly TokenType KeywordChar = CreateKeyword("char");
+	
+	public static readonly ImmutableArray<TokenType> NativeDataTypes = new[]
+	{
+		KeywordInt, KeywordUInt,
+		KeywordNInt, KeywordNUInt,
+		KeywordInt8, KeywordUInt8,
+		KeywordInt16, KeywordUInt16,
+		KeywordInt32, KeywordUInt32,
+		KeywordInt64, KeywordUInt64,
+		KeywordInt128, KeywordUInt128,
+		KeywordSingle, KeywordDouble,
+		KeywordQuad, KeywordFixed, KeywordCoarse,
+		KeywordPrecise, KeywordBool,
+		KeywordString, KeywordChar
+	}.ToImmutableArray();
 
+	public static readonly ImmutableArray<TokenType> ValidDataTypes =
+		NativeDataTypes.Append(Identifier).ToImmutableArray();
+
+	public static TokenType OpReturnType => OpColonRight;
+	public static readonly TokenType OpColonColon = CreateOperator("::");
+	public static readonly TokenType OpDoubleArrow = CreateOperator("=>");
 	public static readonly TokenType OpColon = CreateOperator(":");
+	public static readonly TokenType OpColonRight = CreateOperator(":>");
 	public static readonly TokenType OpSemicolon = CreateOperator(";");
 	public static readonly TokenType OpLeftParen = CreateOperator("(");
 	public static readonly TokenType OpRightParen = CreateOperator(")");
+	public static readonly TokenType OpHashLeftBracket = CreateOperator("#[");
+	public static readonly TokenType OpQuestionLeftBracket = CreateOperator("?[");
 	public static readonly TokenType OpLeftBracket = CreateOperator("[");
 	public static readonly TokenType OpRightBracket = CreateOperator("]");
 	public static readonly TokenType OpLeftBrace = CreateOperator("{");
 	public static readonly TokenType OpRightBrace = CreateOperator("}");
-	public static readonly TokenType OpLeftAngled = CreateOperator("<");
-	public static readonly TokenType OpRightAngled = CreateOperator(">");
+	public static readonly TokenType OpLessEqual = CreateOperator("<=");
+	public static readonly TokenType OpRotLeft = CreateOperator("<<<");
+	public static readonly TokenType OpLeftLeft = CreateOperator("<<");
+	public static readonly TokenType OpLess = CreateOperator("<");
+	public static readonly TokenType OpGreaterEqual = CreateOperator(">=");
+	public static readonly TokenType OpRotRight = CreateOperator(">>>");
+	public static readonly TokenType OpRightRight = CreateOperator(">>");
+	public static readonly TokenType OpGreater = CreateOperator(">");
 	public static readonly TokenType OpComma = CreateOperator(",");
+	public static readonly TokenType OpDotDotEqual = CreateOperator("..=");
+	public static readonly TokenType OpDotDot = CreateOperator("..");
+	public static readonly TokenType OpQuestionDot = CreateOperator("?.");
 	public static readonly TokenType OpDot = CreateOperator(".");
+	public static readonly TokenType OpEqualsEquals = CreateOperator("==");
+	public static readonly TokenType OpBangEquals = CreateOperator("!=");
+	public static readonly TokenType OpBang = CreateOperator("!");
 	public static readonly TokenType OpEquals = CreateOperator("=");
+	public static readonly TokenType OpPlusPlus = CreateOperator("++");
 	public static readonly TokenType OpPlus = CreateOperator("+");
+	public static readonly TokenType OpMinusMinus = CreateOperator("--");
 	public static readonly TokenType OpMinus = CreateOperator("-");
+	public static readonly TokenType OpTilde = CreateOperator("~");
 	public static readonly TokenType OpStarStar = CreateOperator("**");
 	public static readonly TokenType OpStar = CreateOperator("*");
-	public static readonly TokenType OpDivide = CreateOperator("/");
+	public static readonly TokenType OpSlash = CreateOperator("/");
+	public static readonly TokenType OpPercentPercent = CreateOperator("%%");
+	public static readonly TokenType OpPercent = CreateOperator("%");
+	public static readonly TokenType OpQuestionQuestion = CreateOperator("??");
 	public static readonly TokenType OpQuestion = CreateOperator("?");
+	public static readonly TokenType OpBarBar = CreateOperator("||");
+	public static readonly TokenType OpBar = CreateOperator("|");
+	public static readonly TokenType OpAmpAmp = CreateOperator("&&");
+	public static readonly TokenType OpAmp = CreateOperator("&");
+	public static readonly TokenType OpHatHat = CreateOperator("^^");
+	public static readonly TokenType OpHat = CreateOperator("^");
 
 	public static TokenType? GetKeyword(string keyword)
 	{
