@@ -5,21 +5,16 @@ using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Syntax;
 
-internal class ParseException : Exception
+public class ParseException : Exception
 {
-	public ParseException(string? message)
-	: base(FormatMessage(message, null, null))
-	{
-	}
-	
-	public ParseException(string? message, Token? token)
-	: base(FormatMessage(message, token, null))
-	{
-	}
-	
-	public ParseException(string? message, Token? token, TextRange range)
+	public int Line { get; }
+	public int Column { get; }
+
+	public ParseException(string? message, Token? token, TextRange? range = null)
 	: base(FormatMessage(message, token, range))
 	{
+		Line = token?.Line ?? 1;
+		Column = token?.Column ?? 1;
 	}
 
 	private static string? FormatMessage(string? message, Token? token, TextRange? range)
@@ -34,20 +29,31 @@ internal class ParseException : Exception
 		if (range is not null)
 			text = token.Source.GetText(range.Value);
 		
-		return $"[{token.Line}:{token.Column} at '{text}'] {message}";
+		return $"[line {token.Line}, column {token.Column} at '{text}'] {message}";
 	}
 }
 
 public static class Parser
 {
-	public static Ast? Parse(ILexer lexer)
+	public static Ast? Parse(ILexer lexer, out List<ParseException> diagnostics)
 	{
 		var tokens = new List<Token>();
-		
+
+		diagnostics = [];
 		foreach (var token in lexer)
+		{
 			tokens.Add(token);
+
+			if (!token.Type.IsInvalid)
+				continue;
+			
+			var plural = token.Text.Length > 1 ? "characters" : "character";
+			diagnostics.Add(new ParseException($"Unexpected {plural}", token));
+		}
+
+		var root = ParseProgram(tokens, 0, diagnostics);
+		diagnostics = diagnostics.OrderBy(d => d.Line).ThenBy(d => d.Column).ToList();
 		
-		var root = ParseProgram(tokens, 0);
 		if (root is not null)
 			return new Ast(root);
 
@@ -119,7 +125,7 @@ public static class Parser
 		}
 		
 		if (IsEndOfFile(tokens, position))
-			throw new ParseException($"{message}; Instead, got 'end of file'", tokens.FirstOrDefault());
+			throw new ParseException($"{message}; Instead, got 'end of file'", tokens.LastOrDefault());
 
 		var token = tokens[position];
 		if (!types.Contains(token.Type))
@@ -129,17 +135,25 @@ public static class Parser
 		return token;
 	}
 
-	private static ProgramStatement? ParseProgram(IReadOnlyList<Token> tokens, int position)
+	private static ProgramStatement? ParseProgram(IReadOnlyList<Token> tokens, int position,
+		List<ParseException> diagnostics)
 	{
 		try
 		{
 			var startToken = TokenAt(tokens, position);
 			var imports = ParseImportStatements(tokens, ref position);
-			TryParseModuleStatement(tokens, ref position, false, out var module);
-			var statements = ParseTopLevelStatements(tokens, ref position);
+
+			ModuleStatement? module = null;
+			if (Peek(tokens, position) == TokenType.KeywordModule)
+				module = ParseModuleStatement(tokens, ref position, false, diagnostics);
+			
+			var statements = ParseTopLevelStatements(tokens, ref position, diagnostics);
 
 			if (Peek(tokens, position) != TokenType.EndOfFile)
-				throw new ParseException("Expected 'end of file'", TokenAt(tokens, position));
+				diagnostics.Add(new ParseException("Expected 'end of file'", TokenAt(tokens, position)));
+
+			if (diagnostics.Count > 0)
+				return null;
 
 			var range = startToken is null
 				? new TextRange(0, 0)
@@ -149,9 +163,7 @@ public static class Parser
 		}
 		catch (ParseException e)
 		{
-			Console.ForegroundColor = ConsoleColor.Red;
-			Console.WriteLine(e.Message);
-			Console.ResetColor();
+			diagnostics.Add(e);
 			return null;
 		}
 		catch
@@ -213,18 +225,8 @@ public static class Parser
 		return true;
 	}
 
-	private static bool TryParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody,
-		[NotNullWhen(true)] out ModuleStatement? module)
-	{
-		module = null;
-		if (Peek(tokens, position) != TokenType.KeywordModule)
-			return false;
-
-		module = ParseModuleStatement(tokens, ref position, requireBody);
-		return true;
-	}
-		
-	private static ModuleStatement ParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody)
+	private static ModuleStatement ParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody,
+		List<ParseException> diagnostics)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordModule);
 		
@@ -240,18 +242,18 @@ public static class Parser
 		foreach (var token in scope)
 		{
 			if (token.Type != TokenType.Identifier)
-				throw new ParseException("Invalid module statement: Expected 'identifier'", token);
+				diagnostics.Add(new ParseException("Invalid module statement: Expected 'identifier'", token));
 		}
 
 		var statements = new List<StatementNode>();
 		if (Match(tokens, ref position, TokenType.OpLeftBrace))
 		{
-			statements.AddRange(ParseTopLevelStatements(tokens, ref position));
+			statements.AddRange(ParseTopLevelStatements(tokens, ref position, diagnostics));
 			var endToken = Consume(tokens, ref position, "Expected statement", TokenType.OpRightBrace);
 			range = range.Join(endToken.Range);
 		}
 		else if (requireBody)
-			throw new ParseException("Module statement must have a body", TokenAt(tokens, position - 1));
+			diagnostics.Add(new ParseException("Module statement must have a body", TokenAt(tokens, position - 1)));
 
 		return new ModuleStatement(scope, statements, range);
 	}
@@ -343,34 +345,56 @@ public static class Parser
 			startToken.Range.Join(body.range));
 	}
 
-	private static List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position)
+	private static List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
 	{
+		var syncTokens = new[]
+		{
+			TokenType.EndOfFile,
+			TokenType.KeywordModule,
+			TokenType.KeywordEntry,
+			TokenType.KeywordFun
+		};
+		
 		var statements = new List<StatementNode>();
 
-		while (true)
+		while (Peek(tokens, position) != TokenType.EndOfFile)
 		{
-			if (TryParseModuleStatement(tokens, ref position, true, out var moduleStatement))
+			try
 			{
-				statements.Add(moduleStatement);
-				continue;
+				statements.Add(ParseTopLevelStatement(tokens, ref position, diagnostics));
 			}
-			
-			if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
+			catch (ParseException e)
 			{
-				statements.Add(entryStatement);
-				continue;
+				diagnostics.Add(e);
+				while (!syncTokens.Contains(Peek(tokens, position)))
+					position++;
 			}
-			
-			if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
-			{
-				statements.Add(functionDeclaration);
-				continue;
-			}
-
-			break;
 		}
 		
 		return statements;
+	}
+
+	private static StatementNode ParseTopLevelStatement(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
+	{
+		var peek = Peek(tokens, position);
+		if (peek == TokenType.KeywordModule)
+		{
+			return ParseModuleStatement(tokens, ref position, true, diagnostics);
+		}
+			
+		if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
+		{
+			return entryStatement;
+		}
+			
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
+		{
+			return functionDeclaration;
+		}
+
+		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
 	}
 
 	private static BlockStatement ParseBlockStatement(IReadOnlyList<Token> tokens, ref int position)
@@ -415,7 +439,7 @@ public static class Parser
 		}
 
 		if (peek == TokenType.EndOfFile)
-			throw new ParseException("Expected statement");
+			throw new ParseException("Expected statement", tokens.LastOrDefault());
 		
 		var expression = ParseExpression(tokens, ref position);
 		var expressionStatement = new ExpressionStatement(expression, expression.range);
@@ -483,7 +507,10 @@ public static class Parser
 				identifier.Range.Join(initializer.range));
 		}
 
-		throw new ParseException("Expected variable declaration");
+		if (IsEndOfFile(tokens, position))
+			throw new ParseException("Expected variable declaration", tokens.LastOrDefault());
+		
+		throw new ParseException("Expected variable declaration", tokens[position]);
 	}
 
 	private static ReturnStatement ParseReturnStatement(IReadOnlyList<Token> tokens, ref int position)

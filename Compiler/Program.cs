@@ -58,6 +58,8 @@ internal struct ProgramArgs
 
 internal static class Program
 {
+	private static object consoleLock = new();
+	
 	private static async Task Main(string[] args)
 	{
 		if (args.Length == 0)
@@ -158,19 +160,22 @@ internal static class Program
 
 		var optimizationLevel = programArgs.Value.OptimizationLevel ?? 0;
 
-		var files = new List<string>();
+		var workingDirectory = "";
+		var files = new List<(string, string)>();
 
 		if (File.Exists(inputPath))
 		{
-			files.Add(inputPath);
+			workingDirectory = Path.GetDirectoryName(inputPath)!;
+			files.Add((workingDirectory, inputPath));
 		}
 		else if (Directory.Exists(inputPath))
 		{
+			workingDirectory = inputPath;
 			foreach (var file in Directory.EnumerateFiles(inputPath, "*.bs", SearchOption.AllDirectories))
-				files.Add(file);
+				files.Add((workingDirectory, file));
 		}
 
-		var compilationTasks = files.Select(CompileFile).ToArray();
+		var compilationTasks = files.Select(ParseFile).ToArray();
 		await Task.WhenAll(compilationTasks);
 
 		var asts = new Ast[compilationTasks.Length];
@@ -183,12 +188,19 @@ internal static class Program
 				continue;
 			}
 
+			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
+			Console.ResetColor();
+
 			return;
 		}
 
 		Analyze(asts);
 		GenerateIR(asts);
+		
+		Console.ForegroundColor = ConsoleColor.Cyan;
+		await Console.Out.WriteLineAsync("Compilation succeeded.");
+		Console.ResetColor();
 	}
 
 	private static void GenerateIR(Ast[] asts)
@@ -201,15 +213,28 @@ internal static class Program
 		
 	}
 
-	private static async Task<Ast?> CompileFile(string file)
+	private static async Task<Ast?> ParseFile((string, string) file)
 	{
-		var output = new StringBuilder();
-		output.AppendLine($"------------ {file} ------------");
-		var source = await File.ReadAllTextAsync(file);
+		var workingDirectory = file.Item1;
+		var filePath = file.Item2;
+		var relativePath = Path.GetRelativePath(workingDirectory, filePath);
+		
+		var source = await File.ReadAllTextAsync(filePath);
 		var lexer = new FilteredLexer(new StringBuffer(source));
 		
-		var ast = Parser.Parse(lexer);
-		await Console.Out.WriteLineAsync(output.ToString());
+		var ast = Parser.Parse(lexer, out var parseDiagnostics);
+		
+		if (parseDiagnostics.Count <= 0)
+			return ast;
+		
+		lock (consoleLock)
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.WriteLine($"------------ {relativePath} ------------");
+			Console.WriteLine("Parse Error(s):");
+			Console.WriteLine($"{string.Join('\n', parseDiagnostics.Select(d => $"\t{d.Message}"))}\n");
+			Console.ResetColor();
+		}
 
 		return ast;
 	}
