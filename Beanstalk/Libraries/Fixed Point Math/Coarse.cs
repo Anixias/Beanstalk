@@ -1,79 +1,73 @@
-using System.Globalization;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FixedPointMath;
 
-public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
+public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 {
 	[StructLayout(LayoutKind.Explicit)]
-	private readonly struct ToUnsigned(long sourceValue)
+	private readonly struct ToUnsigned(int sourceValue)
 	{
-		[FieldOffset(0)] public readonly long sourceValue = sourceValue;
-		[FieldOffset(0)] public readonly ulong castedValue;
+		[FieldOffset(0)] public readonly int sourceValue = sourceValue;
+		[FieldOffset(0)] public readonly uint castedValue;
 	}
 	
 	[StructLayout(LayoutKind.Explicit)]
-	private readonly struct ToSigned(ulong sourceValue)
+	private readonly struct ToSigned(uint sourceValue)
 	{
-		[FieldOffset(0)] public readonly ulong sourceValue = sourceValue;
-		[FieldOffset(0)] public readonly long castedValue;
+		[FieldOffset(0)] public readonly uint sourceValue = sourceValue;
+		[FieldOffset(0)] public readonly int castedValue;
 	}
 	
-	public static readonly Fixed Epsilon = new(1L);
-	public static readonly Fixed MaxValue = new(long.MaxValue);
-	public static readonly Fixed MinValue = new(long.MinValue);
-	public static Fixed Zero => new(0L);
-	public static Fixed One => new(RawOne);
-	public static readonly Fixed NegativeOne = new(RawNegativeOne);
-	public static readonly Fixed Half = new(RawHalf);
-	public static readonly Fixed Pi = new(RawPi);
-	public static readonly Fixed PiOver2 = new(RawPiOver2);
-	public static readonly Fixed PiTimes2 = new(RawPiTimes2);
-	public static readonly Fixed Ln2 = new(RawLn2);
+	public static readonly Coarse Epsilon = new(1);
+	public static readonly Coarse MaxValue = new(int.MaxValue);
+	public static readonly Coarse MinValue = new(int.MinValue);
+	public static Coarse Zero => new(0);
+	public static Coarse One => new(RawOne);
+	public static readonly Coarse NegativeOne = new(RawNegativeOne);
+	public static readonly Coarse Half = new(RawHalf);
+	public static readonly Coarse Pi = new(RawPi);
+	public static readonly Coarse PiOver2 = new(RawPiOver2);
+	public static readonly Coarse PiTimes2 = new(RawPiTimes2);
+	public static readonly Coarse Ln2 = new(RawLn2);
 
-	private static readonly Fixed Log2Max = BitCount - DecimalPlaces - 1;
-	private static readonly Fixed Log2Min = DecimalPlaces - BitCount;
-	private static readonly Fixed DegToRadConstant = Pi / 180;
-	private static readonly Fixed RadToDegConstant = 180 / Pi;
+	private static readonly Coarse Log2Max = (Coarse)(BitCount - DecimalPlaces - 1);
+	private static readonly Coarse Log2Min = (Coarse)(DecimalPlaces - BitCount);
+	private static readonly Coarse DegToRadConstant = Pi / (Coarse)180;
+	private static readonly Coarse RadToDegConstant = (Coarse)180 / Pi;
 	
-	private const int BitCount = 64;
-	private const int DecimalPlaces = 32;
-	private const long RawOne = 1L << DecimalPlaces;
-	private const long RawHalf = 0x80000000L;
-	private const long RawNegativeOne = -(1L << DecimalPlaces);
-	private const long RawPi = 0x3243F6A88L;
-	private const long RawPiOver2 = 0x1921FB544L;
-	private const long RawPiTimes2 = 0x6487ED511L;
-	private const long RawLn2 = 0xB17217F7L;
+	private const int BitCount = 32;
+	private const int DecimalPlaces = 16;
+	private const int RawOne = 1 << DecimalPlaces;
+	private const int RawHalf = 0x8000;
+	private const int RawNegativeOne = -(1 << DecimalPlaces);
+	private const int RawPi = 0x3_243F;
+	private const int RawPiOver2 = 0x1_921F;
+	private const int RawPiTimes2 = 0x6_487E;
+	private const int RawLn2 = 0x0_B172;
 
-	public long RawValue { get; } = rawValue;
-	public ulong Bits => new ToUnsigned(RawValue).castedValue;
+	public int RawValue { get; } = rawValue;
+	public uint Bits => new ToUnsigned(RawValue).castedValue;
 
-	public Fixed(int value) : this(value * RawOne)
-	{
-	}
-
-	public static Fixed Parse(string number)
+	public static Coarse Parse(string number)
 	{
 		var groups = number.Split('.', StringSplitOptions.TrimEntries);
 
 		if (groups.Length > 2)
 			throw new ArgumentException("Cannot have more than one decimal point");
 
-		if (!int.TryParse(groups[0], out var intPart))
+		if (!short.TryParse(groups[0], out var intPart))
 			throw new ArgumentException("Failed to parse integer part");
 
 		if (groups.Length < 2)
-			return new Fixed((long)intPart << DecimalPlaces);
+			return new Coarse(intPart << DecimalPlaces);
 
 		var decimalString = groups[1];
 		return From(intPart, decimalString);
 	}
 
-	public static bool TryParse(string number, out Fixed result)
+	public static bool TryParse(string number, out Coarse result)
 	{
 		try
 		{
@@ -87,21 +81,21 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		}
 	}
 
-	private static Fixed From(int intPart, string decimalPart)
+	private static Coarse From(short intPart, string decimalPart)
 	{
-		var result = new Fixed((long)intPart << DecimalPlaces);
+		var result = new Coarse(intPart << DecimalPlaces);
 
 		if (string.IsNullOrWhiteSpace(decimalPart))
 			return result;
 
 		var decimalValue = Zero;
-		var place = One / 10;
+		var place = One / (Coarse)10;
 
 		foreach (var c in decimalPart)
 		{
 			var digit = c - '0';
-			decimalValue += digit * place;
-			place /= 10;
+			decimalValue += (Coarse)digit * place;
+			place /= (Coarse)10;
 
 			if (IsZero(place))
 				break;
@@ -116,9 +110,9 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsZero(Fixed value)
+	public static bool IsZero(Coarse value)
 	{
-		return value.RawValue == 0L;
+		return value.RawValue == 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -128,27 +122,27 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsNegative(Fixed value)
+	public static bool IsNegative(Coarse value)
 	{
-		return value.RawValue < 0L;
+		return value.RawValue < 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsOddInteger(Fixed value)
+	public static bool IsOddInteger(Coarse value)
 	{
 		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsEvenInteger(Fixed value)
+	public static bool IsEvenInteger(Coarse value)
 	{
 		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsPositive(Fixed value)
+	public static bool IsPositive(Coarse value)
 	{
-		return value.RawValue > 0L;
+		return value.RawValue > 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -158,7 +152,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsInteger(Fixed value)
+	public static bool IsInteger(Coarse value)
 	{
 		return Fract(value) == Zero;
 	}
@@ -169,22 +163,22 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return IsInteger(this);
 	}
 
-	public static Fixed DegToRad(Fixed value)
+	public static Coarse DegToRad(Coarse value)
 	{
 		return value * DegToRadConstant;
 	}
 
-	public static Fixed RadToDeg(Fixed value)
+	public static Coarse RadToDeg(Coarse value)
 	{
 		return value * RadToDegConstant;
 	}
 
-	public static Fixed Lerp(Fixed a, Fixed b, Fixed t)
+	public static Coarse Lerp(Coarse a, Coarse b, Coarse t)
 	{
 		return a + t * (b - a);
 	}
 
-	public static int Sign(Fixed value)
+	public static int Sign(Coarse value)
 	{
 		return
 			value.RawValue < 0 ? -1 :
@@ -192,50 +186,50 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			0;
 	}
 
-	public static Fixed Abs(Fixed value)
+	public static Coarse Abs(Coarse value)
 	{
 		if (value == MinValue)
 			return MaxValue;
 
 		var mask = value.RawValue >> (BitCount - 1);
-		return new Fixed((value.RawValue + mask) ^ mask);
+		return new Coarse((value.RawValue + mask) ^ mask);
 	}
 
-	public static Fixed Floor(Fixed value)
+	public static Coarse Floor(Coarse value)
 	{
 		var rawValue = new ToUnsigned(value.RawValue).castedValue;
-		var flooredValue = new ToSigned(rawValue & 0xFFFF_FFFF_0000_0000uL).castedValue;
-		return new Fixed(flooredValue);
+		var flooredValue = new ToSigned(rawValue & 0xFFFF_0000u).castedValue;
+		return new Coarse(flooredValue);
 	}
 
-	public static Fixed Ceil(Fixed value)
+	public static Coarse Ceil(Coarse value)
 	{
-		var hasDecimalPart = (value.RawValue & 0x0000_0000_FFFF_FFFFL) != 0L;
+		var hasDecimalPart = (value.RawValue & 0x0000_FFFF) != 0L;
 		return hasDecimalPart ? Floor(value) + One : value;
 	}
 
-	public static Fixed Fract(Fixed value)
+	public static Coarse Fract(Coarse value)
 	{
-		return new Fixed(value.RawValue & 0x0000_0000_FFFF_FFFFL);
+		return new Coarse(value.RawValue & 0x0000_FFFF);
 	}
 
-	public static Fixed Round(Fixed value)
+	public static Coarse Round(Coarse value)
 	{
-		var decimalPart = value.RawValue & 0x0000_0000_FFFF_FFFFL;
+		var decimalPart = value.RawValue & 0x0000_FFFF;
 		var integerPart = Floor(value);
 
-		if (decimalPart < 0x8000_0000L)
+		if (decimalPart < 0x8000)
 			return integerPart;
 		
-		if (decimalPart > 0x8000_0000L)
+		if (decimalPart > 0x8000)
 			return integerPart + One;
 
-		return (integerPart.RawValue & RawOne) == 0L
+		return (integerPart.RawValue & RawOne) == 0
 			? integerPart
 			: integerPart + One;
 	}
 
-	public static Fixed Clamp(Fixed value, Fixed min, Fixed max)
+	public static Coarse Clamp(Coarse value, Coarse min, Coarse max)
 	{
 		if (value < min)
 			return min;
@@ -246,58 +240,58 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value;
 	}
 
-	public static Fixed PosMod(Fixed a, Fixed b)
+	public static Coarse PosMod(Coarse a, Coarse b)
 	{
 		var result = a % b;
 		
-		if (a.RawValue < 0L && b.RawValue > 0L || result.RawValue > 0L && b.RawValue < 0L)
+		if (a.RawValue < 0 && b.RawValue > 0 || result.RawValue > 0 && b.RawValue < 0)
 			result += b;
 
 		return result;
 	}
 
-	public static (Fixed, Fixed) SinCos(Fixed angle)
+	public static (Coarse, Coarse) SinCos(Coarse angle)
 	{
 		return (Sin(angle), Cos(angle));
 	}
 
-	public static Fixed Snapped(Fixed value, Fixed step)
+	public static Coarse Snapped(Coarse value, Coarse step)
 	{
-		return step.RawValue != 0L ? Floor(value / step + Half) * step : value;
+		return step.RawValue != 0 ? Floor(value / step + Half) * step : value;
 	}
 
-	public static Fixed operator +(Fixed left, Fixed right)
+	public static Coarse operator +(Coarse left, Coarse right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
 		var sum = leftRaw + rightRaw;
 
-		if ((~(leftRaw ^ rightRaw) & (leftRaw ^ sum) & long.MinValue) != 0L)
-			sum = leftRaw > 0L ? long.MaxValue : long.MinValue;
+		if ((~(leftRaw ^ rightRaw) & (leftRaw ^ sum) & int.MinValue) != 0)
+			sum = leftRaw > 0 ? int.MaxValue : int.MinValue;
 
-		return new Fixed(sum);
+		return new Coarse(sum);
 	}
 
-	public static Fixed operator -(Fixed left, Fixed right)
+	public static Coarse operator -(Coarse left, Coarse right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
 		var difference = leftRaw - rightRaw;
 
-		if (((leftRaw ^ rightRaw) & (leftRaw ^ difference) & long.MinValue) != 0L)
-			difference = leftRaw < 0L ? long.MinValue : long.MaxValue;
+		if (((leftRaw ^ rightRaw) & (leftRaw ^ difference) & int.MinValue) != 0)
+			difference = leftRaw < 0 ? int.MinValue : int.MaxValue;
 
-		return new Fixed(difference);
+		return new Coarse(difference);
 	}
 
-	private static long AddOverflow(long left, long right, ref bool overflow)
+	private static int AddOverflow(int left, int right, ref bool overflow)
 	{
 		var sum = left + right;
-		overflow |= ((left ^ right ^ sum) & long.MinValue) != 0L;
+		overflow |= ((left ^ right ^ sum) & int.MinValue) != 0;
 		return sum;
 	}
 
-	public static Fixed operator *(Fixed left, Fixed right)
+	public static Coarse operator *(Coarse left, Coarse right)
 	{
 		if (left == One)
 			return right;
@@ -314,12 +308,12 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
 
-		if (leftRaw == 0L || rightRaw == 0L)
+		if (leftRaw == 0 || rightRaw == 0)
 			return Zero;
 
-		var leftLow = leftRaw & 0x0000_0000_FFFF_FFFFL;
+		var leftLow = leftRaw & 0x0000_FFFF;
 		var leftHigh = leftRaw >> DecimalPlaces;
-		var rightLow = rightRaw & 0x0000_0000_FFFF_FFFFL;
+		var rightLow = rightRaw & 0x0000_FFFF;
 		var rightHigh = rightRaw >> DecimalPlaces;
 
 		var leftLowCast = new ToUnsigned(leftLow);
@@ -338,27 +332,27 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		sum = AddOverflow(sum, highLow, ref overflow);
 		sum = AddOverflow(sum, highResult, ref overflow);
 
-		var opSignsEqual = ((leftRaw ^ rightRaw) & long.MinValue) == 0L;
+		var opSignsEqual = ((leftRaw ^ rightRaw) & int.MinValue) == 0;
 
 		if (opSignsEqual)
 		{
-			if (sum < 0L || (overflow && leftRaw > 0L))
+			if (sum < 0 || (overflow && leftRaw > 0))
 				return MaxValue;
 		}
 		else
 		{
-			if (sum > 0L)
+			if (sum > 0)
 				return MinValue;
 		}
 
 		var topCarry = highHigh >> DecimalPlaces;
-		if (topCarry != 0L && topCarry != -1)
+		if (topCarry != 0 && topCarry != -1)
 			return opSignsEqual ? MaxValue : MinValue;
 
 		if (opSignsEqual)
-			return new Fixed(sum);
+			return new Coarse(sum);
 		
-		long posOp, negOp;
+		int posOp, negOp;
 		if (leftRaw > rightRaw)
 		{
 			posOp = leftRaw;
@@ -373,21 +367,21 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (sum > negOp && negOp < -RawOne && posOp > RawOne)
 			return MinValue;
 
-		return new Fixed(sum);
+		return new Coarse(sum);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static int CountLeadingZeroes(ulong value)
+	private static int CountLeadingZeroes(uint value)
 	{
 		var result = 0;
 		
-		while ((value & 0xF000_0000_0000_0000uL) == 0)
+		while ((value & 0xF000_0000u) == 0)
 		{
 			result += 4;
 			value <<= 4;
 		}
 		
-		while ((value & 0x8000_0000_0000_0000uL) == 0)
+		while ((value & 0x8000_0000u) == 0)
 		{
 			result += 1;
 			value <<= 1;
@@ -396,7 +390,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return result;
 	}
 
-	public static Fixed operator /(Fixed left, Fixed right)
+	public static Coarse operator /(Coarse left, Coarse right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
@@ -404,15 +398,15 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (rightRaw == 0L)
 			throw new DivideByZeroException();
 
-		if (right == 2)
-			return new Fixed(leftRaw >> 1);
+		if (right == (Coarse)2)
+			return new Coarse(leftRaw >> 1);
 
-		var remainder = new ToUnsigned(leftRaw >= 0L ? leftRaw : -leftRaw).castedValue;
-		var divisor = new ToUnsigned(rightRaw >= 0L ? rightRaw : -rightRaw).castedValue;
-		var quotient = 0uL;
+		var remainder = new ToUnsigned(leftRaw >= 0 ? leftRaw : -leftRaw).castedValue;
+		var divisor = new ToUnsigned(rightRaw >= 0 ? rightRaw : -rightRaw).castedValue;
+		var quotient = 0u;
 		var bitPos = BitCount / 2 + 1;
 
-		while ((divisor & 0xFuL) == 0uL && bitPos >= 4)
+		while ((divisor & 0xFu) == 0u && bitPos >= 4)
 		{
 			divisor >>= 4;
 			bitPos -= 4;
@@ -431,37 +425,37 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			remainder %= divisor;
 			quotient += division << bitPos;
 
-			if ((division & ~(ulong.MaxValue >> bitPos)) != 0uL)
-				return ((leftRaw ^ rightRaw) & long.MinValue) == 0L ? MaxValue : MinValue;
+			if ((division & ~(uint.MaxValue >> bitPos)) != 0u)
+				return ((leftRaw ^ rightRaw) & int.MinValue) == 0 ? MaxValue : MinValue;
 
 			remainder <<= 1;
 			bitPos--;
 		}
 
 		quotient++;
-		var result = (long)(quotient >> 1);
-		if (((leftRaw ^ rightRaw) & long.MinValue) != 0L)
+		var result = (int)(quotient >> 1);
+		if (((leftRaw ^ rightRaw) & int.MinValue) != 0)
 			result = -result;
 
-		return new Fixed(result);
+		return new Coarse(result);
 	}
 
-	public static Fixed operator %(Fixed left, Fixed right)
+	public static Coarse operator %(Coarse left, Coarse right)
 	{
-		return new Fixed(left.RawValue == long.MinValue & right.RawValue == -1L ? 0L : left.RawValue % right.RawValue);
+		return new Coarse(left.RawValue == int.MinValue & right.RawValue == -1 ? 0 : left.RawValue % right.RawValue);
 	}
 
-	private static Fixed Pow2(Fixed exponent)
+	private static Coarse Pow2(Coarse exponent)
 	{
-		if (exponent.RawValue == 0L)
+		if (exponent.RawValue == 0)
 			return One;
 
-		var negative = exponent.RawValue < 0L;
+		var negative = exponent.RawValue < 0;
 		if (negative)
 			exponent = -exponent;
 
 		if (exponent == One)
-			return negative ? Half : 2;
+			return negative ? Half : (Coarse)2;
 
 		if (exponent >= Log2Max)
 			return negative ? One / MaxValue : MaxValue;
@@ -476,27 +470,27 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		var term = One;
 		var i = 1;
 
-		while (term.RawValue != 0L)
+		while (term.RawValue != 0)
 		{
-			term = exponent * term * Ln2 / i;
+			term = exponent * term * Ln2 / (Coarse)i;
 			result += term;
 			i++;
 		}
 
-		result = new Fixed(result.RawValue << integerPart);
+		result = new Coarse(result.RawValue << integerPart);
 		if (negative)
 			result = One / result;
 
 		return result;
 	}
 
-	public static Fixed Log2(Fixed value)
+	public static Coarse Log2(Coarse value)
 	{
 		if (!IsPositive(value))
 			throw new ArgumentOutOfRangeException(nameof(value));
 
-		var b = 1L << (DecimalPlaces - 1);
-		var y = 0L;
+        var b = 1 << (DecimalPlaces - 1);
+		var y = 0;
 
 		var rawValue = value.RawValue;
 		while (rawValue < RawOne)
@@ -511,29 +505,29 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			y += RawOne;
 		}
 
-		var z = new Fixed(rawValue);
+		var z = new Coarse(rawValue);
 
 		for (var i = 0; i < DecimalPlaces; i++)
 		{
 			z *= z;
 			if (z.RawValue >= RawOne << 1)
 			{
-				z = new Fixed(z.RawValue >> 1);
+				z = new Coarse(z.RawValue >> 1);
 				y += b;
 			}
 
 			b >>= 1;
 		}
 
-		return new Fixed(y);
+		return new Coarse(y);
 	}
 
-	public static Fixed Ln(Fixed value)
+	public static Coarse Ln(Coarse value)
 	{
 		return Log2(value) * Ln2;
 	}
 
-	public static Fixed Pow(Fixed @base, Fixed exponent)
+	public static Coarse Pow(Coarse @base, Coarse exponent)
 	{
 		if (@base < Zero)
 		{
@@ -542,7 +536,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 				return Zero;
 
 			var pow = Pow(-@base, exponent);
-			if (exponent % 2 == 0)
+			if (exponent % (Coarse)2 == Zero)
 				return pow;
 
 			return -pow;
@@ -566,15 +560,15 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return Pow2(exponent * log2);
 	}
 
-	public static Fixed Sqrt(Fixed value)
+	public static Coarse Sqrt(Coarse value)
 	{
 		var rawValue = value.RawValue;
-		if (rawValue < 0L)
+		if (rawValue < 0)
 			throw new ArgumentOutOfRangeException(nameof(value));
 
 		var number = new ToUnsigned(rawValue).castedValue;
-		var result = 0uL;
-		var bit = 1uL << (BitCount - 2);
+		var result = 0u;
+		var bit = 1u << (BitCount - 2);
 
 		while (bit > number)
 		{
@@ -583,7 +577,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 
 		for (var i = 0; i < 2; i++)
 		{
-			while (bit != 0uL)
+			while (bit != 0u)
 			{
 				if (number >= result + bit)
 				{
@@ -601,11 +595,11 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			if (i != 0)
 				continue;
 			
-			if (number > (1uL << (BitCount / 2)) - 1)
+			if (number > (1u << (BitCount / 2)) - 1)
 			{
 				number -= result;
-				number = (number << (BitCount / 2)) - 0x8000_0000uL;
-				result = (result << (BitCount / 2)) + 0x8000_0000uL;
+				number = (number << (BitCount / 2)) - 0x8000u;
+				result = (result << (BitCount / 2)) + 0x8000u;
 			}
 			else
 			{
@@ -613,16 +607,16 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 				result <<= BitCount / 2;
 			}
 
-			bit = 1uL << (BitCount / 2 - 2);
+			bit = 1u << (BitCount / 2 - 2);
 		}
 
 		if (number > result)
 			result++;
 
-		return new Fixed(new ToSigned(result).castedValue);
+		return new Coarse(new ToSigned(result).castedValue);
 	}
 
-	public static Fixed Wrap(Fixed value, Fixed minimum, Fixed maximum)
+	public static Coarse Wrap(Coarse value, Coarse minimum, Coarse maximum)
 	{
 		while (value < minimum)
 			value += maximum - minimum;
@@ -633,30 +627,27 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value;
 	}
 
-	public static Fixed Sin(Fixed value)
+	public static Coarse Sin(Coarse value)
 	{
 		return Cos(value - PiOver2);
 	}
 
-	public static Fixed Cos(Fixed value)
+	public static Coarse Cos(Coarse value)
 	{
-		// 6 terms of taylor series
+		// 3 terms of taylor series
 		value = Wrap(value, -Pi, Pi);
-		return 1
-		       - Pow(value, 2) / 2
-		       + Pow(value, 4) / 24
-		       - Pow(value, 6) / 720
-		       + Pow(value, 8) / 40_320
-		       - Pow(value, 10) / 3_628_800
-		       + Pow(value, 12) / 479_001_600;
+		return One
+		       - Pow(value, (Coarse)2) / (Coarse)2
+		       + Pow(value, (Coarse)4) / (Coarse)24
+		       - Pow(value, (Coarse)6) / (Coarse)720;
 	}
 
-	public static Fixed Tan(Fixed value)
+	public static Coarse Tan(Coarse value)
 	{
 		return Sin(value) / Cos(value);
 	}
 
-	public static Fixed Acos(Fixed value)
+	public static Coarse Acos(Coarse value)
 	{
 		if (value < -One || value > One)
 			throw new ArgumentOutOfRangeException(nameof(value));
@@ -668,7 +659,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value.RawValue < 0 ? result + Pi : result;
 	}
 
-	public static Fixed Atan(Fixed value)
+	public static Coarse Atan(Coarse value)
 	{
 		if (IsZero(value))
 			return Zero;
@@ -685,11 +676,11 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		var term = One;
 
 		var squared = value * value;
-		var squared2 = squared * 2;
+		var squared2 = squared * (Coarse)2;
 		var squaredPlusOne = squared + One;
-		var squaredPlusOne2 = squaredPlusOne * 2;
+		var squaredPlusOne2 = squaredPlusOne * (Coarse)2;
 		var dividend = squared2;
-		var divisor = squaredPlusOne * 3;
+		var divisor = squaredPlusOne * (Coarse)3;
 
 		for (var i = 2; i < 30; i++)
 		{
@@ -714,7 +705,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return result;
 	}
 
-	public static Fixed Atan2(Fixed y, Fixed x)
+	public static Coarse Atan2(Coarse y, Coarse x)
 	{
 		var rawY = y.RawValue;
 		var rawX = x.RawValue;
@@ -723,16 +714,16 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		{
 			return rawY switch
 			{
-				> 0L => PiOver2,
-				< 0L => -PiOver2,
+				> 0 => PiOver2,
+				< 0 => -PiOver2,
 				_ => Zero
 			};
 		}
 		
-		const long rawPointTwoEight = 1202590844L;
-		var pointTwoEight = new Fixed(rawPointTwoEight);
+		const int rawPointTwoEight = 0x0_47AE;
+		var pointTwoEight = new Coarse(rawPointTwoEight);
 
-		Fixed atan;
+		Coarse atan;
 		var z = y / x;
 		var zSquared = z * z;
 
@@ -760,94 +751,84 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return atan;
 	}
 
-	public static Fixed operator -(Fixed operand)
+	public static Coarse operator -(Coarse operand)
 	{
-		return operand.RawValue == long.MinValue ? MaxValue : new Fixed(-operand.RawValue);
+		return operand.RawValue == int.MinValue ? MaxValue : new Coarse(-operand.RawValue);
 	}
 
-	public static bool operator ==(Fixed left, Fixed right)
+	public static bool operator ==(Coarse left, Coarse right)
 	{
 		return left.RawValue == right.RawValue;
 	}
 
-	public static bool operator !=(Fixed left, Fixed right)
+	public static bool operator !=(Coarse left, Coarse right)
 	{
 		return left.RawValue != right.RawValue;
 	}
 
-	public static bool operator >(Fixed left, Fixed right)
+	public static bool operator >(Coarse left, Coarse right)
 	{
 		return left.RawValue > right.RawValue;
 	}
 
-	public static bool operator <(Fixed left, Fixed right)
+	public static bool operator <(Coarse left, Coarse right)
 	{
 		return left.RawValue < right.RawValue;
 	}
 
-	public static bool operator >=(Fixed left, Fixed right)
+	public static bool operator >=(Coarse left, Coarse right)
 	{
 		return left.RawValue >= right.RawValue;
 	}
 
-	public static bool operator <=(Fixed left, Fixed right)
+	public static bool operator <=(Coarse left, Coarse right)
 	{
 		return left.RawValue <= right.RawValue;
 	}
 
-	public static explicit operator Fixed(long value)
+	public static explicit operator Coarse(int value)
 	{
-		return new Fixed(value * RawOne);
+		return new Coarse(value * RawOne);
 	}
 
-	public static explicit operator long(Fixed value)
+	public static explicit operator int(Coarse value)
 	{
 		return value.RawValue >> DecimalPlaces;
 	}
 	
-	public static explicit operator Fixed(float value)
+	public static explicit operator Coarse(float value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Coarse((int)(value * RawOne));
 	}
 
-	public static explicit operator float(Fixed value)
+	public static explicit operator float(Coarse value)
 	{
 		return (float)value.RawValue / RawOne;
 	}
 	
-	public static explicit operator Fixed(double value)
+	public static explicit operator Coarse(double value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Coarse((int)(value * RawOne));
 	}
 
-	public static explicit operator double(Fixed value)
+	public static explicit operator double(Coarse value)
 	{
 		return (double)value.RawValue / RawOne;
 	}
 	
-	public static explicit operator Fixed(decimal value)
+	public static explicit operator Coarse(decimal value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Coarse((int)(value * RawOne));
 	}
 
-	public static explicit operator decimal(Fixed value)
+	public static explicit operator decimal(Coarse value)
 	{
 		return (decimal)value.RawValue / RawOne;
 	}
 
-	public static implicit operator Fixed(int value)
-	{
-		return new Fixed(value);
-	}
-
-	public static explicit operator int(Fixed value)
-	{
-		return (int)(value.RawValue / RawOne);
-	}
-
 	public override bool Equals(object? obj)
 	{
-		return obj is Fixed fixedValue && Equals(fixedValue);
+		return obj is Coarse fixedValue && Equals(fixedValue);
 	}
 
 	public override int GetHashCode()
@@ -855,26 +836,27 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return RawValue.GetHashCode();
 	}
 
-	public bool Equals(Fixed other)
+	public bool Equals(Coarse other)
 	{
 		return RawValue.Equals(other.RawValue);
 	}
 
-	public int CompareTo(Fixed other)
+	public int CompareTo(Coarse other)
 	{
 		return RawValue.CompareTo(other.RawValue);
 	}
 
 	public override string ToString()
 	{
-		const int decimalsToRender = 10;
+		const int decimalsToRender = 5;
 		var result = new StringBuilder();
 
 		if (IsNegative())
 			result.Append('-');
 
 		var posValue = Abs(this);
-		var intPart = (int)(posValue.RawValue >> DecimalPlaces);
+		var intPart = (short)(posValue.RawValue >> DecimalPlaces);
+		
 		result.Append(intPart);
 		
 		var intermediate = Fract(posValue);
@@ -884,7 +866,7 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		}
 
 		result.Append('.');
-		var ten = (Fixed)10;
+		var ten = (Coarse)10;
 		for (var i = 0; i < decimalsToRender; i++)
 		{
 			intermediate *= ten;

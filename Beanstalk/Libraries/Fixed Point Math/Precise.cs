@@ -4,7 +4,7 @@ using System.Text;
 
 namespace FixedPointMath;
 
-public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, IComparable<Precise>
+public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 {
 	[StructLayout(LayoutKind.Explicit)]
 	private readonly struct ToUnsigned(Int128 sourceValue)
@@ -24,35 +24,34 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 	private const int DecimalPlaces = 64;
 	private static readonly Int128 RawOne = Int128.One << DecimalPlaces;
 	private static readonly Int128 RawHalf = RawOne >> 1;
-	private static readonly Int128 RawNegativeOne = -(Int128.One << DecimalPlaces);
-	private static readonly Int128 RawPi = new(3uL, 2611923443488327896uL);
-	private static readonly Int128 RawPiOver2 = 0x1921FB544L;
-	private static readonly Int128 RawPiTimes2 = 0x6487ED511L;
-	private static readonly Int128 RawLn2 = 0xB17217F7L;
-	private static readonly Int128 RawLog2Max = 0x1F00000000L;
-	private static readonly Int128 RawLog2Min = -0x2000000000L;
-	private static readonly int LutSize = (int)(RawPiOver2 >> 15);
-	
-	public static readonly Precise Epsilon = new(1L);
+	private static readonly Int128 RawNegativeOne = -RawOne;
+	private static readonly Int128 RawPi = new(3uL, 2611923443488327892uL);
+	private static readonly Int128 RawLn2 = new(0uL, 12786308645202655667uL);
+
+	public static readonly Precise Epsilon = new(Int128.One);
 	public static readonly Precise MaxValue = new(Int128.MaxValue);
 	public static readonly Precise MinValue = new(Int128.MinValue);
-	public static readonly Precise Zero = new(Int128.Zero);
-	public static readonly Precise One = new(RawOne);
+	public static Precise Zero => new(Int128.Zero);
+	public static Precise One => new(RawOne);
 	public static readonly Precise NegativeOne = new(RawNegativeOne);
 	public static readonly Precise Half = new(RawHalf);
 	public static readonly Precise Pi = new(RawPi);
-	public static readonly Precise PiOver2 = new(RawPiOver2);
+	public static readonly Precise PiOver2 = Pi / 2;
+	public static readonly Precise PiTimes2 = Pi * 2;
 	public static readonly Precise Ln2 = new(RawLn2);
 
-	private static readonly Precise Log2Max = new(RawLog2Max);
-	private static readonly Precise Log2Min = new(RawLog2Min);
+	private static readonly Precise Log2Max = BitCount - DecimalPlaces - 1;
+	private static readonly Precise Log2Min = DecimalPlaces - BitCount;
 	private static readonly Precise DegToRadConstant = Pi / 180;
 	private static readonly Precise RadToDegConstant = 180 / Pi;
-	private static readonly Precise LutInterval = (LutSize - 1) / PiOver2;
 
 	public Int128 RawValue { get; } = rawValue;
 
 	public Precise(int value) : this(value * RawOne)
+	{
+	}
+
+	public Precise(long value) : this(value * RawOne)
 	{
 	}
 
@@ -118,13 +117,55 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static bool IsZero(Precise value)
 	{
-		return value.RawValue == Int128.Zero;
+		return value.RawValue == 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool IsZero()
 	{
-		return RawValue == Int128.Zero;
+		return IsZero(this);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsNegative(Precise value)
+	{
+		return value.RawValue < 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsOddInteger(Precise value)
+	{
+		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 1;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsEvenInteger(Precise value)
+	{
+		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsPositive(Precise value)
+	{
+		return value.RawValue > 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool IsNegative()
+	{
+		return IsNegative(this);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsInteger(Precise value)
+	{
+		return Fract(value) == Zero;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool IsInteger()
+	{
+		return IsInteger(this);
 	}
 
 	public static Precise DegToRad(Precise value)
@@ -155,7 +196,7 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 		if (value == MinValue)
 			return MaxValue;
 
-		var mask = value.RawValue >> 127;
+		var mask = value.RawValue >> (BitCount - 1);
 		return new Precise((value.RawValue + mask) ^ mask);
 	}
 
@@ -207,8 +248,9 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 	public static Precise PosMod(Precise a, Precise b)
 	{
 		var result = a % b;
-		
-		if (a.RawValue < Int128.Zero && b.RawValue > Int128.Zero || result.RawValue > Int128.Zero && b.RawValue < Int128.Zero)
+
+		if (a.RawValue < Int128.Zero && b.RawValue > Int128.Zero ||
+		    result.RawValue > Int128.Zero && b.RawValue < Int128.Zero)
 			result += b;
 
 		return result;
@@ -257,8 +299,23 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 
 	public static Precise operator *(Precise left, Precise right)
 	{
+		if (left == One)
+			return right;
+
+		if (right == One)
+			return left;
+
+		if (left == NegativeOne)
+			return -right;
+
+		if (right == NegativeOne)
+			return -left;
+		
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
+		
+		if (leftRaw == Int128.Zero || rightRaw == Int128.Zero)
+			return Zero;
 
 		var leftLow = leftRaw & 0xFFFF_FFFF_FFFF_FFFFL;
 		var leftHigh = leftRaw >> DecimalPlaces;
@@ -324,13 +381,13 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 	{
 		var result = 0;
 		
-		while ((value & ((UInt128)0xF000_0000_0000_0000 << DecimalPlaces)) == 0)
+		while ((value & ((UInt128)0xF000_0000_0000_0000uL << DecimalPlaces)) == 0)
 		{
 			result += 4;
 			value <<= 4;
 		}
 		
-		while ((value & ((UInt128)0x8000_0000_0000_0000 << DecimalPlaces)) == 0)
+		while ((value & ((UInt128)0x8000_0000_0000_0000uL << DecimalPlaces)) == 0)
 		{
 			result += 1;
 			value <<= 1;
@@ -346,6 +403,9 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 
 		if (rightRaw == Int128.Zero)
 			throw new DivideByZeroException();
+
+		if (right == 2)
+			return new Precise(leftRaw >> 1);
 
 		var remainder = new ToUnsigned(leftRaw >= Int128.Zero ? leftRaw : -leftRaw).castedValue;
 		var divisor = new ToUnsigned(rightRaw >= Int128.Zero ? rightRaw : -rightRaw).castedValue;
@@ -371,7 +431,7 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 			remainder %= divisor;
 			quotient += division << bitPos;
 
-			if ((division & ~(0xFFFF_FFFF_FFFF_FFFFuL >> bitPos)) != 0ul)
+			if ((division & ~(UInt128.MaxValue >> bitPos)) != UInt128.Zero)
 				return ((leftRaw ^ rightRaw) & Int128.MinValue) == Int128.Zero ? MaxValue : MinValue;
 
 			remainder <<= 1;
@@ -401,7 +461,7 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 			exponent = -exponent;
 
 		if (exponent == One)
-			return negative ? One / 2 : 2;
+			return negative ? Half : 2;
 
 		if (exponent >= Log2Max)
 			return negative ? One / MaxValue : MaxValue;
@@ -434,10 +494,10 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 
 	public static Precise Log2(Precise value)
 	{
-		if (value.RawValue <= Int128.Zero)
+		if (!IsPositive(value))
 			throw new ArgumentOutOfRangeException(nameof(value));
 
-		var b = 1L << (DecimalPlaces - 1);
+		var b = Int128.One << (DecimalPlaces - 1);
 		var y = Int128.Zero;
 
 		var rawValue = value.RawValue;
@@ -477,6 +537,19 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 
 	public static Precise Pow(Precise @base, Precise exponent)
 	{
+		if (@base < Zero)
+		{
+			// Todo: Handle properly
+			if (!exponent.IsInteger())
+				return Zero;
+
+			var pow = Pow(-@base, exponent);
+			if (exponent % 2 == 0)
+				return pow;
+
+			return -pow;
+		}
+		
 		if (@base == One)
 			return One;
 
@@ -551,102 +624,42 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 		return new Precise(new ToSigned(result).castedValue);
 	}
 
-	private static Int128 ClampSinValue(Int128 angle, out bool flipHorizontal, out bool flipVertical)
+	public static Precise Wrap(Precise value, Precise minimum, Precise maximum)
 	{
-		throw new NotImplementedException();
-		// (2 ^ 29) * Pi, where 29 is the largest N such that (2 ^ N) * Pi < MaxValue
-		/*var largePi = 7244019458077122842L;
+		while (value < minimum)
+			value += maximum - minimum;
 
-		var clamped2Pi = angle;
-		for (var i = 0; i < 29; i++)
-		{
-			clamped2Pi %= largePi >> i;
-		}
+		while (value >= maximum)
+			value -= maximum - minimum;
 
-		if (angle < 0)
-			clamped2Pi += RawPiTimes2;
-
-		flipVertical = clamped2Pi >= RawPi;
-		
-		var clampedPi = clamped2Pi;
-		while (clampedPi >= RawPi)
-		{
-			clampedPi -= RawPi;
-		}
-		
-		flipHorizontal = clampedPi >= RawPiOver2;
-
-		var clampedPiOver2 = clampedPi;
-		if (clampedPiOver2 >= RawPiOver2)
-			clampedPiOver2 -= RawPiOver2;
-
-		return clampedPiOver2;*/
+		return value;
 	}
 
 	public static Precise Sin(Precise value)
 	{
-		throw new NotImplementedException();
-		/*
-		var clampedL = ClampSinValue(value.RawValue, out var flipHorizontal, out var flipVertical);
-		var clamped = new Precise(clampedL);
-
-		var rawIndex = clamped * LutInterval;
-		var roundedIndex = (int)Round(rawIndex);
-		var indexError = rawIndex - roundedIndex;
-		
-		var nearestValue = new Precise(SinLut[flipHorizontal
-			? SinLut.Length - 1 - roundedIndex
-			: roundedIndex]);
-		
-		var secondNearestValue = new Precise(SinLut[flipHorizontal
-			? SinLut.Length - 1 - roundedIndex - Sign(indexError)
-			: roundedIndex + Sign(indexError)]);
-
-		var delta = (indexError * Abs(nearestValue - secondNearestValue)).RawValue;
-		var interpolatedValue = nearestValue.RawValue + (flipHorizontal ? -delta : delta);
-		var finalValue = flipVertical ? -interpolatedValue : interpolatedValue;
-		return new Precise(finalValue);*/
-	}
-
-	public static Precise FastSin(Precise value)
-	{
-		throw new NotImplementedException();
-		/*
-		var clampedL = ClampSinValue(value.RawValue, out var flipHorizontal, out var flipVertical);
-
-		var rawIndex = (uint)(clampedL >> 15);
-		if (rawIndex >= LutSize)
-			rawIndex = LutSize - 1;
-
-		var nearestValue = SinLut[flipHorizontal
-			? SinLut.Length - 1 - (int)rawIndex
-			: (int)rawIndex];
-
-		return new Precise(flipVertical ? -nearestValue : nearestValue);*/
+		return Cos(value - PiOver2);
 	}
 
 	public static Precise Cos(Precise value)
 	{
-		var rawValue = value.RawValue;
-		var angle = rawValue + (rawValue > 0 ? -RawPi - RawPiOver2 : RawPiOver2);
-		return Sin(new Precise(angle));
-	}
-
-	public static Precise FastCos(Precise value)
-	{
-		var rawValue = value.RawValue;
-		var angle = rawValue + (rawValue > 0 ? -RawPi - RawPiOver2 : RawPiOver2);
-		return FastSin(new Precise(angle));
+		// 10 terms of taylor series
+		value = Wrap(value, -Pi, Pi);
+		return 1
+		       - Pow(value, 2) / 2L
+		       + Pow(value, 4) / 24L
+		       - Pow(value, 6) / 720L
+		       + Pow(value, 8) / 40_320L
+		       - Pow(value, 10) / 3_628_800L
+		       + Pow(value, 12) / 479_001_600L
+		       - Pow(value, 14) / 87_178_291_200L
+		       + Pow(value, 16) / 20_922_789_888_000L
+		       - Pow(value, 18) / 6_402_373_705_728_000L
+		       + Pow(value, 20) / 2_432_902_008_176_640_000L;
 	}
 
 	public static Precise Tan(Precise value)
 	{
 		return Sin(value) / Cos(value);
-	}
-
-	public static Precise FastTan(Precise value)
-	{
-		return FastSin(value) / FastCos(value);
 	}
 
 	public static Precise Acos(Precise value)
@@ -722,7 +735,7 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 			return Zero;
 		}
 		
-		const long rawPointTwoEight = 1202590844L;
+		var rawPointTwoEight = new Int128(0uL, 5165088340638674452uL);
 		var pointTwoEight = new Precise(rawPointTwoEight);
 
 		Precise atan;
@@ -788,14 +801,9 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 		return left.RawValue <= right.RawValue;
 	}
 
-	public static explicit operator Precise(long value)
+	public static explicit operator Int128(Precise value)
 	{
-		return new Precise(value * RawOne);
-	}
-
-	public static explicit operator long(Precise value)
-	{
-		return (long)(value.RawValue >> DecimalPlaces);
+		return value.RawValue >> DecimalPlaces;
 	}
 	
 	public static explicit operator Precise(float value)
@@ -839,6 +847,23 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 		return (int)(value.RawValue / RawOne);
 	}
 
+	public static explicit operator long(Precise value)
+	{
+		return (long)(value.RawValue / RawOne);
+	}
+
+	public static implicit operator Precise(long value)
+	{
+		return new Precise(value);
+	}
+
+	public static implicit operator Precise(Fixed value)
+	{
+		var lower = Fixed.Fract(value).Bits;
+		var upper = Fixed.Floor(value).Bits;
+		return new Precise(new Int128(upper, lower));
+	}
+
 	public override bool Equals(object? obj)
 	{
 		return obj is Precise fixedValue && Equals(fixedValue);
@@ -861,25 +886,33 @@ public readonly partial struct Precise(Int128 rawValue) : IEquatable<Precise>, I
 
 	public override string ToString()
 	{
+		const int decimalsToRender = 20;
 		var result = new StringBuilder();
 
-		var intPart = (long)(RawValue >> DecimalPlaces);
+		if (IsNegative())
+			result.Append('-');
+
+		var posValue = Abs(this);
+		var intPart = (int)(posValue.RawValue >> DecimalPlaces);
 		result.Append(intPart);
 		
-		var intermediate = Fract(this);
+		var intermediate = Fract(posValue);
 		if (intermediate.IsZero())
-			return result.ToString();
-		
-		result.Append('.');
-		for (var i = 0; i < 20; i++)
 		{
-			intermediate *= 10;
+			return result.ToString();
+		}
+
+		result.Append('.');
+		var ten = (Precise)10;
+		for (var i = 0; i < decimalsToRender; i++)
+		{
+			intermediate *= ten;
 			var digit = intermediate.RawValue >> DecimalPlaces;
 
 			intermediate = Fract(intermediate);
 			result.Append(digit);
 		}
 
-		return result.ToString();
+		return result.ToString().TrimEnd('0');
 	}
 }

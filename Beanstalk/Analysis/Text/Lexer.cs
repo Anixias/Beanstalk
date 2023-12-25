@@ -223,6 +223,11 @@ public class Lexer(IBuffer source) : ILexer
 							end++;
 							value = decimal.TryParse(valueString, out var decimalValue) ? decimalValue : null;
 							break;
+						case 'c':
+						case 'C':
+							end++;
+							value = Coarse.TryParse(valueString, out var coarseValue) ? coarseValue : null;
+							break;
 						case 'x':
 						case 'X':
 							end++;
@@ -379,6 +384,11 @@ public class Lexer(IBuffer source) : ILexer
 						case 'M':
 							end++;
 							value = decimal.TryParse(valueString, out var decimalValue) ? decimalValue : null;
+							break;
+						case 'c':
+						case 'C':
+							end++;
+							value = Coarse.TryParse(valueString, out var coarseValue) ? coarseValue : null;
 							break;
 						case 'x':
 						case 'X':
