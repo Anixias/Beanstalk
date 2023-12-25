@@ -19,9 +19,9 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 		[FieldOffset(0)] public readonly UInt128 sourceValue = sourceValue;
 		[FieldOffset(0)] public readonly Int128 castedValue;
 	}
-	
+
 	private const int BitCount = 128;
-	private const int DecimalPlaces = 64;
+	internal const int DecimalPlaces = 64;
 	private static readonly Int128 RawOne = Int128.One << DecimalPlaces;
 	private static readonly Int128 RawHalf = RawOne >> 1;
 	private static readonly Int128 RawNegativeOne = -RawOne;
@@ -46,6 +46,7 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 	private static readonly Precise RadToDegConstant = 180 / Pi;
 
 	public Int128 RawValue { get; } = rawValue;
+	public UInt128 Bits => new ToUnsigned(RawValue).castedValue;
 
 	public Precise(int value) : this(value * RawOne)
 	{
@@ -863,10 +864,17 @@ public readonly struct Precise(Int128 rawValue) : IFixedPoint<Precise>
 		return new Precise(value);
 	}
 
+	public static implicit operator Precise(Coarse value)
+	{
+		var lower = (ulong)Coarse.Fract(value).Bits << (DecimalPlaces - Coarse.DecimalPlaces);
+		var upper = (ulong)(Coarse.Floor(value).Bits >> Coarse.DecimalPlaces);
+		return new Precise(new Int128(upper, lower));
+	}
+
 	public static implicit operator Precise(Fixed value)
 	{
-		var lower = Fixed.Fract(value).Bits;
-		var upper = Fixed.Floor(value).Bits;
+		var lower = Fixed.Fract(value).Bits << (DecimalPlaces - Fixed.DecimalPlaces);
+		var upper = Fixed.Floor(value).Bits >> Fixed.DecimalPlaces;
 		return new Precise(new Int128(upper, lower));
 	}
 

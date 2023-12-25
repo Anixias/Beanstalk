@@ -36,9 +36,9 @@ public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 	private static readonly Coarse Log2Min = (Coarse)(DecimalPlaces - BitCount);
 	private static readonly Coarse DegToRadConstant = Pi / (Coarse)180;
 	private static readonly Coarse RadToDegConstant = (Coarse)180 / Pi;
-	
+
 	private const int BitCount = 32;
-	private const int DecimalPlaces = 16;
+	internal const int DecimalPlaces = 16;
 	private const int RawOne = 1 << DecimalPlaces;
 	private const int RawHalf = 0x8000;
 	private const int RawNegativeOne = -(1 << DecimalPlaces);
@@ -830,6 +830,20 @@ public readonly struct Coarse(int rawValue) : IFixedPoint<Coarse>
 	public static explicit operator decimal(Coarse value)
 	{
 		return (decimal)value.RawValue / RawOne;
+	}
+
+	public static explicit operator Coarse(Fixed value)
+	{
+		const int shiftSize = 16;
+		var rawValue = new ToSigned((uint)(value.Bits >> shiftSize)).castedValue;
+		return new Coarse(rawValue);
+	}
+
+	public static explicit operator Coarse(Precise value)
+	{
+		const int shiftSize = 48;
+		var rawValue = new ToSigned((uint)(value.Bits >> shiftSize)).castedValue;
+		return new Coarse(rawValue);
 	}
 
 	public override bool Equals(object? obj)

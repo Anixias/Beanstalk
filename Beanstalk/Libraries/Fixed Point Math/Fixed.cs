@@ -38,9 +38,9 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	private static readonly Fixed Log2Min = DecimalPlaces - BitCount;
 	private static readonly Fixed DegToRadConstant = Pi / 180;
 	private static readonly Fixed RadToDegConstant = 180 / Pi;
-	
+
 	private const int BitCount = 64;
-	private const int DecimalPlaces = 32;
+	internal const int DecimalPlaces = 32;
 	private const long RawOne = 1L << DecimalPlaces;
 	private const long RawHalf = 0x80000000L;
 	private const long RawNegativeOne = -(1L << DecimalPlaces);
@@ -849,6 +849,20 @@ public readonly struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	public static explicit operator int(Fixed value)
 	{
 		return (int)(value.RawValue / RawOne);
+	}
+	
+	public static implicit operator Fixed(Coarse value)
+	{
+		const int shiftSize = DecimalPlaces - Coarse.DecimalPlaces;
+		var rawValue = new ToSigned((ulong)value.Bits << shiftSize).castedValue;
+		return new Fixed(rawValue);
+	}
+
+	public static explicit operator Fixed(Precise value)
+	{
+		const int shiftSize = Precise.DecimalPlaces - DecimalPlaces;
+		var rawValue = new ToSigned((ulong)(value.Bits >> shiftSize)).castedValue;
+		return new Fixed(rawValue);
 	}
 
 	public override bool Equals(object? obj)
