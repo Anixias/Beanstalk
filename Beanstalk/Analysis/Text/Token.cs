@@ -1,6 +1,8 @@
-﻿namespace Beanstalk.Analysis.Text;
+﻿using System.Collections.Immutable;
 
-public sealed class Token(TokenType type, TextRange range, IBuffer source, object? value = null)
+namespace Beanstalk.Analysis.Text;
+
+public class Token(TokenType type, TextRange range, IBuffer source, object? value = null)
 {
 	public IBuffer Source { get; } = source;
 	public TokenType Type { get; } = type;

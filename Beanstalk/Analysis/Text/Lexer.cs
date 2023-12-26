@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Globalization;
+using System.Text;
 using FixedPointMath;
 
 namespace Beanstalk.Analysis.Text;
@@ -24,10 +25,253 @@ public class Lexer(IBuffer source) : ILexer
 		if (char.IsLetter(character) || character == '_')
 			return ScanIdentifier(position);
 
+		if (character == '"')
+			return ScanString(position);
+
+		if (character == '\'')
+			return ScanChar(position);
+
 		if (TryScanComment(position) is { } comment)
 			return comment;
 
 		return ScanOperator(position);
+	}
+
+	private ScanResult ScanString(int position)
+	{
+		var end = position + 1;
+		var isValid = true;
+		var escaped = false;
+		var interpolated = false;
+		var interpolationLevel = 0;
+		
+		while (end < Source.Length)
+		{
+			var character = Source[end];
+			
+			if (character == '"' && !escaped && interpolationLevel == 0)
+			{
+				end++;
+				break;
+			}
+
+			if (character is '\n' or '\r')
+			{
+				isValid = false;
+				break;
+			}
+
+			if (character == '{' && !escaped)
+			{
+				interpolated = true;
+				interpolationLevel++;
+				end++;
+				continue;
+			}
+
+			if (character == '}' && interpolationLevel > 0)
+			{
+				interpolationLevel--;
+				end++;
+				continue;
+			}
+
+			if (character == '\\')
+				escaped = !escaped;
+			else
+				escaped = false;
+
+			end++;
+		}
+
+		if (!isValid)
+		{
+			var invalidToken = new Token(TokenType.InvalidStringLiteral, new TextRange(position, end), Source);
+			return new ScanResult(invalidToken, end);
+		}
+
+		if (!interpolated)
+		{
+			var value = UnescapeString(Source.GetText(new TextRange(position + 1, end - 1)), true);
+
+			if (!value.Item2)
+			{
+				var invalidToken = new Token(TokenType.InvalidStringLiteral, new TextRange(position, end), Source);
+				return new ScanResult(invalidToken, end);
+			}
+
+			var token = new Token(TokenType.StringLiteral, new TextRange(position, end), Source, value.Item1);
+
+			return new ScanResult(token, end);
+		}
+		else
+		{
+			// Don't escape interpolated strings -- let the parser do that!
+			var value = Source.GetText(new TextRange(position + 1, end - 1));
+			var token = new Token(TokenType.InterpolatedStringLiteral, new TextRange(position, end), Source, value);
+			return new ScanResult(token, end);
+		}
+	}
+	
+	/// <summary>
+	/// Unescapes a string by replacing escape sequences with their respective literal values
+	/// </summary>
+	/// <param name="text">The string to unescape</param>
+	/// <returns>A tuple: (result, valid)</returns>
+	public static (string, bool) UnescapeString(string text, bool escapeOpenBrace = false)
+	{
+		var result = new StringBuilder();
+		var escaped = false;
+		var valid = true;
+
+		for (var i = 0; i < text.Length; i++)
+		{
+			var character = text[i];
+			
+			if (character == '\\')
+			{
+				if (escaped)
+				{
+					result.Append('\\');
+					continue;
+				}
+
+				escaped = true;
+				continue;
+			}
+
+			if (!escaped)
+			{
+				result.Append(character);
+				continue;
+			}
+
+			escaped = false;
+
+			switch (character)
+			{
+				default:
+					valid = false;
+					break;
+				case '\'':
+					result.Append('\'');
+					break;
+				case '"':
+					result.Append('"');
+					break;
+				case '0':
+					result.Append('\0');
+					break;
+				case 'a':
+					result.Append('\a');
+					break;
+				case 'b':
+					result.Append('\b');
+					break;
+				case 'f':
+					result.Append('\f');
+					break;
+				case 'n':
+					result.Append('\n');
+					break;
+				case 'r':
+					result.Append('\r');
+					break;
+				case 't':
+					result.Append('\t');
+					break;
+				case 'v':
+					result.Append('\v');
+					break;
+				case '{':
+					if (escapeOpenBrace)
+						result.Append('{');
+					else
+						valid = false;
+					break;
+				case 'u':
+					const int utf16Length = 4;
+					if (i + utf16Length >= text.Length)
+					{
+						valid = false;
+						i += utf16Length;
+					}
+					else
+					{
+						var sequence = text.Substring(i + 1, utf16Length);
+						i += utf16Length;
+
+						var sequenceValue = int.Parse(sequence, NumberStyles.AllowHexSpecifier);
+						result.Append(Encoding.Unicode.GetChars(BitConverter.GetBytes(sequenceValue)));
+					}
+
+					break;
+				case 'U':
+					const int utf32Length = 8;
+					if (i + utf32Length >= text.Length)
+					{
+						valid = false;
+						i += utf32Length;
+					}
+					else
+					{
+						var sequence = text.Substring(i + 1, utf32Length);
+						i += utf32Length;
+
+						var sequenceValue = int.Parse(sequence, NumberStyles.AllowHexSpecifier);
+						result.Append(Encoding.UTF32.GetChars(BitConverter.GetBytes(sequenceValue)));
+					}
+
+					break;
+			}
+		}
+
+		return (result.ToString(), valid);
+	}
+	
+	private ScanResult ScanChar(int position)
+	{
+		var end = position + 1;
+		var isValid = true;
+		var escaped = false;
+		
+		while (end < Source.Length)
+		{
+			if (Source[end] == '\'' && !escaped)
+			{
+				end++;
+				break;
+			}
+
+			if (Source[end] is '\n' or '\r')
+			{
+				isValid = false;
+				break;
+			}
+
+			if (Source[end] == '\\')
+				escaped = !escaped;
+			else
+				escaped = false;
+
+			end++;
+		}
+		
+		if (!isValid)
+		{
+			var invalidToken = new Token(TokenType.InvalidCharLiteral, new TextRange(position, end), Source);
+			return new ScanResult(invalidToken, end);
+		}
+
+		var value = UnescapeString(Source.GetText(new TextRange(position + 1, end - 1)));
+		if (value.Item1.Length != 1 || !value.Item2)
+		{
+			var invalidToken = new Token(TokenType.InvalidCharLiteral, new TextRange(position, end), Source);
+			return new ScanResult(invalidToken, end);
+		}
+		
+		var token = new Token(TokenType.CharLiteral, new TextRange(position, end), Source, value.Item1[0]);
+		return new ScanResult(token, end);
 	}
 
 	private ScanResult? TryScanComment(int position)

@@ -96,9 +96,26 @@ public sealed class TokenType
 		IsLiteral = true
 	};
 
+	public static readonly TokenType InterpolatedStringLiteral = new("interpolated string literal")
+	{
+		IsLiteral = true
+	};
+
+	public static readonly TokenType InvalidStringLiteral = new("invalid string literal")
+	{
+		IsLiteral = true,
+		IsInvalid = true
+	};
+
 	public static readonly TokenType CharLiteral = new("char literal")
 	{
 		IsLiteral = true
+	};
+
+	public static readonly TokenType InvalidCharLiteral = new("invalid char literal")
+	{
+		IsLiteral = true,
+		IsInvalid = true
 	};
 	
 	public static readonly TokenType KeywordImport = CreateKeyword("import");

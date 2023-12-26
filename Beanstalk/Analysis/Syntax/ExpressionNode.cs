@@ -309,3 +309,13 @@ public sealed class PrimaryOperationExpression : OperationExpression
 		this.operand = operand;
 	}
 }
+
+public sealed class InterpolatedStringExpression : ExpressionNode
+{
+	public readonly ImmutableArray<ExpressionNode> parts;
+	
+	public InterpolatedStringExpression(IEnumerable<ExpressionNode> parts, TextRange range) : base(range)
+	{
+		this.parts = parts.ToImmutableArray();
+	}
+}

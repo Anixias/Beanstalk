@@ -1595,33 +1595,152 @@ public static class Parser
 
 		if (peek?.Type is { } peekType)
 		{
+			if (peekType == TokenType.InterpolatedStringLiteral)
+				return ParseInterpolatedString(tokens, ref position);
+			
 			if (peekType == TokenType.OpLeftParen)
-			{
 				return ParseTupleExpression(tokens, ref position);
-			}
 
 			if (peekType == TokenType.OpHashLeftBracket)
-			{
 				return ParseMapExpression(tokens, ref position);
-			}
 
 			if (peekType == TokenType.OpLeftBracket)
-			{
 				return ParseListExpression(tokens, ref position);
-			}
 
 			if (peekType == TokenType.Identifier)
-			{
 				return new TokenExpression(Consume(tokens, ref position, null, TokenType.Identifier));
-			}
 
 			if (peekType == TokenType.KeywordRef || TokenType.NativeDataTypes.Contains(peekType))
-			{
 				return ParseType(tokens, ref position);
+			
+			throw new ParseException($"Expected expression; Instead, got '{peekType}'", peek);
+		}
+
+		throw new ParseException($"Expected expression; Instead, got '{peek?.Type?.ToString() ?? "null"}'", peek);
+	}
+
+	private readonly struct InterpolationPart
+	{
+		public readonly string text;
+		public readonly bool isStringLiteral;
+		public readonly TextRange range;
+
+		public InterpolationPart(string text, bool isStringLiteral, TextRange range)
+		{
+			this.text = text;
+			this.isStringLiteral = isStringLiteral;
+			this.range = range;
+		}
+	}
+
+	private static InterpolatedStringExpression ParseInterpolatedString(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var stringLiteral = Consume(tokens, ref position, null, TokenType.InterpolatedStringLiteral);
+		if (stringLiteral.Value is not string text)
+			throw new ParseException("Malformed interpolated string", stringLiteral);
+		
+		var stringParts = new List<InterpolationPart>();
+
+		var escaped = false;
+		var withinString = true;
+		var rangeStart = stringLiteral.Range.Start + 1;
+		var start = 0;
+		for (var i = 0; i < text.Length; i++)
+		{
+			var character = text[i];
+
+			if (!withinString)
+			{
+				switch (character)
+				{
+					case '"':
+						withinString = true;
+						start = i + 1;
+						break;
+					case '}':
+						withinString = true;
+						
+						var partText = text[start..i];
+						if (partText != "")
+							stringParts.Add(
+								new InterpolationPart(partText, false, new TextRange(start, i) + rangeStart));
+						
+						start = i + 1;
+						break;
+				}
+
+				continue;
+			}
+			
+			if (character == '\\')
+			{
+				escaped = !escaped;
+				continue;
+			}
+
+			if (character == '{' && !escaped)
+			{
+				var partText = text[start..i];
+				if (partText != "")
+					stringParts.Add(new InterpolationPart(partText, true, new TextRange(start, i) + rangeStart));
+				
+				start = i + 1;
+				withinString = false;
+			}
+
+			if (character == '"' && !escaped)
+			{
+				var partText = text[start..i];
+				if (partText != "")
+					stringParts.Add(new InterpolationPart(partText, true, new TextRange(start, i) + rangeStart));
+				
+				start = i + 1;
+				withinString = false;
+			}
+
+			escaped = false;
+		}
+
+		if (withinString)
+		{
+			var partText = text[start..];
+			if (partText != "")
+				stringParts.Add(new InterpolationPart(partText, true, new TextRange(start, text.Length) + rangeStart));
+		}
+
+		var parts = new List<ExpressionNode>();
+		foreach (var part in stringParts)
+		{
+			if (part.isStringLiteral)
+			{
+				var value = Lexer.UnescapeString(part.text, true);
+				var token = new Token(TokenType.StringLiteral, part.range, stringLiteral.Source, value);
+				parts.Add(new TokenExpression(token));
+			}
+			else
+			{
+				var source = new StringBuffer(part.text);
+				var lexer = new FilteredLexer(source);
+				var interpolatedPosition = 0;
+				var interpolatedTokens = new List<Token>();
+
+				foreach (var interpolatedToken in lexer)
+				{
+					if (interpolatedToken.Type.IsInvalid)
+					{
+						var plural = interpolatedToken.Text.Length > 1 ? "characters" : "character";
+						throw new ParseException($"Unexpected {plural} in interpolated string", interpolatedToken);
+					}
+
+					interpolatedTokens.Add(new Token(interpolatedToken.Type, interpolatedToken.Range + part.range.Start,
+						stringLiteral.Source, interpolatedToken.Value));
+				}
+				
+				parts.Add(ParseExpression(interpolatedTokens, ref interpolatedPosition));
 			}
 		}
 
-		throw new ParseException("Expected expression", peek);
+		return new InterpolatedStringExpression(parts, stringLiteral.Range);
 	}
 
 	private static ExpressionNode ParseTupleExpression(IReadOnlyList<Token> tokens, ref int position)
