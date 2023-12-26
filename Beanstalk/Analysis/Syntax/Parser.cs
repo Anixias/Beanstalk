@@ -1512,7 +1512,7 @@ public static class Parser
 			if (Match(tokens, ref position, TokenType.KeywordRef))
 			{
 				var mutRefType = ParseType(tokens, ref position);
-				return new ReferenceType(mutRefType, true, mutableToken.Range.Join(mutRefType.range));
+				return new ReferenceType(mutRefType, false, mutableToken.Range.Join(mutRefType.range));
 			}
 			
 			var mutType = ParseType(tokens, ref position);
@@ -1522,7 +1522,7 @@ public static class Parser
 		if (Match(tokens, ref position, out var refToken, TokenType.KeywordRef))
 		{
 			var refType = ParseType(tokens, ref position);
-			return new ReferenceType(refType, false, refToken.Range.Join(refType.range));
+			return new ReferenceType(refType, true, refToken.Range.Join(refType.range));
 		}
 		
 		// Recursive types
