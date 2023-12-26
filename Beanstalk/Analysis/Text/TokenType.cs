@@ -124,6 +124,7 @@ public sealed class TokenType
 	public static readonly TokenType KeywordIf = CreateKeyword("if");
 	public static readonly TokenType KeywordElse = CreateKeyword("else");
 	public static readonly TokenType KeywordNew = CreateKeyword("new");
+	public static readonly TokenType KeywordStatic = CreateKeyword("static");
 	public static readonly TokenType KeywordConstructor = CreateKeyword("constructor");
 	public static readonly TokenType KeywordDestructor = CreateKeyword("destructor");
 	public static readonly TokenType KeywordStruct = CreateKeyword("struct");

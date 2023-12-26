@@ -330,7 +330,6 @@ public static class Parser
 			returnType = ParseType(tokens, ref position);
 
 		StatementNode body;
-
 		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
 		{
 			var expression = ParseExpression(tokens, ref position);
@@ -343,6 +342,173 @@ public static class Parser
 
 		return new FunctionDeclarationStatement(identifier, typeParameters, parameters, returnType, body,
 			startToken.Range.Join(body.range));
+	}
+
+	private static bool TryParseConstructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out ConstructorDeclarationStatement? constructorDeclaration)
+	{
+		constructorDeclaration = null;
+		if (Peek(tokens, position) != TokenType.KeywordConstructor)
+			return false;
+
+		constructorDeclaration = ParseConstructorDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static ConstructorDeclarationStatement ParseConstructorDeclaration(IReadOnlyList<Token> tokens,
+		ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordConstructor);
+		
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+
+		var parameters = new List<Parameter>();
+		if (Peek(tokens, position) != TokenType.OpRightParen)
+		{
+			do
+			{
+				parameters.Add(ParseParameter(tokens, ref position, true));
+			} while (Match(tokens, ref position, TokenType.OpComma));
+		}
+		
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+
+		var body = ParseBlockStatement(tokens, ref position);
+
+		return new ConstructorDeclarationStatement(parameters, body, startToken.Range.Join(body.range));
+	}
+
+	private static bool TryParseDestructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out DestructorDeclarationStatement? destructorDeclaration)
+	{
+		destructorDeclaration = null;
+		if (Peek(tokens, position) != TokenType.KeywordDestructor)
+			return false;
+
+		destructorDeclaration = ParseDestructorDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static DestructorDeclarationStatement ParseDestructorDeclaration(IReadOnlyList<Token> tokens,
+		ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordDestructor);
+		
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+
+		var body = ParseBlockStatement(tokens, ref position);
+
+		return new DestructorDeclarationStatement(body, startToken.Range.Join(body.range));
+	}
+
+	private static bool TryParseFieldDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out FieldDeclarationStatement? fieldDeclaration)
+	{
+		fieldDeclaration = null;
+		
+		var modifierTokens = new[]
+		{
+			TokenType.KeywordStatic,
+			TokenType.KeywordMutable
+		};
+		
+		var peek = Peek(tokens, position);
+		var lookahead = 0;
+		while (modifierTokens.Contains(peek))
+		{
+			peek = Peek(tokens, position + ++lookahead);
+		}
+		
+		if (peek != TokenType.Identifier)
+			return false;
+
+		fieldDeclaration = ParseFieldDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static FieldDeclarationStatement ParseFieldDeclaration(IReadOnlyList<Token> tokens,
+		ref int position)
+	{
+		var startToken = TokenAt(tokens, position)!;
+		
+		var isMutable = false;
+		var isConst = false;
+		var isStatic = false;
+
+		var peek = Peek(tokens, position);
+		while (peek != TokenType.Identifier)
+		{
+			var modifierToken = TokenAt(tokens, position++);
+
+			const string duplicateErrorMessage = "Duplicate field modifier";
+			const string mutableConstErrorMessage = "Field cannot be both mutable and constant";
+
+			if (peek == TokenType.KeywordMutable)
+			{
+				if (isMutable)
+					throw new ParseException(duplicateErrorMessage, modifierToken);
+				
+				if (isConst)
+					throw new ParseException(mutableConstErrorMessage, modifierToken);
+				
+				isMutable = true;
+				peek = Peek(tokens, position);
+				continue;
+			}
+
+			if (peek == TokenType.KeywordConst)
+			{
+				if (isConst)
+					throw new ParseException(duplicateErrorMessage, modifierToken);
+				
+				if (isMutable)
+					throw new ParseException(mutableConstErrorMessage, modifierToken);
+				
+				isConst = true;
+				peek = Peek(tokens, position);
+				continue;
+			}
+			
+			if (peek == TokenType.KeywordStatic)
+			{
+				if (isStatic)
+					throw new ParseException(duplicateErrorMessage, modifierToken);
+				
+				isStatic = true;
+				peek = Peek(tokens, position);
+				continue;
+			}
+			
+			throw new ParseException("Invalid field modifier", modifierToken);
+		}
+		
+		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
+		var range = startToken.Range.Join(identifier.Range);
+
+		Type? type = null;
+		if (Match(tokens, ref position, TokenType.OpColon))
+		{
+			type = ParseType(tokens, ref position);
+			range = startToken.Range.Join(type.range);
+		}
+
+		ExpressionNode? initializer = null;
+		if (Match(tokens, ref position, TokenType.OpEquals))
+		{
+			initializer = ParseExpression(tokens, ref position);
+			range = startToken.Range.Join(initializer.range);
+		}
+
+		var mutability = FieldDeclarationStatement.Mutability.Immutable;
+		
+		if (isMutable)
+			mutability = FieldDeclarationStatement.Mutability.Mutable;
+
+		if (isConst)
+			mutability = FieldDeclarationStatement.Mutability.Constant;
+
+		return new FieldDeclarationStatement(identifier, mutability, isStatic, type, initializer, range);
 	}
 
 	private static bool TryParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position,
@@ -382,6 +548,68 @@ public static class Parser
 
 		return new CastDeclarationStatement(castTypeToken.Type == TokenType.KeywordImplicit, parameter, returnType,
 			body, castTypeToken.Range.Join(body.range));
+	}
+
+	private static bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
+	{
+		var peek = Peek(tokens, position);
+
+		if (peek == TokenType.KeywordStruct ||
+		    (peek == TokenType.KeywordMutable && Peek(tokens, position + 1) == TokenType.KeywordStruct))
+		{
+			structDeclaration = ParseStructDeclaration(tokens, ref position);
+			return true;
+		}
+
+		structDeclaration = null;
+		return false;
+	}
+
+	private static StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordMutable, TokenType.KeywordStruct);
+		var isMutable = startToken.Type == TokenType.KeywordMutable;
+
+		if (isMutable)
+			Consume(tokens, ref position, null, TokenType.KeywordStruct);
+		
+		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
+		Consume(tokens, ref position, null, TokenType.OpLeftBrace);
+		var statements = ParseStructBody(tokens, ref position, TokenType.OpRightBrace);
+		var endToken = Consume(tokens, ref position, null, TokenType.OpRightBrace);
+
+		return new StructDeclarationStatement(identifier, isMutable, statements, startToken.Range.Join(endToken.Range));
+	}
+
+	private static List<StatementNode> ParseStructBody(IReadOnlyList<Token> tokens, ref int position,
+		TokenType endTokenType)
+	{
+		var statements = new List<StatementNode>();
+		
+		while (Peek(tokens, position) != endTokenType)
+		{
+			statements.Add(ParseStructMember(tokens, ref position));
+		}
+
+		return statements;
+	}
+
+	private static StatementNode ParseStructMember(IReadOnlyList<Token> tokens, ref int position)
+	{
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
+			return functionDeclaration;
+		
+		if (TryParseConstructorDeclaration(tokens, ref position, out var constructorDeclaration))
+			return constructorDeclaration;
+		
+		if (TryParseDestructorDeclaration(tokens, ref position, out var destructorDeclaration))
+			return destructorDeclaration;
+
+		if (TryParseFieldDeclaration(tokens, ref position, out var fieldDeclaration))
+			return fieldDeclaration;
+
+		throw new ParseException("Expected struct member", TokenAt(tokens, position));
 	}
 
 	private static bool TryParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position,
@@ -512,25 +740,30 @@ public static class Parser
 		{
 			return ParseModuleStatement(tokens, ref position, true, diagnostics);
 		}
-			
+		
 		if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
 		{
 			return entryStatement;
 		}
-			
+		
 		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 		{
 			return functionDeclaration;
 		}
-			
+		
 		if (TryParseCastDeclaration(tokens, ref position, out var castDeclaration))
 		{
 			return castDeclaration;
 		}
-			
+		
 		if (TryParseOperatorDeclaration(tokens, ref position, out var operationDeclaration))
 		{
 			return operationDeclaration;
+		}
+		
+		if (TryParseStructDeclaration(tokens, ref position, out var structDeclaration))
+		{
+			return structDeclaration;
 		}
 
 		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
@@ -1382,7 +1615,7 @@ public static class Parser
 				return new TokenExpression(Consume(tokens, ref position, null, TokenType.Identifier));
 			}
 
-			if (TokenType.NativeDataTypes.Contains(peekType))
+			if (peekType == TokenType.KeywordRef || TokenType.NativeDataTypes.Contains(peekType))
 			{
 				return ParseType(tokens, ref position);
 			}

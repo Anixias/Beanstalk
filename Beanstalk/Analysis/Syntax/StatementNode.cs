@@ -87,6 +87,29 @@ public sealed class FunctionDeclarationStatement : StatementNode
 	}
 }
 
+public sealed class ConstructorDeclarationStatement : StatementNode
+{
+	public readonly ImmutableArray<Parameter> parameters;
+	public readonly StatementNode body;
+
+	public ConstructorDeclarationStatement(IEnumerable<Parameter> parameters, StatementNode body, TextRange range) :
+		base(range)
+	{
+		this.parameters = parameters.ToImmutableArray();
+		this.body = body;
+	}
+}
+
+public sealed class DestructorDeclarationStatement : StatementNode
+{
+	public readonly StatementNode body;
+
+	public DestructorDeclarationStatement(StatementNode body, TextRange range) : base(range)
+	{
+		this.body = body;
+	}
+}
+
 public sealed class ExpressionStatement : StatementNode
 {
 	public readonly ExpressionNode expression;
@@ -185,13 +208,15 @@ public sealed class ReturnStatement : StatementNode
 public sealed class StructDeclarationStatement : StatementNode
 {
 	public readonly Token identifier;
+	public readonly bool isMutable;
 	public readonly ImmutableArray<StatementNode> statements;
 
-	public StructDeclarationStatement(Token identifier, IEnumerable<StatementNode> statements, TextRange range) :
-		base(range)
+	public StructDeclarationStatement(Token identifier, bool isMutable, IEnumerable<StatementNode> statements,
+		TextRange range) : base(range)
 
 	{
 		this.identifier = identifier;
+		this.isMutable = isMutable;
 		this.statements = statements.ToImmutableArray();
 	}
 }
@@ -239,5 +264,32 @@ public sealed class OperatorDeclarationStatement : StatementNode
 		this.operation = operation;
 		this.returnType = returnType;
 		this.body = body;
+	}
+}
+
+public sealed class FieldDeclarationStatement : StatementNode
+{
+	public enum Mutability
+	{
+		Mutable,
+		Immutable,
+		Constant
+	}
+	
+	public readonly Token identifier;
+	public readonly Mutability mutability;
+	public readonly bool isStatic;
+	public readonly Type? type;
+	public readonly ExpressionNode? initializer;
+
+	public FieldDeclarationStatement(Token identifier, Mutability mutability, bool isStatic, Type? type,
+		ExpressionNode? initializer, TextRange range) : base(range)
+
+	{
+		this.identifier = identifier;
+		this.mutability = mutability;
+		this.isStatic = isStatic;
+		this.type = type;
+		this.initializer = initializer;
 	}
 }

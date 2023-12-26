@@ -241,8 +241,8 @@ public class Lexer(IBuffer source) : ILexer
 							{
 								switch (Source[end])
 								{
-									case 'f':
-									case 'F':
+									case 's':
+									case 'S':
 										end++;
 										value = float.TryParse(valueString, NumberStyles.Float, null,
 											out var floatEValue)
@@ -282,8 +282,8 @@ public class Lexer(IBuffer source) : ILexer
 							}
 							
 							break;
-						case 'f':
-						case 'F':
+						case 's':
+						case 'S':
 							end++;
 							value = float.TryParse(valueString, out var floatValue) ? floatValue : null;
 							break;
@@ -404,8 +404,8 @@ public class Lexer(IBuffer source) : ILexer
 							{
 								switch (Source[end])
 								{
-									case 'f':
-									case 'F':
+									case 's':
+									case 'S':
 										end++;
 										value = float.TryParse(valueString, NumberStyles.Float, null,
 											out var floatEValue)
@@ -444,8 +444,8 @@ public class Lexer(IBuffer source) : ILexer
 									: null;
 							}
 							break;
-						case 'f':
-						case 'F':
+						case 's':
+						case 'S':
 							end++;
 							value = float.TryParse(valueString, out var floatValue) ? floatValue : null;
 							break;
