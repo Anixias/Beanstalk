@@ -708,9 +708,11 @@ public static class Parser
 			TokenType.KeywordFun,
 			TokenType.KeywordImplicit,
 			TokenType.KeywordExplicit,
-			//TokenType.KeywordMutable,
-			//TokenType.KeywordStruct,
-			//TokenType.KeywordInterface
+			TokenType.KeywordMutable,
+			TokenType.KeywordStruct,
+			TokenType.KeywordInterface,
+			TokenType.KeywordCast,
+			TokenType.KeywordOperator,
 		};
 		
 		var statements = new List<StatementNode>();
