@@ -1,6 +1,4 @@
-﻿using System.Collections.Immutable;
-
-namespace Beanstalk.Analysis.Text;
+﻿namespace Beanstalk.Analysis.Text;
 
 public class Token(TokenType type, TextRange range, IBuffer source, object? value = null)
 {

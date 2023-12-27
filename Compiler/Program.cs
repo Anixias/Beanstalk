@@ -1,9 +1,6 @@
-﻿using System.Numerics;
-using System.Runtime.InteropServices;
-using System.Text;
+﻿using System.Text;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
-using FixedPointMath;
 
 namespace Compiler;
 
@@ -58,7 +55,7 @@ internal struct ProgramArgs
 
 internal static class Program
 {
-	private static object consoleLock = new();
+	private static readonly object ConsoleLock = new();
 	
 	private static async Task Main(string[] args)
 	{
@@ -175,6 +172,7 @@ internal static class Program
 				files.Add((workingDirectory, file));
 		}
 
+		var startTime = DateTime.Now;
 		var compilationTasks = files.Select(ParseFile).ToArray();
 		await Task.WhenAll(compilationTasks);
 
@@ -198,8 +196,9 @@ internal static class Program
 		Analyze(asts);
 		GenerateIR(asts);
 		
+		var duration = (DateTime.Now - startTime).TotalMilliseconds;
 		Console.ForegroundColor = ConsoleColor.Cyan;
-		await Console.Out.WriteLineAsync("Compilation succeeded.");
+		await Console.Out.WriteLineAsync($"Compilation succeeded. ({duration} ms)");
 		Console.ResetColor();
 	}
 
@@ -226,13 +225,15 @@ internal static class Program
 		
 		if (parseDiagnostics.Count <= 0)
 			return ast;
+
+		var output = $"------------ {relativePath} ------------\n"
+		             + "Parse Error(s):\n"
+		             + $"{string.Join('\n', parseDiagnostics.Select(d => $"\t{d.Message}"))}\n";
 		
-		lock (consoleLock)
+		lock (ConsoleLock)
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
-			Console.WriteLine($"------------ {relativePath} ------------");
-			Console.WriteLine("Parse Error(s):");
-			Console.WriteLine($"{string.Join('\n', parseDiagnostics.Select(d => $"\t{d.Message}"))}\n");
+			Console.WriteLine(output);
 			Console.ResetColor();
 		}
 
