@@ -52,11 +52,11 @@ public sealed class ListExpression : ExpressionNode
 
 public sealed class MapExpression : ExpressionNode
 {
-	public readonly ImmutableArray<(ExpressionNode, ExpressionNode)> keyValuePairs;
+	public readonly ImmutableArray<KeyValuePair<ExpressionNode, ExpressionNode>> keyValuePairs;
 	public readonly TupleType? type;
 
-	public MapExpression(IEnumerable<(ExpressionNode, ExpressionNode)> keyValuePairs, TupleType? type, TextRange range)
-		: base(range)
+	public MapExpression(IEnumerable<KeyValuePair<ExpressionNode, ExpressionNode>> keyValuePairs, TupleType? type,
+		TextRange range) : base(range)
 	{
 		this.type = type;
 		this.keyValuePairs = keyValuePairs.ToImmutableArray();

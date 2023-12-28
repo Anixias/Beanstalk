@@ -202,7 +202,6 @@ public sealed class TokenType
 	public static readonly TokenType OpSemicolon = CreateOperator(";");
 	public static readonly TokenType OpLeftParen = CreateOperator("(");
 	public static readonly TokenType OpRightParen = CreateOperator(")");
-	public static readonly TokenType OpHashLeftBracket = CreateOperator("#[");
 	public static readonly TokenType OpQuestionLeftBracket = CreateOperator("?[");
 	public static readonly TokenType OpLeftBracket = CreateOperator("[");
 	public static readonly TokenType OpRightBracket = CreateOperator("]");

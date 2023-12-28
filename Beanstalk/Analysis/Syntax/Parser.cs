@@ -1603,9 +1603,6 @@ public static class Parser
 			if (peekType == TokenType.OpLeftParen)
 				return ParseTupleExpression(tokens, ref position);
 
-			if (peekType == TokenType.OpHashLeftBracket)
-				return ParseMapExpression(tokens, ref position);
-
 			if (peekType == TokenType.OpLeftBracket)
 				return ParseListExpression(tokens, ref position);
 
@@ -1764,8 +1761,11 @@ public static class Parser
 		return new TupleExpression(expressions, startToken.Range.Join(endToken.Range));
 	}
 
-	private static ListExpression ParseListExpression(IReadOnlyList<Token> tokens, ref int position)
+	private static ExpressionNode ParseListExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
+		if (TryParseMapExpression(tokens, ref position, out var mapExpression))
+			return mapExpression;
+		
 		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftBracket);
 
 		var expressions = new List<ExpressionNode>();
@@ -1790,11 +1790,28 @@ public static class Parser
 		return new ListExpression(expressions, type, range);
 	}
 
+	private static bool TryParseMapExpression(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out MapExpression? mapExpression)
+	{
+        var startPosition = position;
+		try
+		{
+			mapExpression = ParseMapExpression(tokens, ref position);
+			return true;
+		}
+		catch (ParseException)
+		{
+			position = startPosition;
+			mapExpression = null;
+			return false;
+		}
+	}
+
 	private static MapExpression ParseMapExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.OpHashLeftBracket);
+		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftBracket);
 
-		var expressions = new List<(ExpressionNode, ExpressionNode)>();
+		var expressions = new List<KeyValuePair<ExpressionNode, ExpressionNode>>();
 		do
 		{
 			if (Peek(tokens, position) == TokenType.OpRightBracket)
@@ -1804,7 +1821,7 @@ public static class Parser
 			Consume(tokens, ref position, null, TokenType.OpDoubleArrow);
 			var valueExpression = ParseExpression(tokens, ref position);
 			
-			expressions.Add((keyExpression, valueExpression));
+			expressions.Add(new KeyValuePair<ExpressionNode, ExpressionNode>(keyExpression, valueExpression));
 		} while (Match(tokens, ref position, TokenType.OpComma));
 		
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightBracket);
