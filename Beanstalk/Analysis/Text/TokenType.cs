@@ -166,12 +166,14 @@ public sealed class TokenType
 	public static readonly TokenType KeywordUInt64 = CreateKeyword("uint64");
 	public static readonly TokenType KeywordInt128 = CreateKeyword("int128");
 	public static readonly TokenType KeywordUInt128 = CreateKeyword("uint128");
-	public static readonly TokenType KeywordSingle = CreateKeyword("single");
-	public static readonly TokenType KeywordDouble = CreateKeyword("double");
-	public static readonly TokenType KeywordQuad = CreateKeyword("quad");
-	public static readonly TokenType KeywordCoarse = CreateKeyword("coarse");
+	public static readonly TokenType KeywordFloat = CreateKeyword("float");
+	public static readonly TokenType KeywordFloat32 = CreateKeyword("float32");
+	public static readonly TokenType KeywordFloat64 = CreateKeyword("float64");
+	public static readonly TokenType KeywordFloat128 = CreateKeyword("float128");
 	public static readonly TokenType KeywordFixed = CreateKeyword("fixed");
-	public static readonly TokenType KeywordPrecise = CreateKeyword("precise");
+	public static readonly TokenType KeywordFixed32 = CreateKeyword("fixed32");
+	public static readonly TokenType KeywordFixed64 = CreateKeyword("fixed64");
+	public static readonly TokenType KeywordFixed128 = CreateKeyword("fixed128");
 	public static readonly TokenType KeywordBool = CreateKeyword("bool");
 	public static readonly TokenType KeywordString = CreateKeyword("string");
 	public static readonly TokenType KeywordChar = CreateKeyword("char");
@@ -185,10 +187,11 @@ public sealed class TokenType
 		KeywordInt32, KeywordUInt32,
 		KeywordInt64, KeywordUInt64,
 		KeywordInt128, KeywordUInt128,
-		KeywordSingle, KeywordDouble,
-		KeywordQuad, KeywordFixed, KeywordCoarse,
-		KeywordPrecise, KeywordBool,
-		KeywordString, KeywordChar
+		KeywordFloat, KeywordFloat32,
+		KeywordFloat64, KeywordFloat128,
+		KeywordFixed, KeywordFixed32,
+		KeywordFixed64, KeywordFixed128, 
+		KeywordBool, KeywordString, KeywordChar
 	}.ToImmutableArray();
 
 	public static readonly ImmutableArray<TokenType> ValidDataTypes =

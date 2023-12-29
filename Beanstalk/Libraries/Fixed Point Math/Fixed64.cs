@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -7,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace FixedPointMath;
 
-public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
+public readonly partial struct Fixed64(long rawValue) : IFixedPoint<Fixed64>
 {
 	[StructLayout(LayoutKind.Explicit)]
 	private readonly struct ToUnsigned(long sourceValue)
@@ -23,23 +21,23 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		[FieldOffset(0)] public readonly long castedValue;
 	}
 	
-	public static readonly Fixed Epsilon = new(1L);
-	public static readonly Fixed MaxValue = new(long.MaxValue);
-	public static readonly Fixed MinValue = new(long.MinValue);
-	public static Fixed Zero => new(0L);
-	public static Fixed One => new(RawOne);
-	public static readonly Fixed NegativeOne = new(RawNegativeOne);
-	public static readonly Fixed Half = new(RawHalf);
-	public static readonly Fixed Pi = new(RawPi);
-	public static readonly Fixed PiOver2 = new(RawPiOver2);
-	public static readonly Fixed Tau = new(RawTau);
-	public static readonly Fixed Ln2 = new(RawLn2);
-	public static readonly Fixed E = new(RawE);
+	public static readonly Fixed64 Epsilon = new(1L);
+	public static readonly Fixed64 MaxValue = new(long.MaxValue);
+	public static readonly Fixed64 MinValue = new(long.MinValue);
+	public static Fixed64 Zero => new(0L);
+	public static Fixed64 One => new(RawOne);
+	public static readonly Fixed64 NegativeOne = new(RawNegativeOne);
+	public static readonly Fixed64 Half = new(RawHalf);
+	public static readonly Fixed64 Pi = new(RawPi);
+	public static readonly Fixed64 PiOver2 = new(RawPiOver2);
+	public static readonly Fixed64 Tau = new(RawTau);
+	public static readonly Fixed64 Ln2 = new(RawLn2);
+	public static readonly Fixed64 E = new(RawE);
 
-	private static readonly Fixed Log2Max = BitCount - DecimalPlaces - 1;
-	private static readonly Fixed Log2Min = DecimalPlaces - BitCount;
-	private static readonly Fixed DegToRadConstant = Pi / 180;
-	private static readonly Fixed RadToDegConstant = 180 / Pi;
+	private static readonly Fixed64 Log2Max = BitCount - DecimalPlaces - 1;
+	private static readonly Fixed64 Log2Min = DecimalPlaces - BitCount;
+	private static readonly Fixed64 DegToRadConstant = Pi / 180;
+	private static readonly Fixed64 RadToDegConstant = 180 / Pi;
 
 	private const int BitCount = 64;
 	internal const int DecimalPlaces = 32;
@@ -55,7 +53,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	public long RawValue { get; } = rawValue;
 	public ulong Bits => new ToUnsigned(RawValue).castedValue;
 
-	public Fixed(int value) : this(value * RawOne)
+	public Fixed64(int value) : this(value * RawOne)
 	{
 	}
 	
@@ -63,7 +61,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	private static partial Regex WhitespaceRegexImpl();
 	private static readonly Regex WhitespaceRegex = WhitespaceRegexImpl();
 
-	public static Fixed Parse(string number)
+	public static Fixed64 Parse(string number)
 	{
 		number = WhitespaceRegex.Replace(number, "");
 		var groups = number.Split('.');
@@ -75,13 +73,13 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			throw new ArgumentException("Failed to parse integer part");
 
 		if (groups.Length < 2)
-			return new Fixed((long)intPart << DecimalPlaces);
+			return new Fixed64((long)intPart << DecimalPlaces);
 
 		var decimalString = groups[1];
 		return From(intPart, decimalString);
 	}
 
-	public static bool TryParse(string number, out Fixed result)
+	public static bool TryParse(string number, out Fixed64 result)
 	{
 		try
 		{
@@ -95,9 +93,9 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		}
 	}
 
-	private static Fixed From(int intPart, string decimalPart)
+	private static Fixed64 From(int intPart, string decimalPart)
 	{
-		var result = new Fixed((long)intPart << DecimalPlaces);
+		var result = new Fixed64((long)intPart << DecimalPlaces);
 
 		if (string.IsNullOrWhiteSpace(decimalPart))
 			return result;
@@ -124,7 +122,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsZero(Fixed value)
+	public static bool IsZero(Fixed64 value)
 	{
 		return value.RawValue == 0L;
 	}
@@ -136,7 +134,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsNegative(Fixed value)
+	public static bool IsNegative(Fixed64 value)
 	{
 		return value.RawValue < 0L;
 	}
@@ -148,19 +146,19 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsOddInteger(Fixed value)
+	public static bool IsOddInteger(Fixed64 value)
 	{
 		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsEvenInteger(Fixed value)
+	public static bool IsEvenInteger(Fixed64 value)
 	{
 		return IsInteger(value) && ((value.RawValue >> DecimalPlaces) & 1) == 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsPositive(Fixed value)
+	public static bool IsPositive(Fixed64 value)
 	{
 		return value.RawValue > 0L;
 	}
@@ -172,7 +170,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsInteger(Fixed value)
+	public static bool IsInteger(Fixed64 value)
 	{
 		return Fract(value) == Zero;
 	}
@@ -183,22 +181,22 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return IsInteger(this);
 	}
 
-	public static Fixed DegToRad(Fixed value)
+	public static Fixed64 DegToRad(Fixed64 value)
 	{
 		return value * DegToRadConstant;
 	}
 
-	public static Fixed RadToDeg(Fixed value)
+	public static Fixed64 RadToDeg(Fixed64 value)
 	{
 		return value * RadToDegConstant;
 	}
 
-	public static Fixed Lerp(Fixed a, Fixed b, Fixed t)
+	public static Fixed64 Lerp(Fixed64 a, Fixed64 b, Fixed64 t)
 	{
 		return a + t * (b - a);
 	}
 
-	public static int Sign(Fixed value)
+	public static int Sign(Fixed64 value)
 	{
 		return
 			value.RawValue < 0 ? -1 :
@@ -206,34 +204,34 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			0;
 	}
 
-	public static Fixed Abs(Fixed value)
+	public static Fixed64 Abs(Fixed64 value)
 	{
 		if (value == MinValue)
 			return MaxValue;
 
 		var mask = value.RawValue >> (BitCount - 1);
-		return new Fixed((value.RawValue + mask) ^ mask);
+		return new Fixed64((value.RawValue + mask) ^ mask);
 	}
 
-	public static Fixed Floor(Fixed value)
+	public static Fixed64 Floor(Fixed64 value)
 	{
 		var rawValue = new ToUnsigned(value.RawValue).castedValue;
 		var flooredValue = new ToSigned(rawValue & 0xFFFF_FFFF_0000_0000uL).castedValue;
-		return new Fixed(flooredValue);
+		return new Fixed64(flooredValue);
 	}
 
-	public static Fixed Ceil(Fixed value)
+	public static Fixed64 Ceil(Fixed64 value)
 	{
 		var hasDecimalPart = (value.RawValue & 0x0000_0000_FFFF_FFFFL) != 0L;
 		return hasDecimalPart ? Floor(value) + One : value;
 	}
 
-	public static Fixed Fract(Fixed value)
+	public static Fixed64 Fract(Fixed64 value)
 	{
-		return new Fixed(value.RawValue & 0x0000_0000_FFFF_FFFFL);
+		return new Fixed64(value.RawValue & 0x0000_0000_FFFF_FFFFL);
 	}
 
-	public static Fixed Round(Fixed value)
+	public static Fixed64 Round(Fixed64 value)
 	{
 		var decimalPart = value.RawValue & 0x0000_0000_FFFF_FFFFL;
 		var integerPart = Floor(value);
@@ -249,7 +247,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			: integerPart + One;
 	}
 
-	public static Fixed Clamp(Fixed value, Fixed min, Fixed max)
+	public static Fixed64 Clamp(Fixed64 value, Fixed64 min, Fixed64 max)
 	{
 		if (value < min)
 			return min;
@@ -260,7 +258,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value;
 	}
 
-	public static Fixed PosMod(Fixed a, Fixed b)
+	public static Fixed64 PosMod(Fixed64 a, Fixed64 b)
 	{
 		var result = a % b;
 		
@@ -270,17 +268,17 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return result;
 	}
 
-	public static (Fixed, Fixed) SinCos(Fixed angle)
+	public static (Fixed64, Fixed64) SinCos(Fixed64 angle)
 	{
 		return (Sin(angle), Cos(angle));
 	}
 
-	public static Fixed Snapped(Fixed value, Fixed step)
+	public static Fixed64 Snapped(Fixed64 value, Fixed64 step)
 	{
 		return step.RawValue != 0L ? Floor(value / step + Half) * step : value;
 	}
 
-	public static Fixed operator +(Fixed left, Fixed right)
+	public static Fixed64 operator +(Fixed64 left, Fixed64 right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
@@ -289,10 +287,10 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if ((~(leftRaw ^ rightRaw) & (leftRaw ^ sum) & long.MinValue) != 0L)
 			sum = leftRaw > 0L ? long.MaxValue : long.MinValue;
 
-		return new Fixed(sum);
+		return new Fixed64(sum);
 	}
 
-	public static Fixed operator -(Fixed left, Fixed right)
+	public static Fixed64 operator -(Fixed64 left, Fixed64 right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
@@ -301,7 +299,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (((leftRaw ^ rightRaw) & (leftRaw ^ difference) & long.MinValue) != 0L)
 			difference = leftRaw < 0L ? long.MinValue : long.MaxValue;
 
-		return new Fixed(difference);
+		return new Fixed64(difference);
 	}
 
 	private static long AddOverflow(long left, long right, ref bool overflow)
@@ -311,7 +309,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return sum;
 	}
 
-	public static Fixed operator *(Fixed left, Fixed right)
+	public static Fixed64 operator *(Fixed64 left, Fixed64 right)
 	{
 		if (left == One)
 			return right;
@@ -370,7 +368,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			return opSignsEqual ? MaxValue : MinValue;
 
 		if (opSignsEqual)
-			return new Fixed(sum);
+			return new Fixed64(sum);
 		
 		long posOp, negOp;
 		if (leftRaw > rightRaw)
@@ -387,7 +385,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (sum > negOp && negOp < -RawOne && posOp > RawOne)
 			return MinValue;
 
-		return new Fixed(sum);
+		return new Fixed64(sum);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -410,7 +408,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return result;
 	}
 
-	public static Fixed operator /(Fixed left, Fixed right)
+	public static Fixed64 operator /(Fixed64 left, Fixed64 right)
 	{
 		var leftRaw = left.RawValue;
 		var rightRaw = right.RawValue;
@@ -419,7 +417,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			throw new DivideByZeroException();
 
 		if (right == 2)
-			return new Fixed(leftRaw >> 1);
+			return new Fixed64(leftRaw >> 1);
 
 		var remainder = new ToUnsigned(leftRaw >= 0L ? leftRaw : -leftRaw).castedValue;
 		var divisor = new ToUnsigned(rightRaw >= 0L ? rightRaw : -rightRaw).castedValue;
@@ -457,15 +455,15 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (((leftRaw ^ rightRaw) & long.MinValue) != 0L)
 			result = -result;
 
-		return new Fixed(result);
+		return new Fixed64(result);
 	}
 
-	public static Fixed operator %(Fixed left, Fixed right)
+	public static Fixed64 operator %(Fixed64 left, Fixed64 right)
 	{
-		return new Fixed(left.RawValue == long.MinValue & right.RawValue == -1L ? 0L : left.RawValue % right.RawValue);
+		return new Fixed64(left.RawValue == long.MinValue & right.RawValue == -1L ? 0L : left.RawValue % right.RawValue);
 	}
 
-	private static Fixed Pow2(Fixed exponent)
+	private static Fixed64 Pow2(Fixed64 exponent)
 	{
 		if (exponent.RawValue == 0L)
 			return One;
@@ -497,14 +495,14 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			i++;
 		}
 
-		result = new Fixed(result.RawValue << integerPart);
+		result = new Fixed64(result.RawValue << integerPart);
 		if (negative)
 			result = One / result;
 
 		return result;
 	}
 
-	public static Fixed Log2(Fixed value)
+	public static Fixed64 Log2(Fixed64 value)
 	{
 		if (!IsPositive(value))
 			throw new ArgumentOutOfRangeException(nameof(value));
@@ -525,29 +523,29 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			y += RawOne;
 		}
 
-		var z = new Fixed(rawValue);
+		var z = new Fixed64(rawValue);
 
 		for (var i = 0; i < DecimalPlaces; i++)
 		{
 			z *= z;
 			if (z.RawValue >= RawOne << 1)
 			{
-				z = new Fixed(z.RawValue >> 1);
+				z = new Fixed64(z.RawValue >> 1);
 				y += b;
 			}
 
 			b >>= 1;
 		}
 
-		return new Fixed(y);
+		return new Fixed64(y);
 	}
 
-	public static Fixed Ln(Fixed value)
+	public static Fixed64 Ln(Fixed64 value)
 	{
 		return Log2(value) * Ln2;
 	}
 
-	public static Fixed Pow(Fixed @base, Fixed exponent)
+	public static Fixed64 Pow(Fixed64 @base, Fixed64 exponent)
 	{
 		if (@base < Zero)
 		{
@@ -580,7 +578,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return Pow2(exponent * log2);
 	}
 
-	public static Fixed Sqrt(Fixed value)
+	public static Fixed64 Sqrt(Fixed64 value)
 	{
 		var rawValue = value.RawValue;
 		if (rawValue < 0L)
@@ -633,10 +631,10 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		if (number > result)
 			result++;
 
-		return new Fixed(new ToSigned(result).castedValue);
+		return new Fixed64(new ToSigned(result).castedValue);
 	}
 
-	public static Fixed Wrap(Fixed value, Fixed minimum, Fixed maximum)
+	public static Fixed64 Wrap(Fixed64 value, Fixed64 minimum, Fixed64 maximum)
 	{
 		while (value < minimum)
 			value += maximum - minimum;
@@ -647,12 +645,12 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value;
 	}
 
-	public static Fixed Sin(Fixed value)
+	public static Fixed64 Sin(Fixed64 value)
 	{
 		return Cos(value - PiOver2);
 	}
 
-	public static Fixed Cos(Fixed value)
+	public static Fixed64 Cos(Fixed64 value)
 	{
 		// 6 terms of taylor series
 		value = Wrap(value, -Pi, Pi);
@@ -665,12 +663,12 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		       + Pow(value, 12) / 479_001_600;
 	}
 
-	public static Fixed Tan(Fixed value)
+	public static Fixed64 Tan(Fixed64 value)
 	{
 		return Sin(value) / Cos(value);
 	}
 
-	public static Fixed Acos(Fixed value)
+	public static Fixed64 Acos(Fixed64 value)
 	{
 		if (value < -One || value > One)
 			throw new ArgumentOutOfRangeException(nameof(value));
@@ -682,7 +680,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return value.RawValue < 0 ? result + Pi : result;
 	}
 
-	public static Fixed Atan(Fixed value)
+	public static Fixed64 Atan(Fixed64 value)
 	{
 		if (IsZero(value))
 			return Zero;
@@ -728,7 +726,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return result;
 	}
 
-	public static Fixed Atan2(Fixed y, Fixed x)
+	public static Fixed64 Atan2(Fixed64 y, Fixed64 x)
 	{
 		var rawY = y.RawValue;
 		var rawX = x.RawValue;
@@ -744,9 +742,9 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		}
 		
 		const long rawPointTwoEight = 1202590844L;
-		var pointTwoEight = new Fixed(rawPointTwoEight);
+		var pointTwoEight = new Fixed64(rawPointTwoEight);
 
-		Fixed atan;
+		Fixed64 atan;
 		var z = y / x;
 		var zSquared = z * z;
 
@@ -774,108 +772,108 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return atan;
 	}
 
-	public static Fixed operator -(Fixed operand)
+	public static Fixed64 operator -(Fixed64 operand)
 	{
-		return operand.RawValue == long.MinValue ? MaxValue : new Fixed(-operand.RawValue);
+		return operand.RawValue == long.MinValue ? MaxValue : new Fixed64(-operand.RawValue);
 	}
 
-	public static bool operator ==(Fixed left, Fixed right)
+	public static bool operator ==(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue == right.RawValue;
 	}
 
-	public static bool operator !=(Fixed left, Fixed right)
+	public static bool operator !=(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue != right.RawValue;
 	}
 
-	public static bool operator >(Fixed left, Fixed right)
+	public static bool operator >(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue > right.RawValue;
 	}
 
-	public static bool operator <(Fixed left, Fixed right)
+	public static bool operator <(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue < right.RawValue;
 	}
 
-	public static bool operator >=(Fixed left, Fixed right)
+	public static bool operator >=(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue >= right.RawValue;
 	}
 
-	public static bool operator <=(Fixed left, Fixed right)
+	public static bool operator <=(Fixed64 left, Fixed64 right)
 	{
 		return left.RawValue <= right.RawValue;
 	}
 
-	public static explicit operator Fixed(long value)
+	public static explicit operator Fixed64(long value)
 	{
-		return new Fixed(value * RawOne);
+		return new Fixed64(value * RawOne);
 	}
 
-	public static explicit operator long(Fixed value)
+	public static explicit operator long(Fixed64 value)
 	{
 		return value.RawValue >> DecimalPlaces;
 	}
 	
-	public static explicit operator Fixed(float value)
+	public static explicit operator Fixed64(float value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Fixed64((long)(value * RawOne));
 	}
 
-	public static explicit operator float(Fixed value)
+	public static explicit operator float(Fixed64 value)
 	{
 		return (float)value.RawValue / RawOne;
 	}
 	
-	public static explicit operator Fixed(double value)
+	public static explicit operator Fixed64(double value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Fixed64((long)(value * RawOne));
 	}
 
-	public static explicit operator double(Fixed value)
+	public static explicit operator double(Fixed64 value)
 	{
 		return (double)value.RawValue / RawOne;
 	}
 	
-	public static explicit operator Fixed(decimal value)
+	public static explicit operator Fixed64(decimal value)
 	{
-		return new Fixed((long)(value * RawOne));
+		return new Fixed64((long)(value * RawOne));
 	}
 
-	public static explicit operator decimal(Fixed value)
+	public static explicit operator decimal(Fixed64 value)
 	{
 		return (decimal)value.RawValue / RawOne;
 	}
 
-	public static implicit operator Fixed(int value)
+	public static implicit operator Fixed64(int value)
 	{
-		return new Fixed(value);
+		return new Fixed64(value);
 	}
 
-	public static explicit operator int(Fixed value)
+	public static explicit operator int(Fixed64 value)
 	{
 		return (int)(value.RawValue / RawOne);
 	}
 	
-	public static implicit operator Fixed(Coarse value)
+	public static implicit operator Fixed64(Fixed32 value)
 	{
-		const int shiftSize = DecimalPlaces - Coarse.DecimalPlaces;
+		const int shiftSize = DecimalPlaces - Fixed32.DecimalPlaces;
 		var rawValue = (long)value.RawValue << shiftSize;
-		return new Fixed(rawValue);
+		return new Fixed64(rawValue);
 	}
 
-	public static explicit operator Fixed(Precise value)
+	public static explicit operator Fixed64(Fixed128 value)
 	{
-		const int shiftSize = Precise.DecimalPlaces - DecimalPlaces;
+		const int shiftSize = Fixed128.DecimalPlaces - DecimalPlaces;
 		var rawValue = new ToSigned((ulong)(value.Bits >> shiftSize)).castedValue;
-		return new Fixed(rawValue);
+		return new Fixed64(rawValue);
 	}
 
 	public override bool Equals(object? obj)
 	{
-		return obj is Fixed fixedValue && Equals(fixedValue);
+		return obj is Fixed64 fixedValue && Equals(fixedValue);
 	}
 
 	public override int GetHashCode()
@@ -883,12 +881,12 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 		return RawValue.GetHashCode();
 	}
 
-	public bool Equals(Fixed other)
+	public bool Equals(Fixed64 other)
 	{
 		return RawValue.Equals(other.RawValue);
 	}
 
-	public int CompareTo(Fixed other)
+	public int CompareTo(Fixed64 other)
 	{
 		return RawValue.CompareTo(other.RawValue);
 	}
@@ -913,7 +911,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 			}
 
 			result.Append('.');
-			var ten = (Fixed)10;
+			var ten = (Fixed64)10;
 			for (var i = 0; i < decimalsToRender; i++)
 			{
 				intermediate *= ten;
@@ -940,7 +938,7 @@ public readonly partial struct Fixed(long rawValue) : IFixedPoint<Fixed>
 
 			result.Append(intPart + 1);
 			result.Append('.');
-			var ten = (Fixed)10;
+			var ten = (Fixed64)10;
 			for (var i = 0; i < decimalsToRender; i++)
 			{
 				intermediate *= ten;

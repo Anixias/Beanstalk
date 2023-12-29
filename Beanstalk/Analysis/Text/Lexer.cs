@@ -429,7 +429,7 @@ public class Lexer(IBuffer source) : ILexer
 
 	private ScanResult ScanNumber(int position)
 	{
-		// 1_234, 123.456, 123.456s, 123.456x, 123u, 8i64, 0xAF80, 0b1011_0011, 2e3, 2e-3, 3.14e+3s
+		// 1_234, 123.456, 123.456f32, 123.456x32, 123u, 8i64, 0xAF80, 0b1011_0011, 2e3, 2e-3, 3.14e+3s
 		var end = position;
 
 		if (position <= Source.Length - 2)
@@ -481,80 +481,15 @@ public class Lexer(IBuffer source) : ILexer
 								end++;
 
 							valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
-							if (end < Source.Length)
-							{
-								switch (Source[end])
-								{
-									case 's':
-									case 'S':
-										end++;
-										value = float.TryParse(valueString, NumberStyles.Float, null,
-											out var floatEValue)
-											? floatEValue
-											: null;
-										break;
-									case 'd':
-									case 'D':
-										end++;
-										value = double.TryParse(valueString, NumberStyles.Float, null,
-											out var doubleEValue)
-											? doubleEValue
-											: null;
-										break;
-									case 'm':
-									case 'M':
-										end++;
-										value = decimal.TryParse(valueString, NumberStyles.Float, null,
-											out var decimalEValue)
-											? decimalEValue
-											: null;
-										break;
-									default:
-										value = double.TryParse(valueString, NumberStyles.Float, null,
-											out var defaultEValue)
-											? defaultEValue
-											: null;
-										break;
-								}
-							}
-							else
-							{
-								value = double.TryParse(valueString, NumberStyles.Float, null,
-									out var doubleEValue)
-									? doubleEValue
-									: null;
-							}
-							
+							end = ParseFloatSuffix(end, valueString, out value);
 							break;
-						case 's':
-						case 'S':
-							end++;
-							value = float.TryParse(valueString, out var floatValue) ? floatValue : null;
-							break;
-						case 'd':
-						case 'D':
-							end++;
-							value = double.TryParse(valueString, out var doubleValue) ? doubleValue : null;
-							break;
-						case 'm':
-						case 'M':
-							end++;
-							value = decimal.TryParse(valueString, out var decimalValue) ? decimalValue : null;
-							break;
-						case 'c':
-						case 'C':
-							end++;
-							value = Coarse.TryParse(valueString, out var coarseValue) ? coarseValue : null;
+						case 'f':
+						case 'F':
+							end = ParseFloatSuffix(end, valueString, out value);
 							break;
 						case 'x':
 						case 'X':
-							end++;
-							value = Fixed.TryParse(valueString, out var fixedValue) ? fixedValue : null;
-							break;
-						case 'p':
-						case 'P':
-							end++;
-							value = Precise.TryParse(valueString, out var preciseValue) ? preciseValue : null;
+							end = ParseFixedSuffix(end, valueString, out value);
 							break;
 						default:
 							value = double.TryParse(valueString, out var defaultValue) ? defaultValue : null;
@@ -644,79 +579,15 @@ public class Lexer(IBuffer source) : ILexer
 								end++;
 
 							valueString = Source.GetText(new TextRange(position, end));
-							if (end < Source.Length)
-							{
-								switch (Source[end])
-								{
-									case 's':
-									case 'S':
-										end++;
-										value = float.TryParse(valueString, NumberStyles.Float, null,
-											out var floatEValue)
-											? floatEValue
-											: null;
-										break;
-									case 'd':
-									case 'D':
-										end++;
-										value = double.TryParse(valueString, NumberStyles.Float, null,
-											out var doubleEValue)
-											? doubleEValue
-											: null;
-										break;
-									case 'm':
-									case 'M':
-										end++;
-										value = decimal.TryParse(valueString, NumberStyles.Float, null,
-											out var decimalEValue)
-											? decimalEValue
-											: null;
-										break;
-									default:
-										value = double.TryParse(valueString, NumberStyles.Float, null,
-											out var defaultEValue)
-											? defaultEValue
-											: null;
-										break;
-								}
-							}
-							else
-							{
-								value = double.TryParse(valueString, NumberStyles.Float, null,
-									out var defaultEValue)
-									? defaultEValue
-									: null;
-							}
+							end = ParseFloatSuffix(end, valueString, out value);
 							break;
-						case 's':
-						case 'S':
-							end++;
-							value = float.TryParse(valueString, out var floatValue) ? floatValue : null;
-							break;
-						case 'd':
-						case 'D':
-							end++;
-							value = double.TryParse(valueString, out var doubleValue) ? doubleValue : null;
-							break;
-						case 'm':
-						case 'M':
-							end++;
-							value = decimal.TryParse(valueString, out var decimalValue) ? decimalValue : null;
-							break;
-						case 'c':
-						case 'C':
-							end++;
-							value = Coarse.TryParse(valueString, out var coarseValue) ? coarseValue : null;
+						case 'f':
+						case 'F':
+							end = ParseFloatSuffix(end, valueString, out value);
 							break;
 						case 'x':
 						case 'X':
-							end++;
-							value = Fixed.TryParse(valueString, out var fixedValue) ? fixedValue : null;
-							break;
-						case 'p':
-						case 'P':
-							end++;
-							value = Precise.TryParse(valueString, out var preciseValue) ? preciseValue : null;
+							end = ParseFixedSuffix(end, valueString, out value);
 							break;
 						default:
 							if (int.TryParse(valueString, out var intValue))
@@ -810,6 +681,105 @@ public class Lexer(IBuffer source) : ILexer
 		{
 			return str.Replace("_", null);
 		}
+	}
+
+	private int ParseFloatSuffix(int end, string valueString, out object? value)
+	{
+		value = null;
+		
+		if (end < Source.Length)
+		{
+			if (Source[end] is not ('f' or 'F'))
+				return end;
+			
+			end++;
+			switch (ScanStorageSize(end))
+			{
+				case 32:
+					end += 2;
+
+					value = float.TryParse(valueString, NumberStyles.Float, null,
+						out var float32Value)
+						? float32Value
+						: null;
+					break;
+				case 64:
+					end += 2;
+
+					value = double.TryParse(valueString, NumberStyles.Float, null,
+						out var float64Value)
+						? float64Value
+						: null;
+					break;
+				case 128:
+					end += 3;
+
+					value = decimal.TryParse(valueString, NumberStyles.Float, null,
+						out var float128Value)
+						? float128Value
+						: null;
+					break;
+				case null:
+					value = float.TryParse(valueString, NumberStyles.Float, null,
+						out var floatValue)
+						? floatValue
+						: null;
+					break;
+			}
+		}
+		else
+		{
+			value = double.TryParse(valueString, NumberStyles.Float, null,
+				out var doubleValue)
+				? doubleValue
+				: null;
+		}
+
+		return end;
+	}
+	
+	private int ParseFixedSuffix(int end, string valueString, out object? value)
+	{
+		value = null;
+
+		if (end >= Source.Length)
+			return end;
+		
+		if (Source[end] is not ('x' or 'X'))
+			return end;
+			
+		end++;
+		switch (ScanStorageSize(end))
+		{
+			case 32:
+				end += 2;
+
+				value = Fixed32.TryParse(valueString, out var fixed32Value)
+					? fixed32Value
+					: null;
+				break;
+			case 64:
+				end += 2;
+
+				value = Fixed64.TryParse(valueString, out var fixed64Value)
+					? fixed64Value
+					: null;
+				break;
+			case 128:
+				end += 3;
+
+				value = Fixed128.TryParse(valueString, out var fixed128Value)
+					? fixed128Value
+					: null;
+				break;
+			case null:
+				value = Fixed64.TryParse(valueString, out var fixedValue)
+					? fixedValue
+					: null;
+				break;
+		}
+
+		return end;
 	}
 
 	private ScanResult ScanHexadecimal(int position)
