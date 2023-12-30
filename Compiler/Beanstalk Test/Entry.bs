@@ -1,13 +1,11 @@
-import bs.io.Console
-
-module fibonacci
+﻿module program
 
 fun fib(n:int) :> int
 {
 	if (n <= 1)
 		return n
 	
-	return fib(n - 1) + fib(n - 2)
+	return add(fib(n - 1), fib(n - 2))
 }
 
 fun add(x, y) => x + y

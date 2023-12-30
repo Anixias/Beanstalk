@@ -137,6 +137,7 @@ public sealed class TokenType
 	public static readonly TokenType KeywordWith = CreateKeyword("with");
 	public static readonly TokenType KeywordAwait = CreateKeyword("await");
 	public static readonly TokenType KeywordFun = CreateKeyword("fun");
+	public static readonly TokenType KeywordDef = CreateKeyword("def");
 	public static readonly TokenType KeywordReturn = CreateKeyword("return");
 	public static readonly TokenType KeywordIf = CreateKeyword("if");
 	public static readonly TokenType KeywordElse = CreateKeyword("else");

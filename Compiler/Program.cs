@@ -1,6 +1,10 @@
 ﻿using System.Text;
+using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
+using Beanstalk.CodeGen;
+using LLVMSharp;
+using LLVMSharp.Interop;
 
 namespace Compiler;
 
@@ -9,6 +13,7 @@ internal struct ProgramArgs
 	public string? InputPath { get; private set; }
 	public string? OutputPath { get; private set; }
 	public int? OptimizationLevel { get; private set; }
+	public int? BitTarget { get; private set; }
 
 	public static ProgramArgs? Parse(string[] args)
 	{
@@ -41,6 +46,9 @@ internal struct ProgramArgs
 					break;
 				case "-opt":
 					programArgs.OptimizationLevel = int.Parse(Read());
+					break;
+				case "-bit":
+					programArgs.BitTarget = int.Parse(Read());
 					break;
 				default:
 					throw new ArgumentException($"Invalid parameter '{command}'.", nameof(command));
@@ -134,6 +142,44 @@ internal static class Program
 		}
 	}
 
+	private readonly struct FileDiagnostics
+	{
+		public readonly string workingDirectory;
+		public readonly string filePath;
+		public readonly List<ParseException> parseExceptions = [];
+		public readonly List<CollectionException> collectionExceptions = [];
+
+		public FileDiagnostics(string workingDirectory, string filePath)
+		{
+			this.workingDirectory = workingDirectory;
+			this.filePath = filePath;
+		}
+
+		public void Print()
+		{
+			if (parseExceptions.Count > 0)
+				PrintErrorList("Parsing Error(s)", parseExceptions);
+			
+			if (collectionExceptions.Count > 0)
+				PrintErrorList("Collection Error(s)", collectionExceptions);
+		}
+
+		private void PrintErrorList(string errorLabel, IEnumerable<Exception> exceptions)
+		{
+			var relativePath = Path.GetRelativePath(workingDirectory, filePath);
+			var output = $"------------ {relativePath} ------------\n"
+			             + $"{errorLabel}:\n"
+			             + $"{string.Join('\n', exceptions.Select(e => $"\t{e.Message}"))}\n";
+			
+			lock (ConsoleLock)
+			{
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine(output);
+				Console.ResetColor();
+			}
+		}
+	}
+
 	private static async Task Compile(string[] args)
 	{
 		var programArgs = ProgramArgs.Parse(args);
@@ -156,20 +202,34 @@ internal static class Program
 		}
 
 		var optimizationLevel = programArgs.Value.OptimizationLevel ?? 0;
+		var is64Bit = true;
+
+		switch (programArgs.Value.BitTarget)
+		{
+			case 64:
+			case null:
+				break;
+			case 32:
+				is64Bit = false;
+				break;
+			default:
+				await Console.Error.WriteLineAsync("Invalid target architecture. Use '-bit 32' or '-bit 64').");
+				return;
+		}
 
 		string workingDirectory;
-		var files = new List<(string, string)>();
+		var files = new List<FileDiagnostics>();
 
 		if (File.Exists(inputPath))
 		{
 			workingDirectory = Path.GetDirectoryName(inputPath)!;
-			files.Add((workingDirectory, inputPath));
+			files.Add(new FileDiagnostics(workingDirectory, inputPath));
 		}
 		else if (Directory.Exists(inputPath))
 		{
 			workingDirectory = inputPath;
 			foreach (var file in Directory.EnumerateFiles(inputPath, "*.bs", SearchOption.AllDirectories))
-				files.Add((workingDirectory, file));
+				files.Add(new FileDiagnostics(workingDirectory, file));
 		}
 
 		var startTime = DateTime.Now;
@@ -193,7 +253,15 @@ internal static class Program
 			return;
 		}
 
-		Analyze(asts);
+		if (!Analyze(is64Bit, asts, files))
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			await Console.Error.WriteLineAsync("Compilation failed.");
+			Console.ResetColor();
+
+			return;
+		}
+		
 		GenerateIR(asts);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;
@@ -207,35 +275,66 @@ internal static class Program
 		
 	}
 
-	private static void Analyze(Ast[] asts)
+	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files)
 	{
-		
+		var collector = new Collector(is64Bit);
+		var collectionError = false;
+		var collectedAsts = new List<CollectedAst>();
+
+		for (var i = 0; i < asts.Count; i++)
+		{
+			var ast = asts[i];
+			var file = files[i];
+			if (collector.Collect(ast, file.workingDirectory, file.filePath) is { } collectedAst)
+			{
+				collectedAsts.Add(collectedAst);
+				continue;
+			}
+			
+			collectionError = true;
+			file.Print();
+		}
+
+		if (collectionError)
+			return false;
+
+		for (var i = 0; i < collectedAsts.Count; i++)
+		{
+			var ast = collectedAsts[i];
+			var file = files[i];
+			collector.Collect(ast);
+
+			foreach (var exception in collector.exceptions.Where(e =>
+				         e.WorkingDirectory == file.workingDirectory && e.FilePath == file.filePath))
+			{
+				file.collectionExceptions.Add(exception);
+			}
+			
+			file.Print();
+		}
+
+		if (collector.exceptions.Count > 0)
+		{
+			return false;
+		}
+
+		var resolver = new Resolver(collector);
+		return true;
 	}
 
-	private static async Task<Ast?> ParseFile((string, string) file)
+	private static async Task<Ast?> ParseFile(FileDiagnostics file)
 	{
-		var workingDirectory = file.Item1;
-		var filePath = file.Item2;
-		var relativePath = Path.GetRelativePath(workingDirectory, filePath);
+		var relativePath = Path.GetRelativePath(file.workingDirectory, file.filePath);
 		
-		var source = await File.ReadAllTextAsync(filePath);
+		var source = await File.ReadAllTextAsync(file.filePath);
 		var lexer = new FilteredLexer(new StringBuffer(source));
-		
 		var ast = Parser.Parse(lexer, out var parseDiagnostics);
 		
 		if (parseDiagnostics.Count <= 0)
 			return ast;
 
-		var output = $"------------ {relativePath} ------------\n"
-		             + "Parse Error(s):\n"
-		             + $"{string.Join('\n', parseDiagnostics.Select(d => $"\t{d.Message}"))}\n";
-		
-		lock (ConsoleLock)
-		{
-			Console.ForegroundColor = ConsoleColor.Red;
-			Console.WriteLine(output);
-			Console.ResetColor();
-		}
+		file.parseExceptions.AddRange(parseDiagnostics);
+		file.Print();
 
 		return ast;
 	}

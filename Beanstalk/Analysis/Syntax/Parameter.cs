@@ -5,11 +5,11 @@ namespace Beanstalk.Analysis.Syntax;
 public readonly struct Parameter
 {
 	public readonly Token identifier;
-	public readonly Type? type;
+	public readonly SyntaxType? type;
 	public readonly ExpressionNode? defaultExpression;
 	public readonly TextRange range;
 
-	public Parameter(Token identifier, Type? type, ExpressionNode? defaultExpression, TextRange range)
+	public Parameter(Token identifier, SyntaxType? type, ExpressionNode? defaultExpression, TextRange range)
 	{
 		this.identifier = identifier;
 		this.type = type;

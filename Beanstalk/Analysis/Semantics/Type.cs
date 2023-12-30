@@ -1,45 +1,14 @@
 ﻿using System.Collections.Immutable;
-using Beanstalk.Analysis.Text;
 
-namespace Beanstalk.Analysis.Syntax;
+namespace Beanstalk.Analysis.Semantics;
 
-public abstract class Type : ExpressionNode
-{
-	protected Type(TextRange range) : base(range)
-	{
-		
-	}
-	
-	public static Type? TryConvert(ExpressionNode expression)
-	{
-		switch (expression)
-		{
-			case TokenExpression tokenExpression:
-				if (!TokenType.ValidDataTypes.Contains(tokenExpression.token.Type))
-					return null;
-				
-				return new BaseType(tokenExpression.token);
-			case IndexExpression indexExpression:
-				var source = TryConvert(indexExpression.source);
-				if (source is null)
-					return null;
-				
-				var typeParameter = TryConvert(indexExpression.index);
-				if (typeParameter is null)
-					return null;
-
-				return new GenericType(source, [typeParameter], indexExpression.range);
-			default:
-				return null;
-		}
-	}
-}
+public abstract class Type;
 
 public abstract class WrapperType : Type
 {
 	public readonly Type baseType;
 
-	protected WrapperType(Type baseType, TextRange range) : base(range)
+	protected WrapperType(Type baseType)
 	{
 		this.baseType = baseType;
 	}
@@ -49,7 +18,7 @@ public sealed class TupleType : Type
 {
 	public readonly ImmutableArray<Type> types;
 
-	public TupleType(IEnumerable<Type> types, TextRange range) : base(range)
+	public TupleType(IEnumerable<Type> types)
 	{
 		this.types = types.ToImmutableArray();
 	}
@@ -64,7 +33,7 @@ public sealed class GenericType : WrapperType
 {
 	public readonly ImmutableArray<Type> typeParameters;
 	
-	public GenericType(Type baseType, IEnumerable<Type> typeParameters, TextRange range) : base(baseType, range)
+	public GenericType(Type baseType, IEnumerable<Type> typeParameters) : base(baseType)
 	{
 		this.typeParameters = typeParameters.ToImmutableArray();
 	}
@@ -77,7 +46,7 @@ public sealed class GenericType : WrapperType
 
 public sealed class MutableType : WrapperType
 {
-	public MutableType(Type baseType, TextRange range) : base(baseType, range)
+	public MutableType(Type baseType) : base(baseType)
 	{
 	}
 
@@ -89,25 +58,19 @@ public sealed class MutableType : WrapperType
 
 public sealed class ArrayType : WrapperType
 {
-	public readonly ExpressionNode? size;
-	
-	public ArrayType(Type baseType, ExpressionNode? size, TextRange range) : base(baseType, range)
+	public ArrayType(Type baseType) : base(baseType)
 	{
-		this.size = size;
 	}
 
 	public override string ToString()
 	{
-		if (size is null)
-			return $"{baseType}[]";
-		
-        return $"{baseType}[{size}]";
+		return $"{baseType}[]";
 	}
 }
 
 public sealed class NullableType : WrapperType
 {
-	public NullableType(Type baseType, TextRange range) : base(baseType, range)
+	public NullableType(Type baseType) : base(baseType)
 	{
 	}
 
@@ -122,7 +85,7 @@ public sealed class LambdaType : Type
 	public readonly ImmutableArray<Type> parameterTypes;
 	public readonly Type? returnType;
 
-	public LambdaType(IEnumerable<Type> parameterTypes, Type? returnType, TextRange range) : base(range)
+	public LambdaType(IEnumerable<Type> parameterTypes, Type? returnType)
 	{
 		this.parameterTypes = parameterTypes.ToImmutableArray();
 		this.returnType = returnType;
@@ -139,7 +102,7 @@ public sealed class ReferenceType : WrapperType
 {
 	public readonly bool immutable;
 
-	public ReferenceType(Type baseType, bool immutable, TextRange range) : base(baseType, range)
+	public ReferenceType(Type baseType, bool immutable) : base(baseType)
 	{
 		this.immutable = immutable;
 	}
@@ -152,15 +115,15 @@ public sealed class ReferenceType : WrapperType
 
 public sealed class BaseType : Type
 {
-	public readonly Token token;
+	public readonly TypeSymbol typeSymbol;
 
-	public BaseType(Token token) : base(token.Range)
+	public BaseType(TypeSymbol typeSymbol)
 	{
-		this.token = token;
+		this.typeSymbol = typeSymbol;
 	}
 
 	public override string ToString()
 	{
-		return token.Text;
+		return typeSymbol.Name;
 	}
 }

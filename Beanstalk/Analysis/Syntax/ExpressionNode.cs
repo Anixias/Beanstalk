@@ -5,12 +5,79 @@ namespace Beanstalk.Analysis.Syntax;
 
 public abstract class ExpressionNode : IAstNode
 {
+	public interface IVisitor<out T>
+	{
+		T Visit(TokenExpression expression);
+		T Visit(TupleExpression expression);
+		T Visit(ListExpression expression);
+		T Visit(MapExpression expression);
+		T Visit(InstantiationExpression expression);
+		T Visit(FunctionCallExpression expression);
+		T Visit(CastExpression expression);
+		T Visit(AccessExpression expression);
+		T Visit(IndexExpression expression);
+		T Visit(AssignmentExpression expression);
+		T Visit(LambdaExpression expression);
+		T Visit(ConditionalExpression expression);
+		T Visit(BinaryExpression expression);
+		T Visit(UnaryExpression expression);
+		T Visit(SwitchExpression expression);
+		T Visit(WithExpression expression);
+		T Visit(BinaryOperationExpression expression);
+		T Visit(UnaryOperationExpression expression);
+		T Visit(PrimaryOperationExpression expression);
+		T Visit(InterpolatedStringExpression expression);
+		T Visit(TupleSyntaxType syntaxType);
+		T Visit(GenericSyntaxType syntaxType);
+		T Visit(MutableSyntaxType syntaxType);
+		T Visit(ArraySyntaxType syntaxType);
+		T Visit(NullableSyntaxType syntaxType);
+		T Visit(LambdaSyntaxType syntaxType);
+		T Visit(ReferenceSyntaxType syntaxType);
+		T Visit(BaseSyntaxType syntaxType);
+	}
+	
+	public interface IVisitor
+	{
+		void Visit(TokenExpression expression);
+		void Visit(TupleExpression expression);
+		void Visit(ListExpression expression);
+		void Visit(MapExpression expression);
+		void Visit(InstantiationExpression expression);
+		void Visit(FunctionCallExpression expression);
+		void Visit(CastExpression expression);
+		void Visit(AccessExpression expression);
+		void Visit(IndexExpression expression);
+		void Visit(AssignmentExpression expression);
+		void Visit(LambdaExpression expression);
+		void Visit(ConditionalExpression expression);
+		void Visit(BinaryExpression expression);
+		void Visit(UnaryExpression expression);
+		void Visit(SwitchExpression expression);
+		void Visit(WithExpression expression);
+		void Visit(BinaryOperationExpression expression);
+		void Visit(UnaryOperationExpression expression);
+		void Visit(PrimaryOperationExpression expression);
+		void Visit(InterpolatedStringExpression expression);
+		void Visit(TupleSyntaxType syntaxType);
+		void Visit(GenericSyntaxType syntaxType);
+		void Visit(MutableSyntaxType syntaxType);
+		void Visit(ArraySyntaxType syntaxType);
+		void Visit(NullableSyntaxType syntaxType);
+		void Visit(LambdaSyntaxType syntaxType);
+		void Visit(ReferenceSyntaxType syntaxType);
+		void Visit(BaseSyntaxType syntaxType);
+	}
+	
 	public readonly TextRange range;
 
 	protected ExpressionNode(TextRange range)
 	{
 		this.range = range;
 	}
+
+	public abstract void Accept(IVisitor visitor);
+	public abstract T Accept<T>(IVisitor<T> visitor);
 }
 
 public sealed class TokenExpression : ExpressionNode
@@ -26,6 +93,16 @@ public sealed class TokenExpression : ExpressionNode
 	{
 		return token.Text;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class TupleExpression : ExpressionNode
@@ -36,42 +113,82 @@ public sealed class TupleExpression : ExpressionNode
 	{
 		this.expressions = expressions.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ListExpression : ExpressionNode
 {
 	public readonly ImmutableArray<ExpressionNode> expressions;
-	public readonly Type? type;
+	public readonly SyntaxType? type;
 
-	public ListExpression(IEnumerable<ExpressionNode> expressions, Type? type, TextRange range) : base(range)
+	public ListExpression(IEnumerable<ExpressionNode> expressions, SyntaxType? type, TextRange range) : base(range)
 	{
 		this.type = type;
 		this.expressions = expressions.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
 public sealed class MapExpression : ExpressionNode
 {
 	public readonly ImmutableArray<KeyValuePair<ExpressionNode, ExpressionNode>> keyValuePairs;
-	public readonly TupleType? type;
+	public readonly TupleSyntaxType? type;
 
-	public MapExpression(IEnumerable<KeyValuePair<ExpressionNode, ExpressionNode>> keyValuePairs, TupleType? type,
+	public MapExpression(IEnumerable<KeyValuePair<ExpressionNode, ExpressionNode>> keyValuePairs, TupleSyntaxType? type,
 		TextRange range) : base(range)
 	{
 		this.type = type;
 		this.keyValuePairs = keyValuePairs.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class InstantiationExpression : ExpressionNode
 {
-	public readonly Type type;
+	public readonly SyntaxType syntaxType;
 	public readonly ImmutableDictionary<Token, ExpressionNode> values;
 
-	public InstantiationExpression(Type type, IDictionary<Token, ExpressionNode> values, TextRange range) : base(range)
+	public InstantiationExpression(SyntaxType syntaxType, IDictionary<Token, ExpressionNode> values, TextRange range) : base(range)
 	{
-		this.type = type;
+		this.syntaxType = syntaxType;
 		this.values = values.ToImmutableDictionary();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -86,17 +203,37 @@ public sealed class FunctionCallExpression : ExpressionNode
 		this.caller = caller;
 		this.arguments = arguments.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class CastExpression : ExpressionNode
 {
 	public readonly ExpressionNode source;
-	public readonly Type targetType;
+	public readonly SyntaxType targetSyntaxType;
 
-	public CastExpression(ExpressionNode source, Type targetType, TextRange range) : base(range)
+	public CastExpression(ExpressionNode source, SyntaxType targetSyntaxType, TextRange range) : base(range)
 	{
 		this.source = source;
-		this.targetType = targetType;
+		this.targetSyntaxType = targetSyntaxType;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -112,6 +249,16 @@ public sealed class AccessExpression : ExpressionNode
 		this.target = target;
 		this.nullCheck = nullCheck;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class IndexExpression : ExpressionNode
@@ -126,6 +273,16 @@ public sealed class IndexExpression : ExpressionNode
 		this.index = index;
 		this.nullCheck = nullCheck;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class AssignmentExpression : ExpressionNode
@@ -138,20 +295,40 @@ public sealed class AssignmentExpression : ExpressionNode
 		this.target = target;
 		this.expression = expression;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class LambdaExpression : ExpressionNode
 {
 	public readonly ImmutableArray<Parameter> parameters;
-	public readonly Type? returnType;
+	public readonly SyntaxType? returnType;
 	public readonly StatementNode body;
 
-	public LambdaExpression(IEnumerable<Parameter> parameters, Type? returnType, StatementNode body, TextRange range) 
+	public LambdaExpression(IEnumerable<Parameter> parameters, SyntaxType? returnType, StatementNode body, TextRange range) 
 		: base(range)
 	{
 		this.parameters = parameters.ToImmutableArray();
 		this.returnType = returnType;
 		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -167,6 +344,16 @@ public sealed class ConditionalExpression : ExpressionNode
 		this.condition = condition;
 		this.trueExpression = trueExpression;
 		this.falseExpression = falseExpression;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -215,6 +402,16 @@ public sealed class BinaryExpression : ExpressionNode
 		this.operation = operation;
 		this.right = right;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class UnaryExpression : ExpressionNode
@@ -242,6 +439,16 @@ public sealed class UnaryExpression : ExpressionNode
 		this.operation = operation;
 		this.isPrefix = isPrefix;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class SwitchExpression : ExpressionNode
@@ -250,6 +457,16 @@ public sealed class SwitchExpression : ExpressionNode
 	public SwitchExpression(TextRange range) : base(range)
 	{
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class WithExpression : ExpressionNode
@@ -257,6 +474,16 @@ public sealed class WithExpression : ExpressionNode
 	// Todo
 	public WithExpression(TextRange range) : base(range)
 	{
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -283,6 +510,16 @@ public sealed class BinaryOperationExpression : OperationExpression
 		this.operation = operation;
 		this.right = right;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class UnaryOperationExpression : OperationExpression
@@ -298,6 +535,16 @@ public sealed class UnaryOperationExpression : OperationExpression
 		this.operand = operand;
 		this.isPrefix = isPrefix;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class PrimaryOperationExpression : OperationExpression
@@ -308,6 +555,16 @@ public sealed class PrimaryOperationExpression : OperationExpression
 	{
 		this.operand = operand;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class InterpolatedStringExpression : ExpressionNode
@@ -317,5 +574,15 @@ public sealed class InterpolatedStringExpression : ExpressionNode
 	public InterpolatedStringExpression(IEnumerable<ExpressionNode> parts, TextRange range) : base(range)
 	{
 		this.parts = parts.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }

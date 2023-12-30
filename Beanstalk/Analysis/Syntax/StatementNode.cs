@@ -5,12 +5,67 @@ namespace Beanstalk.Analysis.Syntax;
 
 public abstract class StatementNode : IAstNode
 {
+	public interface IVisitor<out T>
+	{
+		T Visit(ProgramStatement statement);
+		T Visit(ImportStatement statement);
+		T Visit(DllImportStatement statement);
+		T Visit(DllFunctionSignatureStatement statement);
+		T Visit(ModuleStatement statement);
+		T Visit(EntryStatement statement);
+		T Visit(FunctionDeclarationStatement statement);
+		T Visit(ConstructorDeclarationStatement statement);
+		T Visit(DestructorDeclarationStatement statement);
+		T Visit(ExpressionStatement statement);
+		T Visit(BlockStatement statement);
+		T Visit(IfStatement statement);
+		T Visit(MutableVarDeclarationStatement statement);
+		T Visit(ImmutableVarDeclarationStatement statement);
+		T Visit(ConstVarDeclarationStatement statement);
+		T Visit(ReturnStatement statement);
+		T Visit(StructDeclarationStatement statement);
+		T Visit(InterfaceDeclarationStatement statement);
+		T Visit(CastDeclarationStatement statement);
+		T Visit(OperatorDeclarationStatement statement);
+		T Visit(FieldDeclarationStatement statement);
+		T Visit(DefineStatement statement);
+	}
+	
+	public interface IVisitor
+	{
+		void Visit(ProgramStatement programStatement);
+		void Visit(ImportStatement statement);
+		void Visit(DllImportStatement statement);
+		void Visit(DllFunctionSignatureStatement statement);
+		void Visit(ModuleStatement statement);
+		void Visit(EntryStatement statement);
+		void Visit(FunctionDeclarationStatement statement);
+		void Visit(ConstructorDeclarationStatement statement);
+		void Visit(DestructorDeclarationStatement statement);
+		void Visit(ExpressionStatement statement);
+		void Visit(BlockStatement statement);
+		void Visit(IfStatement statement);
+		void Visit(MutableVarDeclarationStatement statement);
+		void Visit(ImmutableVarDeclarationStatement statement);
+		void Visit(ConstVarDeclarationStatement statement);
+		void Visit(ReturnStatement statement);
+		void Visit(StructDeclarationStatement structDeclarationStatement);
+		void Visit(InterfaceDeclarationStatement statement);
+		void Visit(CastDeclarationStatement statement);
+		void Visit(OperatorDeclarationStatement statement);
+		void Visit(FieldDeclarationStatement statement);
+		void Visit(DefineStatement statement);
+	}
+	
 	public readonly TextRange range;
 
 	protected StatementNode(TextRange range)
 	{
 		this.range = range;
 	}
+
+	public abstract void Accept(IVisitor visitor);
+	public abstract T Accept<T>(IVisitor<T> visitor);
 }
 
 public sealed class ProgramStatement : StatementNode
@@ -26,32 +81,85 @@ public sealed class ProgramStatement : StatementNode
 		this.moduleStatement = moduleStatement;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ImportStatement : StatementNode
 {
-	public readonly ImmutableArray<Token> scope;
+	public readonly ModuleName scope;
 	public readonly Token identifier;
 	public readonly Token? alias;
 
-	public ImportStatement(IEnumerable<Token> scope, Token identifier, Token? alias, TextRange range) : base(range)
+	public ImportStatement(ModuleName scope, Token identifier, Token? alias, TextRange range) : base(range)
 	{
-		this.scope = scope.ToImmutableArray();
+		this.scope = scope;
 		this.identifier = identifier;
 		this.alias = alias;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class DllImportStatement : StatementNode
+{
+	public readonly string dllPath;
+	public readonly ImmutableArray<StatementNode> statements;
+	
+	public DllImportStatement(string dllPath, IEnumerable<StatementNode> statements, TextRange range) : base(range)
+	{
+		this.dllPath = dllPath;
+		this.statements = statements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
 public sealed class ModuleStatement : StatementNode
 {
-	public readonly ImmutableArray<Token> scope;
+	// Todo: Track whether has a body or not -- alternatively, move all statements into this after parsing if file-scope
+	public readonly ModuleName scope;
 	public readonly ImmutableArray<StatementNode> topLevelStatements;
 
-	public ModuleStatement(IEnumerable<Token> scope, IEnumerable<StatementNode> topLevelStatements, TextRange range)
+	public ModuleStatement(ModuleName scope, IEnumerable<StatementNode> topLevelStatements, TextRange range)
 		: base(range)
 	{
-		this.scope = scope.ToImmutableArray();
+		this.scope = scope;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -65,18 +173,28 @@ public sealed class EntryStatement : StatementNode
 		this.parameters = parameters.ToImmutableArray();
 		this.body = body;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class FunctionDeclarationStatement : StatementNode
 {
 	public readonly Token identifier;
-	public readonly ImmutableArray<Type> typeParameters;
+	public readonly ImmutableArray<SyntaxType> typeParameters;
 	public readonly ImmutableArray<Parameter> parameters;
-	public readonly Type? returnType;
+	public readonly SyntaxType? returnType;
 	public readonly StatementNode body;
 
-	public FunctionDeclarationStatement(Token identifier, IEnumerable<Type> typeParameters,
-		IEnumerable<Parameter> parameters, Type? returnType, StatementNode body, TextRange range) : base(range)
+	public FunctionDeclarationStatement(Token identifier, IEnumerable<SyntaxType> typeParameters,
+		IEnumerable<Parameter> parameters, SyntaxType? returnType, StatementNode body, TextRange range) : base(range)
 
 	{
 		this.identifier = identifier;
@@ -84,6 +202,43 @@ public sealed class FunctionDeclarationStatement : StatementNode
 		this.parameters = parameters.ToImmutableArray();
 		this.returnType = returnType;
 		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class DllFunctionSignatureStatement : StatementNode
+{
+	public readonly Token identifier;
+	public readonly IReadOnlyDictionary<string, string> attributes;
+	public readonly ImmutableArray<Parameter> parameters;
+	public readonly SyntaxType? returnType;
+
+	public DllFunctionSignatureStatement(Token identifier, IEnumerable<Parameter> parameters, SyntaxType? returnType,
+		IReadOnlyDictionary<string, string> attributes, TextRange range) : base(range)
+	{
+		this.identifier = identifier;
+		this.parameters = parameters.ToImmutableArray();
+		this.returnType = returnType;
+		this.attributes = attributes;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -98,6 +253,16 @@ public sealed class ConstructorDeclarationStatement : StatementNode
 		this.parameters = parameters.ToImmutableArray();
 		this.body = body;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class DestructorDeclarationStatement : StatementNode
@@ -107,6 +272,16 @@ public sealed class DestructorDeclarationStatement : StatementNode
 	public DestructorDeclarationStatement(StatementNode body, TextRange range) : base(range)
 	{
 		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -118,6 +293,16 @@ public sealed class ExpressionStatement : StatementNode
 	{
 		this.expression = expression;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class BlockStatement : StatementNode
@@ -127,6 +312,16 @@ public sealed class BlockStatement : StatementNode
 	public BlockStatement(IEnumerable<StatementNode> statements, TextRange range) : base(range)
 	{
 		this.statements = statements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -144,6 +339,16 @@ public sealed class IfStatement : StatementNode
 		this.thenBranch = thenBranch;
 		this.elseBranch = elseBranch;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public abstract class VarDeclarationStatement : StatementNode
@@ -151,9 +356,9 @@ public abstract class VarDeclarationStatement : StatementNode
 	public virtual bool IsImmutable => true;
 	public virtual bool IsConstant => false;
 	public readonly Token identifier;
-	public readonly Type? type;
+	public readonly SyntaxType? type;
 
-	protected VarDeclarationStatement(Token identifier, Type? type, TextRange range) : base(range)
+	protected VarDeclarationStatement(Token identifier, SyntaxType? type, TextRange range) : base(range)
 	{
 		this.identifier = identifier;
 		this.type = type;
@@ -165,10 +370,20 @@ public sealed class MutableVarDeclarationStatement : VarDeclarationStatement
 	public override bool IsImmutable => false;
 	public readonly ExpressionNode? initializer;
 
-	public MutableVarDeclarationStatement(Token identifier, Type? type, ExpressionNode? initializer, TextRange range)
+	public MutableVarDeclarationStatement(Token identifier, SyntaxType? type, ExpressionNode? initializer, TextRange range)
 		: base(identifier, type, range)
 	{
 		this.initializer = initializer;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -176,10 +391,20 @@ public sealed class ImmutableVarDeclarationStatement : VarDeclarationStatement
 {
 	public readonly ExpressionNode initializer;
 
-	public ImmutableVarDeclarationStatement(Token identifier, Type? type, ExpressionNode initializer, TextRange range)
+	public ImmutableVarDeclarationStatement(Token identifier, SyntaxType? type, ExpressionNode initializer, TextRange range)
 		: base(identifier, type, range)
 	{
 		this.initializer = initializer;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -188,10 +413,20 @@ public sealed class ConstVarDeclarationStatement : VarDeclarationStatement
 	public override bool IsConstant => true;
 	public readonly ExpressionNode initializer;
 
-	public ConstVarDeclarationStatement(Token identifier, Type? type, ExpressionNode initializer, TextRange range)
+	public ConstVarDeclarationStatement(Token identifier, SyntaxType? type, ExpressionNode initializer, TextRange range)
 		: base(identifier, type, range)
 	{
 		this.initializer = initializer;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -202,6 +437,16 @@ public sealed class ReturnStatement : StatementNode
 	public ReturnStatement(ExpressionNode expression, TextRange range) : base(range)
 	{
 		this.expression = expression;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -219,6 +464,16 @@ public sealed class StructDeclarationStatement : StatementNode
 		this.isMutable = isMutable;
 		this.statements = statements.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class InterfaceDeclarationStatement : StatementNode
@@ -233,37 +488,67 @@ public sealed class InterfaceDeclarationStatement : StatementNode
 		this.identifier = identifier;
 		this.statements = statements.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class CastDeclarationStatement : StatementNode
 {
 	public readonly bool isImplicit;
 	public readonly Parameter parameter;
-	public readonly Type returnType;
+	public readonly SyntaxType returnSyntaxType;
 	public readonly StatementNode body;
 
-	public CastDeclarationStatement(bool isImplicit, Parameter parameter, Type returnType, StatementNode body, TextRange range) :
+	public CastDeclarationStatement(bool isImplicit, Parameter parameter, SyntaxType returnSyntaxType, StatementNode body, TextRange range) :
 		base(range)
 	{
 		this.isImplicit = isImplicit;
 		this.parameter = parameter;
-		this.returnType = returnType;
+		this.returnSyntaxType = returnSyntaxType;
 		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
 public sealed class OperatorDeclarationStatement : StatementNode
 {
 	public readonly OperationExpression operation;
-	public readonly Type returnType;
+	public readonly SyntaxType returnSyntaxType;
 	public readonly StatementNode body;
 
-	public OperatorDeclarationStatement(OperationExpression operation, Type returnType, StatementNode body, TextRange range) :
+	public OperatorDeclarationStatement(OperationExpression operation, SyntaxType returnSyntaxType, StatementNode body, TextRange range) :
 		base(range)
 	{
 		this.operation = operation;
-		this.returnType = returnType;
+		this.returnSyntaxType = returnSyntaxType;
 		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -279,10 +564,10 @@ public sealed class FieldDeclarationStatement : StatementNode
 	public readonly Token identifier;
 	public readonly Mutability mutability;
 	public readonly bool isStatic;
-	public readonly Type? type;
+	public readonly SyntaxType? type;
 	public readonly ExpressionNode? initializer;
 
-	public FieldDeclarationStatement(Token identifier, Mutability mutability, bool isStatic, Type? type,
+	public FieldDeclarationStatement(Token identifier, Mutability mutability, bool isStatic, SyntaxType? type,
 		ExpressionNode? initializer, TextRange range) : base(range)
 
 	{
@@ -291,5 +576,37 @@ public sealed class FieldDeclarationStatement : StatementNode
 		this.isStatic = isStatic;
 		this.type = type;
 		this.initializer = initializer;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class DefineStatement : StatementNode
+{
+	public readonly Token identifier;
+	public readonly SyntaxType type;
+	
+	public DefineStatement(Token identifier, SyntaxType type, TextRange range) : base(range)
+	{
+		this.identifier = identifier;
+		this.type = type;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
