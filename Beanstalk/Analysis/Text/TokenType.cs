@@ -200,6 +200,7 @@ public sealed class TokenType
 		NativeDataTypes.Append(Identifier).ToImmutableArray();
 
 	public static TokenType OpReturnType => OpColonRight;
+	public static readonly TokenType OpEllipsis = CreateOperator("...");
 	public static readonly TokenType OpColonColon = CreateOperator("::");
 	public static readonly TokenType OpDoubleArrow = CreateOperator("=>");
 	public static readonly TokenType OpColon = CreateOperator(":");

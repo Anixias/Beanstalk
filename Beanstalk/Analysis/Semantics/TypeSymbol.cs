@@ -4,16 +4,16 @@ namespace Beanstalk.Analysis.Semantics;
 
 public abstract class TypeSymbol : ISymbol
 {
-	private static uint nextID;
+	private static uint nextID = 1u;
 	
 	public abstract string SymbolTypeName { get; }
 	public string Name { get; }
 	public uint TypeID { get; }
 	
-	protected TypeSymbol(string name)
+	protected TypeSymbol(string name, bool increment = true)
 	{
 		Name = name;
-		TypeID = nextID++;
+		TypeID = increment ? nextID++ : 0u;
 	}
 
 	public static readonly NativeSymbol Int8 = new(TokenType.KeywordInt8.ToString());
@@ -60,5 +60,14 @@ public sealed class StructSymbol : TypeSymbol
 	{
 		IsMutable = isMutable;
 		Scope = scope;
+	}
+}
+
+public sealed class TypeParameterSymbol : TypeSymbol
+{
+	public override string SymbolTypeName => "a type parameter";
+	
+	public TypeParameterSymbol(string name) : base(name, false)
+	{
 	}
 }

@@ -11,3 +11,13 @@ fun printLine(text:string)
 {
     print("{text}\n"::char[])
 }
+
+fun printMany(...parts:string[])
+{
+    /*for (part in parts)
+    {
+       print(part::char[]) 
+    }*/
+    
+    print('\n')
+}

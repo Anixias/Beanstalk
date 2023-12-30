@@ -43,7 +43,7 @@ public abstract class StatementNode : IAstNode
 		void Visit(ConstructorDeclarationStatement statement);
 		void Visit(DestructorDeclarationStatement statement);
 		void Visit(ExpressionStatement statement);
-		void Visit(BlockStatement statement);
+		void Visit(BlockStatement blockStatement);
 		void Visit(IfStatement statement);
 		void Visit(MutableVarDeclarationStatement statement);
 		void Visit(ImmutableVarDeclarationStatement statement);
@@ -188,12 +188,12 @@ public sealed class EntryStatement : StatementNode
 public sealed class FunctionDeclarationStatement : StatementNode
 {
 	public readonly Token identifier;
-	public readonly ImmutableArray<SyntaxType> typeParameters;
+	public readonly ImmutableArray<Token> typeParameters;
 	public readonly ImmutableArray<Parameter> parameters;
 	public readonly SyntaxType? returnType;
 	public readonly StatementNode body;
 
-	public FunctionDeclarationStatement(Token identifier, IEnumerable<SyntaxType> typeParameters,
+	public FunctionDeclarationStatement(Token identifier, IEnumerable<Token> typeParameters,
 		IEnumerable<Parameter> parameters, SyntaxType? returnType, StatementNode body, TextRange range) : base(range)
 
 	{
@@ -432,9 +432,9 @@ public sealed class ConstVarDeclarationStatement : VarDeclarationStatement
 
 public sealed class ReturnStatement : StatementNode
 {
-	public readonly ExpressionNode expression;
+	public readonly ExpressionNode? expression;
 
-	public ReturnStatement(ExpressionNode expression, TextRange range) : base(range)
+	public ReturnStatement(ExpressionNode? expression, TextRange range) : base(range)
 	{
 		this.expression = expression;
 	}
@@ -533,8 +533,8 @@ public sealed class OperatorDeclarationStatement : StatementNode
 	public readonly SyntaxType returnSyntaxType;
 	public readonly StatementNode body;
 
-	public OperatorDeclarationStatement(OperationExpression operation, SyntaxType returnSyntaxType, StatementNode body, TextRange range) :
-		base(range)
+	public OperatorDeclarationStatement(OperationExpression operation, SyntaxType returnSyntaxType, StatementNode body,
+		TextRange range) : base(range)
 	{
 		this.operation = operation;
 		this.returnSyntaxType = returnSyntaxType;

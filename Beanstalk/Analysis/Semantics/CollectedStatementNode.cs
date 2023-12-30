@@ -13,6 +13,9 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedFieldDeclarationStatement statement);
 		T Visit(CollectedConstDeclarationStatement statement);
 		T Visit(CollectedDefStatement statement);
+		T Visit(CollectedFunctionDeclarationStatement statement);
+		T Visit(CollectedCastDeclarationStatement statement);
+		T Visit(CollectedOperatorDeclarationStatement statement);
 		T Visit(CollectedSimpleStatement statement);
 	}
 	
@@ -24,6 +27,9 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedFieldDeclarationStatement statement);
 		void Visit(CollectedConstDeclarationStatement statement);
 		void Visit(CollectedDefStatement statement);
+		void Visit(CollectedFunctionDeclarationStatement statement);
+		void Visit(CollectedCastDeclarationStatement statement);
+		void Visit(CollectedOperatorDeclarationStatement statement);
 		void Visit(CollectedSimpleStatement statement);
 	}
 
@@ -153,6 +159,69 @@ public sealed class CollectedDefStatement : CollectedStatementNode
 	{
 		this.defSymbol = defSymbol;
 		this.syntaxType = syntaxType;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNode
+{
+	public FunctionSymbol? functionSymbol;
+	public readonly FunctionDeclarationStatement functionDeclarationStatement;
+	
+	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement)
+	{
+		this.functionDeclarationStatement = functionDeclarationStatement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedCastDeclarationStatement : CollectedStatementNode
+{
+	public CastOverloadSymbol? castOverloadSymbol;
+	public readonly CastDeclarationStatement castDeclarationStatement;
+	
+	public CollectedCastDeclarationStatement(CastDeclarationStatement castDeclarationStatement)
+	{
+		this.castDeclarationStatement = castDeclarationStatement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNode
+{
+	public OperatorOverloadSymbol? operatorOverloadSymbol;
+	public readonly OperatorDeclarationStatement operatorDeclarationStatement;
+	
+	public CollectedOperatorDeclarationStatement(OperatorDeclarationStatement operatorDeclarationStatement)
+	{
+		this.operatorDeclarationStatement = operatorDeclarationStatement;
 	}
 
 	public override void Accept(IVisitor visitor)

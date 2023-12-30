@@ -193,6 +193,346 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 	}
 
+	public void Visit(CollectedFunctionDeclarationStatement statement)
+	{
+		var functionDeclarationStatement = statement.functionDeclarationStatement;
+		var body = new Scope(CurrentScope);
+		scopeStack.Push(body);
+
+		var autoGenericSymbols = new List<VarSymbol>();
+		var autoGenericReturnType = false;
+		var typeParameterSymbols = new List<TypeParameterSymbol>();
+		foreach (var typeParameter in functionDeclarationStatement.typeParameters)
+		{
+			var typeParameterSymbol = new TypeParameterSymbol(typeParameter.Text);
+			typeParameterSymbols.Add(typeParameterSymbol);
+			body.AddSymbol(typeParameterSymbol);
+		}
+
+		var parameters = new List<ParameterSymbol>();
+		var requireDefault = false;
+		var additionalParametersAllowed = true;
+		foreach (var parameter in functionDeclarationStatement.parameters)
+		{
+			if (!additionalParametersAllowed)
+				exceptions.Add(NewCollectionException("Cannot define additional parameters after a " +
+				                                      "variadic parameter", parameter.identifier));
+			
+			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
+
+			if (parameter.type is not null)
+			{
+				var invalidTypes = new List<Token>();
+				varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+
+				if (invalidTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+
+				if (parameter.isVariadic)
+				{
+					additionalParametersAllowed = false;
+					
+					if (varSymbol.Type is not null && varSymbol.Type is not ArrayType)
+						exceptions.Add(NewCollectionException("Variadic parameters must be array types",
+							parameter.identifier));
+				}
+			}
+			else
+			{
+				autoGenericSymbols.Add(varSymbol);
+			}
+
+			if (parameter.defaultExpression is { } defaultExpression)
+			{
+				requireDefault = true;
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression));
+				continue;
+			}
+			
+			if (requireDefault)
+				exceptions.Add(NewCollectionException(
+					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
+					"previous parameter specified a default value", parameter.identifier));
+
+			parameters.Add(new ParameterSymbol(varSymbol, null));
+		}
+
+		Type? returnType = null;
+		if (functionDeclarationStatement.returnType is not null)
+		{
+			var invalidTypes = new List<Token>();
+			returnType = ResolveType(functionDeclarationStatement.returnType, invalidTypes);
+			
+			if (invalidTypes.Count > 0)
+			{
+				foreach (var invalidType in invalidTypes)
+				{
+					exceptions.Add(NewCollectionException(
+						$"Could not find a type named '{invalidType.Text}'", invalidType));
+				}
+			}
+		}
+		else if (ReturnStatementFinder.Find(functionDeclarationStatement.body))
+		{
+			autoGenericReturnType = true;
+		}
+		
+		// Handle auto-generic type parameters
+		var autoGenericId = 1u;
+		foreach (var symbol in autoGenericSymbols)
+		{
+			var typeSymbol = new TypeParameterSymbol($"$T{autoGenericId++}");
+			typeParameterSymbols.Add(typeSymbol);
+			body.AddSymbol(typeSymbol);
+			symbol.Type = new BaseType(typeSymbol);
+		}
+
+		if (autoGenericReturnType)
+		{
+			var typeSymbol = new TypeParameterSymbol($"$T{autoGenericId}");
+			typeParameterSymbols.Add(typeSymbol);
+			body.AddSymbol(typeSymbol);
+			returnType = new BaseType(typeSymbol);
+		}
+
+		foreach (var parameter in parameters)
+		{
+			body.AddSymbol(parameter);
+		}
+		
+		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text,
+			typeParameterSymbols, parameters, body)
+		{
+			ReturnType = returnType
+		};
+
+		scopeStack.Pop();
+		CurrentScope.AddSymbol(functionSymbol);
+		statement.functionSymbol = functionSymbol;
+	}
+
+	public void Visit(CollectedCastDeclarationStatement statement)
+	{
+		var castDeclarationStatement = statement.castDeclarationStatement;
+		var body = new Scope(CurrentScope);
+
+		var parameter = castDeclarationStatement.parameter;
+				
+		if (parameter.isMutable)
+			exceptions.Add(NewCollectionException(
+				"Cannot mark cast parameter as mutable", parameter.identifier));
+				
+		if (parameter.isVariadic)
+			exceptions.Add(NewCollectionException(
+				"Cannot mark cast parameter as variadic", parameter.identifier));
+				
+		var varSymbol = new VarSymbol(parameter.identifier.Text, false);
+		if (parameter.type is not null)
+		{
+			var invalidTypes = new List<Token>();
+			varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+
+			if (invalidTypes.Count > 0)
+			{
+				foreach (var invalidType in invalidTypes)
+				{
+					exceptions.Add(NewCollectionException(
+						$"Could not find a type named '{invalidType.Text}'", invalidType));
+				}
+			}
+		}
+		else
+		{
+			exceptions.Add(NewCollectionException(
+				"Parameter type is required in cast overload declarations", parameter.identifier));
+		}
+
+		var invalidReturnTypes = new List<Token>();
+		var returnType = ResolveType(castDeclarationStatement.returnSyntaxType, invalidReturnTypes);
+				
+		if (invalidReturnTypes.Count > 0)
+		{
+			foreach (var invalidType in invalidReturnTypes)
+			{
+				exceptions.Add(NewCollectionException(
+					$"Could not find a type named '{invalidType.Text}'", invalidType));
+			}
+		}
+
+		if (returnType is null)
+			return;
+				
+		var parameterSymbol = new ParameterSymbol(varSymbol, null);
+		body.AddSymbol(parameterSymbol);
+
+		var castSymbol = new CastOverloadSymbol(castDeclarationStatement.isImplicit, parameterSymbol,
+			returnType, body);
+
+		CurrentScope.AddSymbol(castSymbol);
+		statement.castOverloadSymbol = castSymbol;
+	}
+
+	public void Visit(CollectedOperatorDeclarationStatement statement)
+	{
+		var operatorDeclarationStatement = statement.operatorDeclarationStatement;
+		var body = new Scope(CurrentScope);
+		switch (operatorDeclarationStatement.operation)
+		{
+			case BinaryOperationExpression binaryOperationExpression:
+			{
+				var left = binaryOperationExpression.left;
+				var right = binaryOperationExpression.right;
+				
+				if (left.isVariadic)
+					exceptions.Add(NewCollectionException(
+						"Cannot mark operator parameter as variadic", left.identifier));
+				
+				if (right.isVariadic)
+					exceptions.Add(NewCollectionException(
+						"Cannot mark operator parameter as variadic", left.identifier));
+				
+				var leftSymbol = new VarSymbol(left.identifier.Text, false);
+				if (left.type is not null)
+				{
+					var invalidTypes = new List<Token>();
+					leftSymbol.Type = ResolveType(left.type, invalidTypes);
+
+					if (invalidTypes.Count > 0)
+					{
+						foreach (var invalidType in invalidTypes)
+						{
+							exceptions.Add(NewCollectionException(
+								$"Could not find a type named '{invalidType.Text}'", invalidType));
+						}
+					}
+				}
+				else
+				{
+					exceptions.Add(NewCollectionException(
+						"Parameter type is required in operator overload declarations", left.identifier));
+				}
+				
+				var rightSymbol = new VarSymbol(right.identifier.Text, false);
+				if (right.type is not null)
+				{
+					var invalidTypes = new List<Token>();
+					rightSymbol.Type = ResolveType(right.type, invalidTypes);
+
+					if (invalidTypes.Count > 0)
+					{
+						foreach (var invalidType in invalidTypes)
+						{
+							exceptions.Add(NewCollectionException(
+								$"Could not find a type named '{invalidType.Text}'", invalidType));
+						}
+					}
+				}
+				else
+				{
+					exceptions.Add(NewCollectionException(
+						"Parameter type is required in operator overload declarations", right.identifier));
+				}
+				
+				var invalidReturnTypes = new List<Token>();
+				var returnType = ResolveType(operatorDeclarationStatement.returnSyntaxType, invalidReturnTypes);
+				
+				if (invalidReturnTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidReturnTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+
+				if (returnType is null)
+					return;
+						
+				var leftParameterSymbol = new ParameterSymbol(leftSymbol, null);
+				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null);
+				body.AddSymbol(leftParameterSymbol);
+				body.AddSymbol(rightParameterSymbol);
+
+				var operatorSymbol = new BinaryOperatorOverloadSymbol(leftParameterSymbol,
+					binaryOperationExpression.operation, rightParameterSymbol, returnType, body);
+
+				CurrentScope.AddSymbol(operatorSymbol);
+				statement.operatorOverloadSymbol = operatorSymbol;
+			}
+				break;
+
+			case UnaryOperationExpression unaryOperationExpression:
+			{
+				var operand = unaryOperationExpression.operand;
+				
+				if (operand.isVariadic)
+					exceptions.Add(NewCollectionException(
+						"Cannot mark operator parameter as variadic", operand.identifier));
+				
+				var varSymbol = new VarSymbol(operand.identifier.Text, false);
+				if (operand.type is not null)
+				{
+					var invalidTypes = new List<Token>();
+					varSymbol.Type = ResolveType(operand.type, invalidTypes);
+
+					if (invalidTypes.Count > 0)
+					{
+						foreach (var invalidType in invalidTypes)
+						{
+							exceptions.Add(NewCollectionException(
+								$"Could not find a type named '{invalidType.Text}'", invalidType));
+						}
+					}
+				}
+				else
+				{
+					exceptions.Add(NewCollectionException(
+						"Parameter type is required in operator overload declarations", operand.identifier));
+				}
+				
+				var invalidReturnTypes = new List<Token>();
+				var returnType = ResolveType(operatorDeclarationStatement.returnSyntaxType, invalidReturnTypes);
+				
+				if (invalidReturnTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidReturnTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+
+				if (returnType is null)
+					return;
+				
+				var parameterSymbol = new ParameterSymbol(varSymbol, null);
+				body.AddSymbol(parameterSymbol);
+
+				var operatorSymbol = new UnaryOperatorOverloadSymbol(parameterSymbol,
+					unaryOperationExpression.operation, unaryOperationExpression.isPrefix, returnType, body);
+
+				CurrentScope.AddSymbol(operatorSymbol);
+				statement.operatorOverloadSymbol = operatorSymbol;
+			}
+				break;
+			
+			default:
+				exceptions.Add(NewCollectionException(
+					"Invalid operation: Unknown operation expression type",
+					statement.operatorDeclarationStatement.operation.op));
+				
+				break;
+		}
+
+		
+	}
+
 	public void Visit(CollectedSimpleStatement statement)
 	{
 		// Do nothing

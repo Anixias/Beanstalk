@@ -232,8 +232,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(FunctionDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedFunctionDeclarationStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)
@@ -318,14 +317,12 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(CastDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedCastDeclarationStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(OperatorDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedOperatorDeclarationStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(FieldDeclarationStatement statement)

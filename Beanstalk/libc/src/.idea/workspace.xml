@@ -21,12 +21,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="034d7094-b98b-47e8-8d8f-a87765de19b7" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/Collector.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Collector.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/Resolver.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Resolver.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Beanstalk.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../../Beanstalk.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/library.c" beforeDir="false" afterPath="$PROJECT_DIR$/library.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/library.h" beforeDir="false" afterPath="$PROJECT_DIR$/library.h" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ParameterSymbol.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/CollectorPass2.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/CollectorPass2.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/FunctionSymbol.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/FunctionSymbol.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/TypeSymbol.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/TypeSymbol.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/Parameter.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/Parameter.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/Parser.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/Parser.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/StatementNode.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/StatementNode.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Text/TokenType.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Text/TokenType.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Console.bs" beforeDir="false" afterPath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Console.bs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -96,7 +98,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1703930607748</updated>
-      <workItem from="1703930608928" duration="1669000" />
+      <workItem from="1703930608928" duration="2272000" />
     </task>
     <servers />
   </component>

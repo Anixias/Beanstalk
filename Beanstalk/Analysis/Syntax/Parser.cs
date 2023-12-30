@@ -362,10 +362,13 @@ public static class Parser
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 
-		var typeParameters = new List<SyntaxType>();
+		var typeParameters = new List<Token>();
 		if (Match(tokens, ref position, TokenType.OpLeftBracket))
 		{
-			typeParameters.AddRange(ParseTypeList(tokens, ref position));
+			do
+			{
+				typeParameters.Add(Consume(tokens, ref position, null, TokenType.Identifier));
+			} while (Match(tokens, ref position, TokenType.OpComma));
 			Consume(tokens, ref position, null, TokenType.OpRightBracket);
 		}
 		
@@ -1575,15 +1578,18 @@ public static class Parser
 
 	private static Parameter ParseLambdaParameter(IReadOnlyList<Token> tokens, ref int position)
 	{
+		var isMutable = Match(tokens, ref position, TokenType.KeywordVar);
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		Consume(tokens, ref position, null, TokenType.OpColon);
 		var type = ParseType(tokens, ref position);
 
-		return new Parameter(identifier, type, null, identifier.Range.Join(type.range));
+		return new Parameter(identifier, type, null, false, isMutable, identifier.Range.Join(type.range));
 	}
 
 	private static Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position, bool defaultValueAllowed)
 	{
+		var isVariadic = Match(tokens, ref position, TokenType.OpEllipsis);
+		var isMutable = Match(tokens, ref position, TokenType.KeywordVar);
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		var range = identifier.Range;
 
@@ -1595,12 +1601,12 @@ public static class Parser
 		}
 
 		if (!defaultValueAllowed || !Match(tokens, ref position, TokenType.OpEquals))
-			return new Parameter(identifier, type, null, range);
+			return new Parameter(identifier, type, null, isVariadic, isMutable, range);
 		
 		var defaultExpression = ParseExpression(tokens, ref position);
 		range = range.Join(defaultExpression.range);
 
-		return new Parameter(identifier, type, defaultExpression, range);
+		return new Parameter(identifier, type, defaultExpression, isVariadic, isMutable, range);
 	}
 
 	private static ExpressionNode ParsePostfixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)

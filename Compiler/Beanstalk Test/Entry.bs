@@ -9,6 +9,7 @@ fun fib(n:int) :> int
 }
 
 fun add(x, y) => x + y
+fun add2[T](x:T, y:T) :> T => x + y
 
 entry()
 {
