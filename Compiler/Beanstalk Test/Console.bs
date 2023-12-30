@@ -1,16 +1,13 @@
 ﻿module bs.io.console
 
-/*import ("beanstalk.a")
+/*import ("beanstalk.dll")
 {
-    fun printOut[entry = "printOut"](text:char[])
+    fun printOut(text:char[]) external(entry = "print_out")
 }*/
 
-extern
-{
-    fun printOut[entry = "printOut"](text:char[])
-}
+fun print(text:char[]) external(entry = "print")
 
 fun printLine(text:string)
 {
-    printOut("%s", text)
+    print("{text}\n"::char[])
 }

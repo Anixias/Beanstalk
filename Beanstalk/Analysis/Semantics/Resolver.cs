@@ -39,7 +39,7 @@ public class Resolver : StatementNode.IVisitor<ResolvedStatementNode>, Expressio
 		throw new NotImplementedException();
 	}
 
-	public ResolvedStatementNode Visit(DllFunctionSignatureStatement statement)
+	public ResolvedStatementNode Visit(ExternalFunctionStatement statement)
 	{
 		throw new NotImplementedException();
 	}

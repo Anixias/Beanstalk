@@ -401,15 +401,56 @@ public static class Parser
 			startToken.Range.Join(body.range));
 	}
 
-	private static DllFunctionSignatureStatement ParseDllFunctionSignatureStatement(IReadOnlyList<Token> tokens,
+	private static bool TryParseExternalFunctionStatement(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out ExternalFunctionStatement? externalFunctionStatement)
+	{
+		externalFunctionStatement = null;
+		if (Peek(tokens, position) != TokenType.KeywordFun)
+			return false;
+
+		var startPosition = position;
+		try
+		{
+			externalFunctionStatement = ParseExternalFunctionStatement(tokens, ref position);
+			return true;
+		}
+		catch (ParseException)
+		{
+			position = startPosition;
+			return false;
+		}
+	}
+
+	private static ExternalFunctionStatement ParseExternalFunctionStatement(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
-		var range = startToken.Range;
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
+		
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+
+		var parameters = new List<Parameter>();
+		if (Peek(tokens, position) != TokenType.OpRightParen)
+		{
+			do
+			{
+				parameters.Add(ParseParameter(tokens, ref position, false));
+			} while (Match(tokens, ref position, TokenType.OpComma));
+		}
+		
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+
+		SyntaxType? returnType = null;
+		if (Match(tokens, ref position, TokenType.OpReturnType))
+		{
+			returnType = ParseType(tokens, ref position);
+		}
 
 		var attributes = new Dictionary<string, string>();
-		if (Match(tokens, ref position, TokenType.OpLeftBracket))
+		Consume(tokens, ref position, null, TokenType.KeywordExternal);
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+
+		if (Peek(tokens, position) != TokenType.OpRightParen)
 		{
 			do
 			{
@@ -423,32 +464,11 @@ public static class Parser
 						$"Attribute '{attributeKey.Text}' is already defined for this function signature",
 						attributeKey);
 			} while (Match(tokens, ref position, TokenType.OpComma));
-			
-			Consume(tokens, ref position, null, TokenType.OpRightBracket);
 		}
-		
-		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 
-		var parameters = new List<Parameter>();
-		if (Peek(tokens, position) != TokenType.OpRightParen)
-		{
-			do
-			{
-				parameters.Add(ParseParameter(tokens, ref position, false));
-			} while (Match(tokens, ref position, TokenType.OpComma));
-		}
-		
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
-		range = range.Join(endToken.Range);
-
-		SyntaxType? returnType = null;
-		if (Match(tokens, ref position, TokenType.OpReturnType))
-		{
-			returnType = ParseType(tokens, ref position);
-			range = range.Join(returnType.range);
-		}
-
-		return new DllFunctionSignatureStatement(identifier, parameters, returnType, attributes, range);
+		return new ExternalFunctionStatement(identifier, parameters, returnType, attributes,
+			startToken.Range.Join(endToken.Range));
 	}
 
 	private static bool TryParseConstructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
@@ -864,6 +884,11 @@ public static class Parser
 			return dllImportStatement;
 		}
 		
+		if (TryParseExternalFunctionStatement(tokens, ref position, out var externalFunctionStatement))
+		{
+			return externalFunctionStatement;
+		}
+		
 		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 		{
 			return functionDeclaration;
@@ -929,10 +954,10 @@ public static class Parser
 		var peek = Peek(tokens, position);
 		if (peek == TokenType.KeywordFun)
 		{
-			return ParseDllFunctionSignatureStatement(tokens, ref position);
+			return ParseExternalFunctionStatement(tokens, ref position);
 		}
 
-		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
+		throw new ParseException($"Expected imported statement; Instead, got '{peek}'", tokens[position]);
 	}
 
 	private static BlockStatement ParseBlockStatement(IReadOnlyList<Token> tokens, ref int position)

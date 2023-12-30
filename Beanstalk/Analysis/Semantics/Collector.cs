@@ -175,7 +175,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		return new CollectedSimpleStatement(statement);
 	}
 
-	public CollectedStatementNode Visit(DllFunctionSignatureStatement statement)
+	public CollectedStatementNode Visit(ExternalFunctionStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);

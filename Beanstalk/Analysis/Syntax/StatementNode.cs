@@ -10,7 +10,7 @@ public abstract class StatementNode : IAstNode
 		T Visit(ProgramStatement statement);
 		T Visit(ImportStatement statement);
 		T Visit(DllImportStatement statement);
-		T Visit(DllFunctionSignatureStatement statement);
+		T Visit(ExternalFunctionStatement statement);
 		T Visit(ModuleStatement statement);
 		T Visit(EntryStatement statement);
 		T Visit(FunctionDeclarationStatement statement);
@@ -36,7 +36,7 @@ public abstract class StatementNode : IAstNode
 		void Visit(ProgramStatement programStatement);
 		void Visit(ImportStatement statement);
 		void Visit(DllImportStatement statement);
-		void Visit(DllFunctionSignatureStatement statement);
+		void Visit(ExternalFunctionStatement statement);
 		void Visit(ModuleStatement statement);
 		void Visit(EntryStatement statement);
 		void Visit(FunctionDeclarationStatement statement);
@@ -215,14 +215,14 @@ public sealed class FunctionDeclarationStatement : StatementNode
 	}
 }
 
-public sealed class DllFunctionSignatureStatement : StatementNode
+public sealed class ExternalFunctionStatement : StatementNode
 {
 	public readonly Token identifier;
 	public readonly IReadOnlyDictionary<string, string> attributes;
 	public readonly ImmutableArray<Parameter> parameters;
 	public readonly SyntaxType? returnType;
 
-	public DllFunctionSignatureStatement(Token identifier, IEnumerable<Parameter> parameters, SyntaxType? returnType,
+	public ExternalFunctionStatement(Token identifier, IEnumerable<Parameter> parameters, SyntaxType? returnType,
 		IReadOnlyDictionary<string, string> attributes, TextRange range) : base(range)
 	{
 		this.identifier = identifier;

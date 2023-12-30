@@ -21,54 +21,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="034d7094-b98b-47e8-8d8f-a87765de19b7" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/AliasedSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/CollectedAst.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/CollectedStatementNode.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Collector.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/CollectorPass2.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ConstSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/DefSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/FieldSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/FunctionSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ICollectedAstNode.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/IResolvedAstNode.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ISymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ModuleSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ResolvedAst.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ResolvedExpressionNode.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/ResolvedStatementNode.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Resolver.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Scope.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/SymbolTable.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Type.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/TypeSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Semantics/VarSymbol.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../Analysis/Syntax/ModuleName.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../CodeGen/CodeGenerator.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/src.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/build.bat" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/library.c" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/library.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Console.bs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Entry.bs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Vec2.bs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../../Beanstalk.sln.DotSettings" beforeDir="false" afterPath="$PROJECT_DIR$/../../../Beanstalk.sln.DotSettings" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/ExpressionNode.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/ExpressionNode.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/Parameter.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/Parameter.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/Parser.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/Parser.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/StatementNode.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/StatementNode.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Syntax/Type.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Syntax/SyntaxType.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Analysis/Text/TokenType.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Text/TokenType.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/Collector.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Collector.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Analysis/Semantics/Resolver.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../Analysis/Semantics/Resolver.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../../Beanstalk.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../../Beanstalk.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../../Compiler/Compiler.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../../../Compiler/Compiler.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../../Compiler/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../../Compiler/Program.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../../Compiler/Test.bs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library.c" beforeDir="false" afterPath="$PROJECT_DIR$/library.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library.h" beforeDir="false" afterPath="$PROJECT_DIR$/library.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Console.bs" beforeDir="false" afterPath="$PROJECT_DIR$/../../../Compiler/Beanstalk Test/Console.bs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,6 +60,7 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_ADD_EXTERNAL_FILES": "true",
+    "ASKED_MARK_IGNORED_FILES_AS_EXCLUDED": "true",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.cidr.known.project.marker": "true",
@@ -109,6 +69,10 @@
     "cidr.known.project.marker": "true",
     "git-widget-placeholder": "development",
     "ignore.virus.scanning.warn.message": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -132,7 +96,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1703930607748</updated>
-      <workItem from="1703930608928" duration="278000" />
+      <workItem from="1703930608928" duration="1669000" />
     </task>
     <servers />
   </component>
