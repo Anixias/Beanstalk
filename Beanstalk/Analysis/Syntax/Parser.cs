@@ -1177,7 +1177,7 @@ public static class Parser
 	
 	private static ExpressionNode ParseNullCoalescingExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var expression = ParseLogicalOrExpression(tokens, ref position);
+		var expression = ParseEqualityExpression(tokens, ref position);
 
 		while (Match(tokens, ref position, TokenType.OpQuestionQuestion))
 		{
@@ -1189,55 +1189,13 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseLogicalOrExpression(IReadOnlyList<Token> tokens, ref int position)
-	{
-		var expression = ParseLogicalXorExpression(tokens, ref position);
-		
-		while (Match(tokens, ref position, TokenType.OpBarBar))
-		{
-			var right = ParseLogicalXorExpression(tokens, ref position);
-			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.LogicalOr, right, range);
-		}
-
-		return expression;
-	}
-
-	private static ExpressionNode ParseLogicalXorExpression(IReadOnlyList<Token> tokens, ref int position)
-	{
-		var expression = ParseLogicalAndExpression(tokens, ref position);
-		
-		while (Match(tokens, ref position, TokenType.OpHatHat))
-		{
-			var right = ParseLogicalAndExpression(tokens, ref position);
-			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.LogicalXor, right, range);
-		}
-
-		return expression;
-	}
-
-	private static ExpressionNode ParseLogicalAndExpression(IReadOnlyList<Token> tokens, ref int position)
-	{
-		var expression = ParseEqualityExpression(tokens, ref position);
-		
-		while (Match(tokens, ref position, TokenType.OpAmpAmp))
-		{
-			var right = ParseEqualityExpression(tokens, ref position);
-			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.LogicalAnd, right, range);
-		}
-
-		return expression;
-	}
-
 	private static ExpressionNode ParseEqualityExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var expression = ParseBitwiseOrExpression(tokens, ref position);
+		var expression = ParseOrExpression(tokens, ref position);
 		
 		while (Match(tokens, ref position, out var op, TokenType.OpEqualsEquals, TokenType.OpBangEquals))
 		{
-			var right = ParseBitwiseOrExpression(tokens, ref position);
+			var right = ParseOrExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
 
 			BinaryExpression.Operation operation;
@@ -1254,35 +1212,35 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseBitwiseOrExpression(IReadOnlyList<Token> tokens, ref int position)
+	private static ExpressionNode ParseOrExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var expression = ParseBitwiseXorExpression(tokens, ref position);
+		var expression = ParseXorExpression(tokens, ref position);
 		
 		while (Match(tokens, ref position, TokenType.OpBar))
 		{
-			var right = ParseBitwiseXorExpression(tokens, ref position);
+			var right = ParseXorExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.BitwiseOr, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.Or, right, range);
 		}
 
 		return expression;
 	}
 
-	private static ExpressionNode ParseBitwiseXorExpression(IReadOnlyList<Token> tokens, ref int position)
+	private static ExpressionNode ParseXorExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var expression = ParseBitwiseAndExpression(tokens, ref position);
+		var expression = ParseAndExpression(tokens, ref position);
 		
 		while (Match(tokens, ref position, TokenType.OpHat))
 		{
-			var right = ParseBitwiseAndExpression(tokens, ref position);
+			var right = ParseAndExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.BitwiseXor, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.Xor, right, range);
 		}
 
 		return expression;
 	}
 
-	private static ExpressionNode ParseBitwiseAndExpression(IReadOnlyList<Token> tokens, ref int position)
+	private static ExpressionNode ParseAndExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseRelationalExpression(tokens, ref position);
 		
@@ -1290,7 +1248,7 @@ public static class Parser
 		{
 			var right = ParseRelationalExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.BitwiseAnd, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.And, right, range);
 		}
 
 		return expression;

@@ -362,14 +362,11 @@ public sealed class BinaryExpression : ExpressionNode
 	public enum Operation
 	{
 		NullCoalescence,
-		LogicalOr,
-		LogicalXor,
-		LogicalAnd,
 		Equals,
 		NotEquals,
-		BitwiseOr,
-		BitwiseXor,
-		BitwiseAnd,
+		Or,
+		Xor,
+		And,
 		LessThan,
 		GreaterThan,
 		LessEqual,

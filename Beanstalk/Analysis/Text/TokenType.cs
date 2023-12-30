@@ -240,11 +240,8 @@ public sealed class TokenType
 	public static readonly TokenType OpPercent = CreateOperator("%");
 	public static readonly TokenType OpQuestionQuestion = CreateOperator("??");
 	public static readonly TokenType OpQuestion = CreateOperator("?");
-	public static readonly TokenType OpBarBar = CreateOperator("||");
 	public static readonly TokenType OpBar = CreateOperator("|");
-	public static readonly TokenType OpAmpAmp = CreateOperator("&&");
 	public static readonly TokenType OpAmp = CreateOperator("&");
-	public static readonly TokenType OpHatHat = CreateOperator("^^");
 	public static readonly TokenType OpHat = CreateOperator("^");
 
 	public static TokenType? GetKeyword(string keyword)
