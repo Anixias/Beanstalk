@@ -474,6 +474,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		var castSymbol = new CastOverloadSymbol(castDeclarationStatement.isImplicit, parameterSymbol,
 			returnType, body);
 
+		if (CurrentScope.LookupSymbol(castSymbol.Name) is not null)
+		{
+			exceptions.Add(NewCollectionException("Cast overload matches existing cast overload",
+				castDeclarationStatement.castKeyword));
+			
+			return;
+		}
+
 		CurrentScope.AddSymbol(castSymbol);
 		statement.castOverloadSymbol = castSymbol;
 	}
@@ -562,6 +570,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				var operatorSymbol = new BinaryOperatorOverloadSymbol(leftParameterSymbol,
 					binaryOperationExpression.operation, rightParameterSymbol, returnType, body);
 
+				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
+				{
+					exceptions.Add(NewCollectionException("Operator overload matches existing operator overload",
+						operatorDeclarationStatement.operatorKeyword));
+					
+					break;
+				}
+
 				CurrentScope.AddSymbol(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
@@ -617,6 +633,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				var operatorSymbol = new UnaryOperatorOverloadSymbol(parameterSymbol,
 					unaryOperationExpression.operation, unaryOperationExpression.isPrefix, returnType, body);
 
+				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
+				{
+					exceptions.Add(NewCollectionException("Operator overload matches existing operator overload",
+						operatorDeclarationStatement.operatorKeyword));
+					
+					break;
+				}
+
 				CurrentScope.AddSymbol(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
@@ -629,8 +653,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				
 				break;
 		}
-
-		
 	}
 
 	public void Visit(CollectedSimpleStatement statement)

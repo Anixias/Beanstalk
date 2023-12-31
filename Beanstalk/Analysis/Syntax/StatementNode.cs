@@ -506,14 +506,16 @@ public sealed class InterfaceDeclarationStatement : StatementNode
 
 public sealed class CastDeclarationStatement : StatementNode
 {
+	public readonly Token castKeyword;
 	public readonly bool isImplicit;
 	public readonly Parameter parameter;
 	public readonly SyntaxType returnSyntaxType;
 	public readonly StatementNode body;
 
-	public CastDeclarationStatement(bool isImplicit, Parameter parameter, SyntaxType returnSyntaxType, StatementNode body, TextRange range) :
-		base(range)
+	public CastDeclarationStatement(Token castKeyword, bool isImplicit, Parameter parameter,
+		SyntaxType returnSyntaxType, StatementNode body, TextRange range) : base(range)
 	{
+		this.castKeyword = castKeyword;
 		this.isImplicit = isImplicit;
 		this.parameter = parameter;
 		this.returnSyntaxType = returnSyntaxType;
@@ -533,13 +535,15 @@ public sealed class CastDeclarationStatement : StatementNode
 
 public sealed class OperatorDeclarationStatement : StatementNode
 {
+	public readonly Token operatorKeyword;
 	public readonly OperationExpression operation;
 	public readonly SyntaxType returnSyntaxType;
 	public readonly StatementNode body;
 
-	public OperatorDeclarationStatement(OperationExpression operation, SyntaxType returnSyntaxType, StatementNode body,
-		TextRange range) : base(range)
+	public OperatorDeclarationStatement(Token operatorKeyword, OperationExpression operation,
+		SyntaxType returnSyntaxType, StatementNode body, TextRange range) : base(range)
 	{
+		this.operatorKeyword = operatorKeyword;
 		this.operation = operation;
 		this.returnSyntaxType = returnSyntaxType;
 		this.body = body;

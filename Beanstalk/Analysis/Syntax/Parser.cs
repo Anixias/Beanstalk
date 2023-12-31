@@ -657,7 +657,7 @@ public static class Parser
 	private static CastDeclarationStatement ParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var castTypeToken = Consume(tokens, ref position, null, TokenType.KeywordImplicit, TokenType.KeywordExplicit);
-		Consume(tokens, ref position, null, TokenType.KeywordCast);
+		var castKeyword = Consume(tokens, ref position, null, TokenType.KeywordCast);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 		var parameter = ParseParameter(tokens, ref position, false);
 		Consume(tokens, ref position, null, TokenType.OpRightParen);
@@ -676,8 +676,8 @@ public static class Parser
 			body = ParseBlockStatement(tokens, ref position);
 		}
 
-		return new CastDeclarationStatement(castTypeToken.Type == TokenType.KeywordImplicit, parameter, returnType,
-			body, castTypeToken.Range.Join(body.range));
+		return new CastDeclarationStatement(castKeyword, castTypeToken.Type == TokenType.KeywordImplicit, parameter,
+			returnType, body, castTypeToken.Range.Join(body.range));
 	}
 
 	private static bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
@@ -776,9 +776,14 @@ public static class Parser
 
 	private static OperatorDeclarationStatement ParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordOperator);
+		var operatorKeyword = Consume(tokens, ref position, null, TokenType.KeywordOperator);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 		var operationExpression = ParseOperationExpression(tokens, ref position);
+
+		if (operationExpression is PrimaryOperationExpression)
+			throw new ParseException("Operator required in operation expression",
+				operationExpression.op ?? operatorKeyword);
+		
 		Consume(tokens, ref position, null, TokenType.OpRightParen);
 		Consume(tokens, ref position, null, TokenType.OpReturnType);
 		var returnType = ParseType(tokens, ref position);
@@ -795,8 +800,8 @@ public static class Parser
 			body = ParseBlockStatement(tokens, ref position);
 		}
 
-		return new OperatorDeclarationStatement(operationExpression, returnType, body,
-			startToken.Range.Join(body.range));
+		return new OperatorDeclarationStatement(operatorKeyword, operationExpression, returnType, body,
+			operatorKeyword.Range.Join(body.range));
 	}
 
 	private static OperationExpression ParseOperationExpression(IReadOnlyList<Token> tokens, ref int position)
