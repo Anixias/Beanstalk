@@ -2,9 +2,6 @@
 using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
-using Beanstalk.CodeGen;
-using LLVMSharp;
-using LLVMSharp.Interop;
 
 namespace Compiler;
 
