@@ -523,14 +523,14 @@ public static class Parser
 	private static DestructorDeclarationStatement ParseDestructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordDestructor);
+		var destructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordDestructor);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 		Consume(tokens, ref position, null, TokenType.OpRightParen);
 
 		var body = ParseBlockStatement(tokens, ref position);
 
-		return new DestructorDeclarationStatement(body, startToken.Range.Join(body.range));
+		return new DestructorDeclarationStatement(destructorKeyword, body, destructorKeyword.Range.Join(body.range));
 	}
 
 	private static bool TryParseFieldDeclaration(IReadOnlyList<Token> tokens, ref int position,

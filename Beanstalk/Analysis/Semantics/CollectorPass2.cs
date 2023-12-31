@@ -395,6 +395,28 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 	}
 
+	public void Visit(CollectedDestructorDeclarationStatement statement)
+	{
+		var destructorDeclarationStatement = statement.destructorDeclarationStatement;
+		var body = new Scope(CurrentScope);
+		scopeStack.Push(body);
+
+		var destructorSymbol = new DestructorSymbol(body);
+
+		statement.destructorSymbol = destructorSymbol;
+		scopeStack.Pop();
+
+		if (CurrentScope.LookupSymbol(destructorSymbol.Name) is DestructorSymbol)
+		{
+			exceptions.Add(NewCollectionException("A destructor is already declared in this scope",
+				destructorDeclarationStatement.destructorKeyword));
+
+			return;
+		}
+		
+		CurrentScope.AddSymbol(destructorSymbol);
+	}
+
 	public void Visit(CollectedCastDeclarationStatement statement)
 	{
 		var castDeclarationStatement = statement.castDeclarationStatement;

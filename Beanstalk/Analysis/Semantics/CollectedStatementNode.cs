@@ -15,6 +15,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedDefStatement statement);
 		T Visit(CollectedFunctionDeclarationStatement statement);
 		T Visit(CollectedConstructorDeclarationStatement statement);
+		T Visit(CollectedDestructorDeclarationStatement statement);
 		T Visit(CollectedCastDeclarationStatement statement);
 		T Visit(CollectedOperatorDeclarationStatement statement);
 		T Visit(CollectedSimpleStatement statement);
@@ -30,6 +31,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedDefStatement statement);
 		void Visit(CollectedFunctionDeclarationStatement statement);
 		void Visit(CollectedConstructorDeclarationStatement statement);
+		void Visit(CollectedDestructorDeclarationStatement statement);
 		void Visit(CollectedCastDeclarationStatement statement);
 		void Visit(CollectedOperatorDeclarationStatement statement);
 		void Visit(CollectedSimpleStatement statement);
@@ -203,6 +205,27 @@ public sealed class CollectedConstructorDeclarationStatement : CollectedStatemen
 	public CollectedConstructorDeclarationStatement(ConstructorDeclarationStatement constructorDeclarationStatement)
 	{
 		this.constructorDeclarationStatement = constructorDeclarationStatement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedDestructorDeclarationStatement : CollectedStatementNode
+{
+	public DestructorSymbol? destructorSymbol;
+	public readonly DestructorDeclarationStatement destructorDeclarationStatement;
+	
+	public CollectedDestructorDeclarationStatement(DestructorDeclarationStatement destructorDeclarationStatement)
+	{
+		this.destructorDeclarationStatement = destructorDeclarationStatement;
 	}
 
 	public override void Accept(IVisitor visitor)

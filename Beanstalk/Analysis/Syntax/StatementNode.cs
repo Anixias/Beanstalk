@@ -269,10 +269,12 @@ public sealed class ConstructorDeclarationStatement : StatementNode
 
 public sealed class DestructorDeclarationStatement : StatementNode
 {
+	public readonly Token destructorKeyword;
 	public readonly StatementNode body;
 
-	public DestructorDeclarationStatement(StatementNode body, TextRange range) : base(range)
+	public DestructorDeclarationStatement(Token destructorKeyword, StatementNode body, TextRange range) : base(range)
 	{
+		this.destructorKeyword = destructorKeyword;
 		this.body = body;
 	}
 
