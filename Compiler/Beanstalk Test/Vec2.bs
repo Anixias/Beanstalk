@@ -2,11 +2,11 @@ module bs.math
 
 mutable struct Vec2
 {
-    static zero = ref Vec2.new(0.0f32, 0.0f32)
-    static one = ref Vec2.new(1.0f32, 1.0f32)
+    static zero:Vec2 = ref Vec2.new(0.0f32, 0.0f32)
+    static one:Vec2 = ref Vec2.new(1.0f32, 1.0f32)
 
-    mutable x:float
-    mutable y:float
+    var x:float
+    var y:float
     
     constructor(x:float, y:float)
     {

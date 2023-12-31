@@ -199,8 +199,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		var body = new Scope(CurrentScope);
 		scopeStack.Push(body);
 
-		var autoGenericSymbols = new List<VarSymbol>();
-		var autoGenericReturnType = false;
 		var typeParameterSymbols = new List<TypeParameterSymbol>();
 		foreach (var typeParameter in functionDeclarationStatement.typeParameters)
 		{
@@ -243,10 +241,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							parameter.identifier));
 				}
 			}
-			else
-			{
-				autoGenericSymbols.Add(varSymbol);
-			}
 
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
@@ -277,28 +271,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 						$"Could not find a type named '{invalidType.Text}'", invalidType));
 				}
 			}
-		}
-		else if (ReturnStatementFinder.Find(functionDeclarationStatement.body))
-		{
-			autoGenericReturnType = true;
-		}
-		
-		// Handle auto-generic type parameters
-		var autoGenericId = 1u;
-		foreach (var symbol in autoGenericSymbols)
-		{
-			var typeSymbol = new TypeParameterSymbol($"$T{autoGenericId++}");
-			typeParameterSymbols.Add(typeSymbol);
-			body.AddSymbol(typeSymbol);
-			symbol.Type = new BaseType(typeSymbol);
-		}
-
-		if (autoGenericReturnType)
-		{
-			var typeSymbol = new TypeParameterSymbol($"$T{autoGenericId}");
-			typeParameterSymbols.Add(typeSymbol);
-			body.AddSymbol(typeSymbol);
-			returnType = new BaseType(typeSymbol);
 		}
 
 		foreach (var parameter in parameters)

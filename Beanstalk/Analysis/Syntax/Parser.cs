@@ -339,7 +339,7 @@ public static class Parser
 		}
 		else
 		{
-			var statement = ParseDllImportedStatement(tokens, ref position, diagnostics);
+			var statement = ParseDllImportedStatement(tokens, ref position);
 			range = range.Join(statement.range);
 		}
 		
@@ -540,7 +540,7 @@ public static class Parser
 		var modifierTokens = new[]
 		{
 			TokenType.KeywordStatic,
-			TokenType.KeywordMutable
+			TokenType.KeywordVar
 		};
 		
 		var peek = Peek(tokens, position);
@@ -574,7 +574,7 @@ public static class Parser
 			const string duplicateErrorMessage = "Duplicate field modifier";
 			const string mutableConstErrorMessage = "Field cannot be both mutable and constant";
 
-			if (peek == TokenType.KeywordMutable)
+			if (peek == TokenType.KeywordVar)
 			{
 				if (isMutable)
 					throw new ParseException(duplicateErrorMessage, modifierToken);
@@ -614,14 +614,13 @@ public static class Parser
 		}
 		
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
-		var range = startToken.Range.Join(identifier.Range);
 
-		SyntaxType? type = null;
-		if (Match(tokens, ref position, TokenType.OpColon))
-		{
-			type = ParseType(tokens, ref position);
-			range = startToken.Range.Join(type.range);
-		}
+		// A type is required for fields - this may change in the future, allowing field types to be inferred from
+		// the initializer. The main reason not to do so is if the initializer refers to a static member, it may require
+		// several passes to fully infer the type
+		Consume(tokens, ref position, null, TokenType.OpColon);
+		var type = ParseType(tokens, ref position);
+		var range = startToken.Range.Join(type.range);
 
 		ExpressionNode? initializer = null;
 		if (Match(tokens, ref position, TokenType.OpEquals))
@@ -681,14 +680,14 @@ public static class Parser
 	}
 
 	private static bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
+		List<ParseException> diagnostics, [NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
 	{
 		var peek = Peek(tokens, position);
 
 		if (peek == TokenType.KeywordStruct ||
 		    (peek == TokenType.KeywordMutable && Peek(tokens, position + 1) == TokenType.KeywordStruct))
 		{
-			structDeclaration = ParseStructDeclaration(tokens, ref position);
+			structDeclaration = ParseStructDeclaration(tokens, ref position, diagnostics);
 			return true;
 		}
 
@@ -696,7 +695,8 @@ public static class Parser
 		return false;
 	}
 
-	private static StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private static StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordMutable, TokenType.KeywordStruct);
 		var isMutable = startToken.Type == TokenType.KeywordMutable;
@@ -706,20 +706,40 @@ public static class Parser
 		
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		Consume(tokens, ref position, null, TokenType.OpLeftBrace);
-		var statements = ParseStructBody(tokens, ref position, TokenType.OpRightBrace);
+		var statements = ParseStructBody(tokens, ref position, diagnostics, TokenType.OpRightBrace);
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightBrace);
 
 		return new StructDeclarationStatement(identifier, isMutable, statements, startToken.Range.Join(endToken.Range));
 	}
 
 	private static List<StatementNode> ParseStructBody(IReadOnlyList<Token> tokens, ref int position,
-		TokenType endTokenType)
+		List<ParseException> diagnostics, TokenType endTokenType)
 	{
-		var statements = new List<StatementNode>();
+		var syncTokens = new[]
+		{
+			TokenType.EndOfFile,
+			TokenType.KeywordFun,
+			TokenType.KeywordVar,
+			TokenType.KeywordStatic
+		};
 		
+		var statements = new List<StatementNode>();
+
 		while (Peek(tokens, position) != endTokenType)
 		{
-			statements.Add(ParseStructMember(tokens, ref position));
+			try
+			{
+				statements.Add(ParseStructMember(tokens, ref position));
+			}
+			catch (ParseException e)
+			{
+				diagnostics.Add(e);
+
+				do
+				{
+					position++;
+				} while (!syncTokens.Contains(Peek(tokens, position)));
+			}
 		}
 
 		return statements;
@@ -907,7 +927,7 @@ public static class Parser
 			return operationDeclaration;
 		}
 		
-		if (TryParseStructDeclaration(tokens, ref position, out var structDeclaration))
+		if (TryParseStructDeclaration(tokens, ref position, diagnostics, out var structDeclaration))
 		{
 			return structDeclaration;
 		}
@@ -935,7 +955,7 @@ public static class Parser
 		{
 			try
 			{
-				statements.Add(ParseDllImportedStatement(tokens, ref position, diagnostics));
+				statements.Add(ParseDllImportedStatement(tokens, ref position));
 			}
 			catch (ParseException e)
 			{
@@ -951,8 +971,7 @@ public static class Parser
 		return statements;
 	}
 
-	private static StatementNode ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private static StatementNode ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
 		if (peek == TokenType.KeywordFun)
