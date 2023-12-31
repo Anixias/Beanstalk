@@ -2,7 +2,10 @@
 
 namespace Beanstalk.Analysis.Semantics;
 
-public abstract class Type;
+public abstract class Type
+{
+	public abstract bool Equals(Type? type);
+}
 
 public abstract class WrapperType : Type
 {
@@ -25,7 +28,24 @@ public sealed class TupleType : Type
 
 	public override string ToString()
 	{
-		return $"({string.Join(',', types.Select(t => t.ToString()))})";
+		return $"({string.Join(", ", types.Select(t => t.ToString()))})";
+	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not TupleType tupleType)
+			return false;
+
+		if (types.Length != tupleType.types.Length)
+			return false;
+
+		for (var i = 0; i < types.Length; i++)
+		{
+			if (!types[i].Equals(tupleType.types[i]))
+				return false;
+		}
+
+		return true;
 	}
 }
 
@@ -40,7 +60,24 @@ public sealed class GenericType : WrapperType
 
 	public override string ToString()
 	{
-		return $"{baseType}[{string.Join(',', typeParameters.Select(t => t.ToString()))}]";
+		return $"{baseType}[{string.Join(", ", typeParameters.Select(t => t.ToString()))}]";
+	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not GenericType genericType)
+			return false;
+
+		if (typeParameters.Length != genericType.typeParameters.Length)
+			return false;
+
+		for (var i = 0; i < typeParameters.Length; i++)
+		{
+			if (!typeParameters[i].Equals(genericType.typeParameters[i]))
+				return false;
+		}
+
+		return true;
 	}
 }
 
@@ -54,6 +91,17 @@ public sealed class MutableType : WrapperType
 	{
 		return $"mutable {baseType}";
 	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not MutableType mutableType)
+			return false;
+
+		if (!baseType.Equals(mutableType.baseType))
+			return false;
+
+		return true;
+	}
 }
 
 public sealed class ArrayType : WrapperType
@@ -66,6 +114,17 @@ public sealed class ArrayType : WrapperType
 	{
 		return $"{baseType}[]";
 	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not ArrayType arrayType)
+			return false;
+
+		if (!baseType.Equals(arrayType.baseType))
+			return false;
+
+		return true;
+	}
 }
 
 public sealed class NullableType : WrapperType
@@ -77,6 +136,17 @@ public sealed class NullableType : WrapperType
 	public override string ToString()
 	{
 		return $"{baseType}?";
+	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not NullableType nullableType)
+			return false;
+
+		if (!baseType.Equals(nullableType.baseType))
+			return false;
+
+		return true;
 	}
 }
 
@@ -94,7 +164,30 @@ public sealed class LambdaType : Type
 	public override string ToString()
 	{
 		var returnString = returnType is null ? "." : $"{returnType}";
-		return $"({string.Join(',', parameterTypes.Select(p => p.ToString()))}) => {returnString}";
+		return $"({string.Join(", ", parameterTypes.Select(p => p.ToString()))}) => {returnString}";
+	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not LambdaType lambdaType)
+			return false;
+
+		if (returnType is null != lambdaType.returnType is null)
+			return false;
+
+		if (returnType?.Equals(lambdaType.returnType!) == false)
+			return false;
+		
+		if (parameterTypes.Length != lambdaType.parameterTypes.Length)
+			return false;
+
+		for (var i = 0; i < parameterTypes.Length; i++)
+		{
+			if (!parameterTypes[i].Equals(lambdaType.parameterTypes[i]))
+				return false;
+		}
+
+		return true;
 	}
 }
 
@@ -111,6 +204,17 @@ public sealed class ReferenceType : WrapperType
 	{
 		return immutable ? $"ref {baseType}" : $"mutable ref {baseType}";
 	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not ReferenceType referenceType)
+			return false;
+
+		if (!baseType.Equals(referenceType.baseType))
+			return false;
+
+		return true;
+	}
 }
 
 public sealed class BaseType : Type
@@ -125,5 +229,16 @@ public sealed class BaseType : Type
 	public override string ToString()
 	{
 		return typeSymbol.Name;
+	}
+
+	public override bool Equals(Type? type)
+	{
+		if (type is not BaseType baseType)
+			return false;
+
+		if (typeSymbol != baseType.typeSymbol)
+			return false;
+
+		return true;
 	}
 }

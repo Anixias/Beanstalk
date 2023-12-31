@@ -324,8 +324,6 @@ internal static class Program
 
 	private static async Task<Ast?> ParseFile(FileDiagnostics file)
 	{
-		var relativePath = Path.GetRelativePath(file.workingDirectory, file.filePath);
-		
 		var source = await File.ReadAllTextAsync(file.filePath);
 		var lexer = new FilteredLexer(new StringBuffer(source));
 		var ast = Parser.Parse(lexer, out var parseDiagnostics);

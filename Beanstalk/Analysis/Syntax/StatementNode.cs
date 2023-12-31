@@ -244,12 +244,14 @@ public sealed class ExternalFunctionStatement : StatementNode
 
 public sealed class ConstructorDeclarationStatement : StatementNode
 {
+	public readonly Token constructorKeyword;
 	public readonly ImmutableArray<Parameter> parameters;
 	public readonly StatementNode body;
 
-	public ConstructorDeclarationStatement(IEnumerable<Parameter> parameters, StatementNode body, TextRange range) :
-		base(range)
+	public ConstructorDeclarationStatement(Token constructorKeyword, IEnumerable<Parameter> parameters,
+		StatementNode body, TextRange range) : base(range)
 	{
+		this.constructorKeyword = constructorKeyword;
 		this.parameters = parameters.ToImmutableArray();
 		this.body = body;
 	}

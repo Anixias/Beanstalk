@@ -488,7 +488,7 @@ public static class Parser
 	private static ConstructorDeclarationStatement ParseConstructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordConstructor);
+		var constructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordConstructor);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 
@@ -505,7 +505,8 @@ public static class Parser
 
 		var body = ParseBlockStatement(tokens, ref position);
 
-		return new ConstructorDeclarationStatement(parameters, body, startToken.Range.Join(body.range));
+		return new ConstructorDeclarationStatement(constructorKeyword, parameters, body,
+			constructorKeyword.Range.Join(body.range));
 	}
 
 	private static bool TryParseDestructorDeclaration(IReadOnlyList<Token> tokens, ref int position,

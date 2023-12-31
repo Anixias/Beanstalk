@@ -238,7 +238,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)
 	{
 		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedConstructorDeclarationStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(DestructorDeclarationStatement statement)

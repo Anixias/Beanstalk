@@ -31,7 +31,16 @@ public sealed class FunctionSymbol : ISymbol
 
 		for (var i = 0; i < Parameters.Length; i++)
 		{
-			if (Parameters[i] != functionSymbol.Parameters[i])
+			var otherParameterType = functionSymbol.Parameters[i].VarSymbol.Type;
+			if (Parameters[i].VarSymbol.Type is not { } parameterType)
+			{
+				if (otherParameterType is not null)
+					return false;
+
+				continue;
+			}
+			
+			if (!parameterType.Equals(otherParameterType))
 				return false;
 		}
 

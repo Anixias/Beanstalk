@@ -308,6 +308,93 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 	}
 
+	public void Visit(CollectedConstructorDeclarationStatement statement)
+	{
+		var constructorDeclarationStatement = statement.constructorDeclarationStatement;
+		var body = new Scope(CurrentScope);
+		scopeStack.Push(body);
+
+		var parameters = new List<ParameterSymbol>();
+		var requireDefault = false;
+		var additionalParametersAllowed = true;
+		foreach (var parameter in constructorDeclarationStatement.parameters)
+		{
+			if (!additionalParametersAllowed)
+				exceptions.Add(NewCollectionException("Cannot define additional parameters after a " +
+				                                      "variadic parameter", parameter.identifier));
+			
+			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
+
+			if (parameter.type is not null)
+			{
+				var invalidTypes = new List<Token>();
+				varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+
+				if (invalidTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+
+				if (parameter.isVariadic)
+				{
+					additionalParametersAllowed = false;
+					
+					if (varSymbol.Type is not null && varSymbol.Type is not ArrayType)
+						exceptions.Add(NewCollectionException("Variadic parameters must be array types",
+							parameter.identifier));
+				}
+			}
+
+			if (parameter.defaultExpression is { } defaultExpression)
+			{
+				requireDefault = true;
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression));
+				continue;
+			}
+			
+			if (requireDefault)
+				exceptions.Add(NewCollectionException(
+					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
+					"previous parameter specified a default value", parameter.identifier));
+
+			parameters.Add(new ParameterSymbol(varSymbol, null));
+		}
+
+		foreach (var parameter in parameters)
+		{
+			body.AddSymbol(parameter);
+		}
+
+		var constructorSymbol = new ConstructorSymbol(parameters, body);
+
+		statement.constructorSymbol = constructorSymbol;
+		scopeStack.Pop();
+
+		if (CurrentScope.LookupSymbol(constructorSymbol.Name) is ConstructorSymbol existingConstructorSymbol)
+		{
+			if (constructorSymbol.SignatureMatches(existingConstructorSymbol))
+				throw NewCollectionException("Constructor signature matches existing constructor signature",
+					constructorDeclarationStatement.constructorKeyword);
+
+			foreach (var existingOverload in existingConstructorSymbol.Overloads)
+			{
+				if (constructorSymbol.SignatureMatches(existingOverload))
+					throw NewCollectionException("Constructor signature matches existing constructor signature",
+						constructorDeclarationStatement.constructorKeyword);
+			}
+			
+			existingConstructorSymbol.Overloads.Add(constructorSymbol);
+		}
+		else
+		{
+			CurrentScope.AddSymbol(constructorSymbol);
+		}
+	}
+
 	public void Visit(CollectedCastDeclarationStatement statement)
 	{
 		var castDeclarationStatement = statement.castDeclarationStatement;
