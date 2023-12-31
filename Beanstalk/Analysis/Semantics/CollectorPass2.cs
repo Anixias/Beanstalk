@@ -284,9 +284,28 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			ReturnType = returnType
 		};
 
-		scopeStack.Pop();
-		CurrentScope.AddSymbol(functionSymbol);
 		statement.functionSymbol = functionSymbol;
+		scopeStack.Pop();
+
+		if (CurrentScope.LookupSymbol(functionSymbol.Name) is FunctionSymbol existingFunctionSymbol)
+		{
+			if (functionSymbol.SignatureMatches(existingFunctionSymbol))
+				throw NewCollectionException("Function signature matches existing function signature",
+					functionDeclarationStatement.identifier);
+
+			foreach (var existingOverload in existingFunctionSymbol.Overloads)
+			{
+				if (functionSymbol.SignatureMatches(existingOverload))
+					throw NewCollectionException("Function signature matches existing function signature",
+						functionDeclarationStatement.identifier);
+			}
+			
+			existingFunctionSymbol.Overloads.Add(functionSymbol);
+		}
+		else
+		{
+			CurrentScope.AddSymbol(functionSymbol);
+		}
 	}
 
 	public void Visit(CollectedCastDeclarationStatement statement)

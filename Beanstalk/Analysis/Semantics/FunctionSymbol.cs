@@ -10,6 +10,7 @@ public sealed class FunctionSymbol : ISymbol
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Type? ReturnType { get; set; }
 	public Scope Body { get; }
+	public List<FunctionSymbol> Overloads { get; } = [];
 
 	public FunctionSymbol(string name, IEnumerable<TypeParameterSymbol> typeParameters,
 		IEnumerable<ParameterSymbol> parameters, Scope body)
@@ -18,5 +19,22 @@ public sealed class FunctionSymbol : ISymbol
 		TypeParameters = typeParameters.ToImmutableArray();
 		Parameters = parameters.ToImmutableArray();
 		Body = body;
+	}
+
+	public bool SignatureMatches(FunctionSymbol functionSymbol)
+	{
+		if (Name != functionSymbol.Name)
+			return false;
+
+		if (Parameters.Length != functionSymbol.Parameters.Length)
+			return false;
+
+		for (var i = 0; i < Parameters.Length; i++)
+		{
+			if (Parameters[i] != functionSymbol.Parameters[i])
+				return false;
+		}
+
+		return true;
 	}
 }
