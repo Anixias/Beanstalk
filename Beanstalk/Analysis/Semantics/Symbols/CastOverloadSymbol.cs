@@ -3,6 +3,7 @@
 public sealed class CastOverloadSymbol : ISymbol
 {
 	public string SymbolTypeName => "a cast overload";
+	public Type EvaluatedType => ReturnType;
 	public string Name { get; }
 	public bool IsImplicit { get; }
 	public ParameterSymbol Parameter { get; }
@@ -16,6 +17,11 @@ public sealed class CastOverloadSymbol : ISymbol
 		ReturnType = returnType;
 		Body = body;
 
-		Name = $"${(isImplicit ? "i" : "e")}cast({parameter.VarSymbol.Type}::{returnType})";
+		Name = GenerateName(isImplicit, parameter.VarSymbol.EvaluatedType!, returnType);
+	}
+
+	public static string GenerateName(bool isImplicit, Type parameterType, Type returnType)
+	{
+		return $"${(isImplicit ? "i" : "e")}cast({parameterType}::{returnType})";
 	}
 }

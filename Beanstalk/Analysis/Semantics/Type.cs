@@ -150,12 +150,12 @@ public sealed class NullableType : WrapperType
 	}
 }
 
-public sealed class LambdaType : Type
+public sealed class FunctionType : Type
 {
 	public readonly ImmutableArray<Type> parameterTypes;
 	public readonly Type? returnType;
 
-	public LambdaType(IEnumerable<Type> parameterTypes, Type? returnType)
+	public FunctionType(IEnumerable<Type> parameterTypes, Type? returnType)
 	{
 		this.parameterTypes = parameterTypes.ToImmutableArray();
 		this.returnType = returnType;
@@ -169,21 +169,21 @@ public sealed class LambdaType : Type
 
 	public override bool Equals(Type? type)
 	{
-		if (type is not LambdaType lambdaType)
+		if (type is not FunctionType functionType)
 			return false;
 
-		if (returnType is null != lambdaType.returnType is null)
+		if (returnType is null != functionType.returnType is null)
 			return false;
 
-		if (returnType?.Equals(lambdaType.returnType!) == false)
+		if (returnType?.Equals(functionType.returnType!) == false)
 			return false;
 		
-		if (parameterTypes.Length != lambdaType.parameterTypes.Length)
+		if (parameterTypes.Length != functionType.parameterTypes.Length)
 			return false;
 
 		for (var i = 0; i < parameterTypes.Length; i++)
 		{
-			if (!parameterTypes[i].Equals(lambdaType.parameterTypes[i]))
+			if (!parameterTypes[i].Equals(functionType.parameterTypes[i]))
 				return false;
 		}
 

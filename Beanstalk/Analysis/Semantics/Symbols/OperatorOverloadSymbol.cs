@@ -5,6 +5,7 @@ namespace Beanstalk.Analysis.Semantics;
 public abstract class OperatorOverloadSymbol : ISymbol
 {
 	public string SymbolTypeName => "an operator overload";
+	public Type EvaluatedType => ReturnType;
 	public string Name { get; }
 	public Type ReturnType { get; }
 	public Scope Body { get; }
@@ -25,11 +26,17 @@ public sealed class BinaryOperatorOverloadSymbol : OperatorOverloadSymbol
 
 	public BinaryOperatorOverloadSymbol(ParameterSymbol left, BinaryExpression.Operation operation, 
 		ParameterSymbol right, Type returnType, Scope body)
-		: base($"$operator({left.VarSymbol.Type}[{operation}]{right.VarSymbol.Type}:>{returnType})", returnType, body)
+		: base(GenerateName(left.VarSymbol.EvaluatedType!, operation, right.VarSymbol.EvaluatedType!, returnType), returnType, body)
 	{
 		Left = left;
 		Operation = operation;
 		Right = right;
+	}
+
+	public static string GenerateName(Type leftType, BinaryExpression.Operation operation, Type rightType,
+		Type returnType)
+	{
+		return $"$operator({leftType}[{operation}]{rightType}:>{returnType})";
 	}
 }
 
@@ -41,13 +48,19 @@ public sealed class UnaryOperatorOverloadSymbol : OperatorOverloadSymbol
 
 	public UnaryOperatorOverloadSymbol(ParameterSymbol operand, UnaryExpression.Operation operation,
 		bool isPrefix, Type returnType, Scope body)
-		: base(isPrefix
-			? $"$operator([{operation}]{operand.VarSymbol.Type}:>{returnType})"
-			: $"$operator({operand.VarSymbol.Type}[{operation}]:>{returnType})",
+		: base(GenerateName(isPrefix, operand.VarSymbol.EvaluatedType!, operation, returnType),
 			returnType, body)
 	{
 		Operand = operand;
 		Operation = operation;
 		IsPrefix = isPrefix;
+	}
+
+	public static string GenerateName(bool isPrefix, Type operandType, UnaryExpression.Operation operation,
+		Type returnType)
+	{
+		return isPrefix
+			? $"$operator([{operation}]{operandType}:>{returnType})"
+			: $"$operator({operandType}[{operation}]:>{returnType})";
 	}
 }

@@ -5,16 +5,18 @@ namespace Beanstalk.Analysis.Semantics;
 public sealed class ConstructorSymbol : ISymbol
 {
 	public string SymbolTypeName => "a constructor";
+	public Type? EvaluatedType { get; }
 	public string Name { get; }
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Scope Body { get; }
 	public List<ConstructorSymbol> Overloads { get; } = [];
 
-	public ConstructorSymbol(IEnumerable<ParameterSymbol> parameters, Scope body)
+	public ConstructorSymbol(TypeSymbol owner, IEnumerable<ParameterSymbol> parameters, Scope body)
 	{
 		Name = "$constructor";
 		Parameters = parameters.ToImmutableArray();
 		Body = body;
+		EvaluatedType = new BaseType(owner);
 	}
 
 	public bool SignatureMatches(ConstructorSymbol constructorSymbol)
@@ -24,8 +26,8 @@ public sealed class ConstructorSymbol : ISymbol
 
 		for (var i = 0; i < Parameters.Length; i++)
 		{
-			var otherParameterType = constructorSymbol.Parameters[i].VarSymbol.Type;
-			if (Parameters[i].VarSymbol.Type is not { } parameterType)
+			var otherParameterType = constructorSymbol.Parameters[i].VarSymbol.EvaluatedType;
+			if (Parameters[i].VarSymbol.EvaluatedType is not { } parameterType)
 			{
 				if (otherParameterType is not null)
 					return false;

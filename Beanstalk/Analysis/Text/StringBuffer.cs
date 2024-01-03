@@ -2,6 +2,7 @@
 
 public sealed class StringBuffer(string text) : IBuffer
 {
+	public static readonly IBuffer Empty = new StringBuffer("");
 	public char this[int position] => text[position];
 	public int Length => text.Length;
 

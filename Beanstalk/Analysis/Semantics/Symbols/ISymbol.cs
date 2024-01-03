@@ -4,4 +4,5 @@ public interface ISymbol
 {
 	string Name { get; }
 	string SymbolTypeName { get; }
+	Type? EvaluatedType { get; }
 }

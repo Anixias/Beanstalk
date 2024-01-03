@@ -27,14 +27,6 @@ public abstract class ExpressionNode : IAstNode
 		T Visit(UnaryOperationExpression expression);
 		T Visit(PrimaryOperationExpression expression);
 		T Visit(InterpolatedStringExpression expression);
-		T Visit(TupleSyntaxType syntaxType);
-		T Visit(GenericSyntaxType syntaxType);
-		T Visit(MutableSyntaxType syntaxType);
-		T Visit(ArraySyntaxType syntaxType);
-		T Visit(NullableSyntaxType syntaxType);
-		T Visit(LambdaSyntaxType syntaxType);
-		T Visit(ReferenceSyntaxType syntaxType);
-		T Visit(BaseSyntaxType syntaxType);
 	}
 	
 	public interface IVisitor
@@ -59,14 +51,6 @@ public abstract class ExpressionNode : IAstNode
 		void Visit(UnaryOperationExpression expression);
 		void Visit(PrimaryOperationExpression expression);
 		void Visit(InterpolatedStringExpression expression);
-		void Visit(TupleSyntaxType syntaxType);
-		void Visit(GenericSyntaxType syntaxType);
-		void Visit(MutableSyntaxType syntaxType);
-		void Visit(ArraySyntaxType syntaxType);
-		void Visit(NullableSyntaxType syntaxType);
-		void Visit(LambdaSyntaxType syntaxType);
-		void Visit(ReferenceSyntaxType syntaxType);
-		void Visit(BaseSyntaxType syntaxType);
 	}
 	
 	public readonly TextRange range;
@@ -240,10 +224,10 @@ public sealed class CastExpression : ExpressionNode
 public sealed class AccessExpression : ExpressionNode
 {
 	public readonly ExpressionNode source;
-	public readonly ExpressionNode target;
+	public readonly Token target;
 	public readonly bool nullCheck;
 
-	public AccessExpression(ExpressionNode source, ExpressionNode target, bool nullCheck, TextRange range) : base(range)
+	public AccessExpression(ExpressionNode source, Token target, bool nullCheck, TextRange range) : base(range)
 	{
 		this.source = source;
 		this.target = target;

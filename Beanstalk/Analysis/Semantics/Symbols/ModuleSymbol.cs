@@ -3,6 +3,7 @@
 public sealed class ModuleSymbol : ISymbol
 {
 	public string SymbolTypeName => "a module";
+	public Type? EvaluatedType => null;
 	public string Name { get; }
 	public Scope Scope { get; }
 	

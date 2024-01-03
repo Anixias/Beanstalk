@@ -100,7 +100,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			if (root is null)
 				return null;
 
-			return new CollectedAst(root, workingDirectory, filePath);
+			return new CollectedAst(root, ast.Source, workingDirectory, filePath);
 		}
 		catch (CollectionException e)
 		{
@@ -339,15 +339,18 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			case FieldDeclarationStatement.Mutability.Mutable:
 				var mutableFieldSymbol = new FieldSymbol(name, true, statement.isStatic);
 				CurrentScope.AddSymbol(mutableFieldSymbol);
-				return new CollectedFieldDeclarationStatement(mutableFieldSymbol, syntaxType);
+				return new CollectedFieldDeclarationStatement(mutableFieldSymbol, syntaxType, statement.initializer);
 			case FieldDeclarationStatement.Mutability.Immutable:
 				var immutableFieldSymbol = new FieldSymbol(name, false, statement.isStatic);
 				CurrentScope.AddSymbol(immutableFieldSymbol);
-				return new CollectedFieldDeclarationStatement(immutableFieldSymbol, syntaxType);
+				return new CollectedFieldDeclarationStatement(immutableFieldSymbol, syntaxType, statement.initializer);
 			case FieldDeclarationStatement.Mutability.Constant:
+				if (statement.initializer is null)
+					throw NewCollectionException("Constant fields require an initializer", statement.identifier);
+				
 				var constantSymbol = new ConstSymbol(name, statement.isStatic);
 				CurrentScope.AddSymbol(constantSymbol);
-				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType);
+				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType, statement.initializer);
 			default:
 				throw NewCollectionException("Invalid field mutability; This should never happen! " +
 				                              "Please report this to the compiler developer");

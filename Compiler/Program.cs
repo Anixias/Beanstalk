@@ -2,6 +2,7 @@
 using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
+using Beanstalk.CodeGen;
 
 namespace Compiler;
 
@@ -145,6 +146,7 @@ internal static class Program
 		public readonly string filePath;
 		public readonly List<ParseException> parseExceptions = [];
 		public readonly List<CollectionException> collectionExceptions = [];
+		public readonly List<ResolutionException> resolutionExceptions = [];
 
 		public FileDiagnostics(string workingDirectory, string filePath)
 		{
@@ -159,6 +161,9 @@ internal static class Program
 			
 			if (collectionExceptions.Count > 0)
 				PrintErrorList("Collection Error(s)", collectionExceptions);
+			
+			if (resolutionExceptions.Count > 0)
+				PrintErrorList("Resolution Error(s)", resolutionExceptions);
 		}
 
 		private void PrintErrorList(string errorLabel, IEnumerable<Exception> exceptions)
@@ -250,7 +255,7 @@ internal static class Program
 			return;
 		}
 
-		if (!Analyze(is64Bit, asts, files))
+		if (!Analyze(is64Bit, asts, files, out var resolvedAsts))
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
@@ -258,8 +263,9 @@ internal static class Program
 
 			return;
 		}
-		
-		GenerateIR(asts);
+
+		var codeGenerator = new CodeGenerator();
+		codeGenerator.Generate(resolvedAsts, optimizationLevel, outputPath);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;
 		Console.ForegroundColor = ConsoleColor.Cyan;
@@ -267,13 +273,10 @@ internal static class Program
 		Console.ResetColor();
 	}
 
-	private static void GenerateIR(Ast[] asts)
+	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files,
+		out List<ResolvedAst> resolvedAsts)
 	{
-		
-	}
-
-	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files)
-	{
+		resolvedAsts = [];
 		var collector = new Collector(is64Bit);
 		var collectionError = false;
 		var collectedAsts = new List<CollectedAst>();
@@ -316,6 +319,38 @@ internal static class Program
 		}
 
 		var resolver = new Resolver(collector);
+
+		for (var i = 0; i < collectedAsts.Count; i++)
+		{
+			var ast = collectedAsts[i];
+			var file = files[i];
+
+			try
+			{
+				if (resolver.Resolve(ast) is { } resolvedAst)
+					resolvedAsts.Add(resolvedAst);
+			}
+			catch (Exception e)
+			{
+				Console.ForegroundColor = ConsoleColor.DarkRed;
+				Console.WriteLine(e.Message);
+				Console.ResetColor();
+			}
+
+			foreach (var exception in resolver.exceptions.Where(e =>
+				         e.WorkingDirectory == file.workingDirectory && e.FilePath == file.filePath))
+			{
+				file.resolutionExceptions.Add(exception);
+			}
+
+			file.Print();
+		}
+
+		if (resolver.exceptions.Count > 0)
+		{
+			return false;
+		}
+
 		return true;
 	}
 

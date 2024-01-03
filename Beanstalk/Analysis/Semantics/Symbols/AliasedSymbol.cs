@@ -2,6 +2,7 @@
 
 public sealed class AliasedSymbol : ISymbol
 {
+	public Type? EvaluatedType => LinkedSymbol.EvaluatedType;
 	public ISymbol LinkedSymbol { get; }
 	public string Name { get; }
 	public string SymbolTypeName => "an alias";

@@ -6,9 +6,11 @@ public abstract class TypeSymbol : ISymbol
 {
 	private static uint nextID = 1u;
 	
+	public Type EvaluatedType => new BaseType(this);
 	public abstract string SymbolTypeName { get; }
 	public string Name { get; }
 	public uint TypeID { get; }
+	public List<TypeSymbol> Implementations { get; } = [];
 	
 	protected TypeSymbol(string name, bool increment = true)
 	{
@@ -39,13 +41,22 @@ public abstract class TypeSymbol : ISymbol
 	public static readonly NativeSymbol Char = new(TokenType.KeywordChar.ToString());
 	public static readonly NativeSymbol String = new(TokenType.KeywordString.ToString());
 	public static readonly NativeSymbol Bool = new(TokenType.KeywordBool.ToString());
+	public static readonly GenericNativeSymbol Array = new("$Array");
+	public static readonly GenericNativeSymbol Nullable = new("$Nullable");
 }
 
-public sealed class NativeSymbol : TypeSymbol
+public class NativeSymbol : TypeSymbol
 {
 	public override string SymbolTypeName => "a native type";
 	
 	public NativeSymbol(string name) : base(name)
+	{
+	}
+}
+
+public sealed class GenericNativeSymbol : NativeSymbol
+{
+	public GenericNativeSymbol(string name) : base(name)
 	{
 	}
 }

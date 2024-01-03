@@ -7,9 +7,9 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 {
 	public interface IVisitor<out T>
 	{
-		T Visit(CollectedProgramStatement statement);
-		T Visit(CollectedModuleStatement statement);
-		T Visit(CollectedStructStatement statement);
+		T Visit(CollectedProgramStatement programStatement);
+		T Visit(CollectedModuleStatement moduleStatement);
+		T Visit(CollectedStructStatement structStatement);
 		T Visit(CollectedFieldDeclarationStatement statement);
 		T Visit(CollectedConstDeclarationStatement statement);
 		T Visit(CollectedDefStatement statement);
@@ -43,6 +43,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 
 public sealed class CollectedProgramStatement : CollectedStatementNode
 {
+	public SymbolTable? importedSymbols;
 	public readonly ImmutableArray<ImportStatement> importStatements;
 	public readonly ModuleSymbol? moduleSymbol;
 	public readonly ImmutableArray<CollectedStatementNode> topLevelStatements;
@@ -114,11 +115,14 @@ public sealed class CollectedFieldDeclarationStatement : CollectedStatementNode
 {
 	public readonly FieldSymbol fieldSymbol;
 	public readonly SyntaxType? syntaxType;
-	
-	public CollectedFieldDeclarationStatement(FieldSymbol fieldSymbol, SyntaxType? syntaxType)
+	public readonly ExpressionNode? initializer;
+
+	public CollectedFieldDeclarationStatement(FieldSymbol fieldSymbol, SyntaxType? syntaxType,
+		ExpressionNode? initializer)
 	{
 		this.fieldSymbol = fieldSymbol;
 		this.syntaxType = syntaxType;
+		this.initializer = initializer;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -136,11 +140,14 @@ public sealed class CollectedConstDeclarationStatement : CollectedStatementNode
 {
 	public readonly ConstSymbol constSymbol;
 	public readonly SyntaxType? syntaxType;
-	
-	public CollectedConstDeclarationStatement(ConstSymbol constSymbol, SyntaxType? syntaxType)
+	public readonly ExpressionNode initializer;
+
+	public CollectedConstDeclarationStatement(ConstSymbol constSymbol, SyntaxType? syntaxType,
+		ExpressionNode initializer)
 	{
 		this.constSymbol = constSymbol;
 		this.syntaxType = syntaxType;
+		this.initializer = initializer;
 	}
 
 	public override void Accept(IVisitor visitor)

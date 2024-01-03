@@ -18,6 +18,16 @@ public sealed class SymbolTable : IEnumerable<KeyValuePair<string, ISymbol>>
 		symbols.Add(symbol.Name, symbol);
 	}
 
+	/// <summary>
+	/// Adds the given symbol to the <see cref="SymbolTable"/> if it does not already exist; else, overwrites the
+	/// existing symbol.
+	/// </summary>
+	/// <param name="symbol">The symbol to add</param>
+	public void AddOrShadow(ISymbol symbol)
+	{
+		symbols[symbol.Name] = symbol;
+	}
+
 	public bool Contains(string name)
 	{
 		return symbols.ContainsKey(name);
@@ -41,5 +51,17 @@ public sealed class SymbolTable : IEnumerable<KeyValuePair<string, ISymbol>>
 	public void Clear()
 	{
 		symbols.Clear();
+	}
+
+	public SymbolTable Duplicate()
+	{
+		var result = new SymbolTable();
+
+		foreach (var (name, symbol) in symbols)
+		{
+			result.symbols.Add(name, symbol);
+		}
+
+		return result;
 	}
 }

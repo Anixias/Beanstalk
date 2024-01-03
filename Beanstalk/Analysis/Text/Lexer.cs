@@ -7,7 +7,7 @@ namespace Beanstalk.Analysis.Text;
 
 public class Lexer(IBuffer source) : ILexer
 {
-	private IBuffer Source { get; } = source;
+	public IBuffer Source { get; } = source;
 	
 	public ScanResult? ScanToken(int position)
 	{

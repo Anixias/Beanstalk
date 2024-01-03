@@ -8,5 +8,6 @@ public readonly struct ScanResult(Token token, int nextPosition)
 
 public interface ILexer : IEnumerable<Token>
 {
+	IBuffer Source { get; }
 	ScanResult? ScanToken(int position);
 }

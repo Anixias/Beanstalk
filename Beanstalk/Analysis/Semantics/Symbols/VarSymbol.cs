@@ -5,7 +5,7 @@ public sealed class VarSymbol : ISymbol
 	public string SymbolTypeName => "a local variable";
 	public string Name { get; }
 	public bool IsMutable { get; }
-	public Type? Type { get; set; }
+	public Type? EvaluatedType { get; set; }
 	
 	public VarSymbol(string name, bool isMutable)
 	{

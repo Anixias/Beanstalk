@@ -33,6 +33,43 @@ public abstract class SyntaxType : ExpressionNode
 				return null;
 		}
 	}
+
+	public override void Accept(ExpressionNode.IVisitor visitor)
+	{
+		throw new NotImplementedException();
+	}
+
+	public override T Accept<T>(ExpressionNode.IVisitor<T> visitor)
+	{
+		throw new NotImplementedException();
+	}
+	
+	public new interface IVisitor<out T>
+	{
+		T Visit(TupleSyntaxType syntaxType);
+		T Visit(GenericSyntaxType syntaxType);
+		T Visit(MutableSyntaxType syntaxType);
+		T Visit(ArraySyntaxType syntaxType);
+		T Visit(NullableSyntaxType syntaxType);
+		T Visit(LambdaSyntaxType syntaxType);
+		T Visit(ReferenceSyntaxType syntaxType);
+		T Visit(BaseSyntaxType syntaxType);
+	}
+	
+	public new interface IVisitor
+	{
+		void Visit(TupleSyntaxType syntaxType);
+		void Visit(GenericSyntaxType syntaxType);
+		void Visit(MutableSyntaxType syntaxType);
+		void Visit(ArraySyntaxType syntaxType);
+		void Visit(NullableSyntaxType syntaxType);
+		void Visit(LambdaSyntaxType syntaxType);
+		void Visit(ReferenceSyntaxType syntaxType);
+		void Visit(BaseSyntaxType syntaxType);
+	}
+
+	public abstract void Accept(IVisitor visitor);
+	public abstract T Accept<T>(IVisitor<T> visitor);
 }
 
 public abstract class WrapperSyntaxType : SyntaxType

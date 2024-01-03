@@ -55,7 +55,7 @@ public static class Parser
 		diagnostics = diagnostics.OrderBy(d => d.Line).ThenBy(d => d.Column).ToList();
 		
 		if (root is not null)
-			return new Ast(root);
+			return new Ast(root, lexer.Source);
 
 		return null;
 	}
@@ -1733,9 +1733,9 @@ public static class Parser
 	{
 		var accessOperator = Consume(tokens, ref position, null, TokenType.OpQuestionDot, TokenType.OpDot);
 		var nullCheck = accessOperator.Type == TokenType.OpQuestionDot;
-		var target = ParsePrimaryExpression(tokens, ref position);
+		var target = Consume(tokens, ref position, null, TokenType.Identifier, TokenType.KeywordNew);
 
-		return new AccessExpression(source, target, nullCheck, source.range.Join(target.range));
+		return new AccessExpression(source, target, nullCheck, source.range.Join(target.Range));
 	}
 
 	private static IndexExpression ParseIndexExpression(IReadOnlyList<Token> tokens, ref int position,

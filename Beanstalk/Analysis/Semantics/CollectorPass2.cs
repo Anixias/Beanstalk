@@ -5,7 +5,9 @@ namespace Beanstalk.Analysis.Semantics;
 
 public partial class Collector : CollectedStatementNode.IVisitor
 {
-	private readonly SymbolTable importedSymbols = new();
+	public readonly SymbolTable importedSymbols = new();
+	private readonly Stack<TypeSymbol> typeStack = new();
+	private TypeSymbol CurrentType => typeStack.Peek();
 	
 	public void Collect(CollectedAst ast)
 	{
@@ -119,6 +121,8 @@ public partial class Collector : CollectedStatementNode.IVisitor
 
 		if (inModule)
 			scopeStack.Pop();
+
+		statement.importedSymbols = importedSymbols.Duplicate();
 	}
 
 	public void Visit(CollectedModuleStatement statement)
@@ -136,12 +140,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedStructStatement structStatement)
 	{
 		scopeStack.Push(structStatement.structSymbol.Scope);
+		typeStack.Push(structStatement.structSymbol);
 
 		foreach (var statement in structStatement.statements)
 		{
 			statement.Accept(this);
 		}
 
+		typeStack.Pop();
 		scopeStack.Pop();
 	}
 
@@ -151,7 +157,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			return;
 
 		var invalidTypes = new List<Token>();
-		statement.fieldSymbol.Type = ResolveType(syntaxType, invalidTypes);
+		statement.fieldSymbol.EvaluatedType = ResolveType(syntaxType, invalidTypes);
 
 		if (invalidTypes.Count == 0)
 			return;
@@ -168,7 +174,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			return;
 
 		var invalidTypes = new List<Token>();
-		statement.constSymbol.Type = ResolveType(syntaxType, invalidTypes);
+		statement.constSymbol.EvaluatedType = ResolveType(syntaxType, invalidTypes);
 
 		if (invalidTypes.Count == 0)
 			return;
@@ -182,7 +188,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedDefStatement statement)
 	{
 		var invalidTypes = new List<Token>();
-		statement.defSymbol.Type = ResolveType(statement.syntaxType, invalidTypes);
+		statement.defSymbol.EvaluatedType = ResolveType(statement.syntaxType, invalidTypes);
 
 		if (invalidTypes.Count == 0)
 			return;
@@ -221,7 +227,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.type is not null)
 			{
 				var invalidTypes = new List<Token>();
-				varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
 
 				if (invalidTypes.Count > 0)
 				{
@@ -236,7 +242,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				{
 					additionalParametersAllowed = false;
 					
-					if (varSymbol.Type is not null && varSymbol.Type is not ArrayType)
+					if (varSymbol.EvaluatedType is not null && varSymbol.EvaluatedType is not ArrayType)
 						exceptions.Add(NewCollectionException("Variadic parameters must be array types",
 							parameter.identifier));
 				}
@@ -328,7 +334,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.type is not null)
 			{
 				var invalidTypes = new List<Token>();
-				varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
 
 				if (invalidTypes.Count > 0)
 				{
@@ -343,7 +349,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				{
 					additionalParametersAllowed = false;
 					
-					if (varSymbol.Type is not null && varSymbol.Type is not ArrayType)
+					if (varSymbol.EvaluatedType is not null && varSymbol.EvaluatedType is not ArrayType)
 						exceptions.Add(NewCollectionException("Variadic parameters must be array types",
 							parameter.identifier));
 				}
@@ -369,7 +375,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			body.AddSymbol(parameter);
 		}
 
-		var constructorSymbol = new ConstructorSymbol(parameters, body);
+		var constructorSymbol = new ConstructorSymbol(CurrentType, parameters, body);
 
 		statement.constructorSymbol = constructorSymbol;
 		scopeStack.Pop();
@@ -436,7 +442,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		if (parameter.type is not null)
 		{
 			var invalidTypes = new List<Token>();
-			varSymbol.Type = ResolveType(parameter.type, invalidTypes);
+			varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
 
 			if (invalidTypes.Count > 0)
 			{
@@ -509,7 +515,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (left.type is not null)
 				{
 					var invalidTypes = new List<Token>();
-					leftSymbol.Type = ResolveType(left.type, invalidTypes);
+					leftSymbol.EvaluatedType = ResolveType(left.type, invalidTypes);
 
 					if (invalidTypes.Count > 0)
 					{
@@ -530,7 +536,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (right.type is not null)
 				{
 					var invalidTypes = new List<Token>();
-					rightSymbol.Type = ResolveType(right.type, invalidTypes);
+					rightSymbol.EvaluatedType = ResolveType(right.type, invalidTypes);
 
 					if (invalidTypes.Count > 0)
 					{
@@ -595,7 +601,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (operand.type is not null)
 				{
 					var invalidTypes = new List<Token>();
-					varSymbol.Type = ResolveType(operand.type, invalidTypes);
+					varSymbol.EvaluatedType = ResolveType(operand.type, invalidTypes);
 
 					if (invalidTypes.Count > 0)
 					{
@@ -738,7 +744,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (invalidTypes.Count > 0)
 					return null;
 				
-				return new LambdaType(lambdaParameterTypes, returnType);
+				return new FunctionType(lambdaParameterTypes, returnType);
 
 			case TupleSyntaxType tupleSyntaxType:
 				var types = new List<Type>();

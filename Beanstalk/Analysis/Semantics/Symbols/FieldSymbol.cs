@@ -6,7 +6,7 @@ public sealed class FieldSymbol : ISymbol
 	public string Name { get; }
 	public bool IsMutable { get; }
 	public bool IsStatic { get; }
-	public Type? Type { get; set; }
+	public Type? EvaluatedType { get; set; }
 	
 	public FieldSymbol(string name, bool isMutable, bool isStatic)
 	{

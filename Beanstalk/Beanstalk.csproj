@@ -8,16 +8,17 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <None Remove="libc\src\beanstalk.a" />
+      <EmbeddedResource Include="libc\src\beanstalk.a">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </EmbeddedResource>
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="libLLVM" Version="16.0.6" />
       <PackageReference Include="libLLVM.runtime.win-x64" Version="16.0.6" />
       <PackageReference Include="LLVMSharp" Version="16.0.0" />
       <PackageReference Include="LLVMSharp.Interop" Version="16.0.0" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Update="libc\src\beanstalk.a">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
     </ItemGroup>
 
 </Project>

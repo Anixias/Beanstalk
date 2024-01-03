@@ -4,6 +4,8 @@ namespace Beanstalk.Analysis.Text;
 
 public sealed class FilteredLexer(IBuffer source) : ILexer
 {
+	public IBuffer Source => lexer.Source;
+	
 	private readonly Lexer lexer = new(source);
 
 	public ScanResult? ScanToken(int position)

@@ -11,6 +11,7 @@ public sealed class FunctionSymbol : ISymbol
 	public Type? ReturnType { get; set; }
 	public Scope Body { get; }
 	public List<FunctionSymbol> Overloads { get; } = [];
+	public Type? EvaluatedType => GetFunctionType();
 
 	public FunctionSymbol(string name, IEnumerable<TypeParameterSymbol> typeParameters,
 		IEnumerable<ParameterSymbol> parameters, Scope body)
@@ -31,8 +32,8 @@ public sealed class FunctionSymbol : ISymbol
 
 		for (var i = 0; i < Parameters.Length; i++)
 		{
-			var otherParameterType = functionSymbol.Parameters[i].VarSymbol.Type;
-			if (Parameters[i].VarSymbol.Type is not { } parameterType)
+			var otherParameterType = functionSymbol.Parameters[i].VarSymbol.EvaluatedType;
+			if (Parameters[i].VarSymbol.EvaluatedType is not { } parameterType)
 			{
 				if (otherParameterType is not null)
 					return false;
@@ -45,5 +46,19 @@ public sealed class FunctionSymbol : ISymbol
 		}
 
 		return true;
+	}
+
+	public FunctionType? GetFunctionType()
+	{
+		var parameterTypes = new List<Type>();
+		foreach (var parameter in Parameters)
+		{
+			if (parameter.VarSymbol.EvaluatedType is not { } type)
+				return null;
+			
+			parameterTypes.Add(type);
+		}
+		
+		return new FunctionType(parameterTypes, ReturnType);
 	}
 }
