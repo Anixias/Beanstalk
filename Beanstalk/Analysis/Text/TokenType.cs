@@ -205,7 +205,6 @@ public sealed class TokenType
 	public static readonly TokenType OpDoubleArrow = CreateOperator("=>");
 	public static readonly TokenType OpColon = CreateOperator(":");
 	public static readonly TokenType OpColonRight = CreateOperator(":>");
-	public static readonly TokenType OpSemicolon = CreateOperator(";");
 	public static readonly TokenType OpLeftParen = CreateOperator("(");
 	public static readonly TokenType OpRightParen = CreateOperator(")");
 	public static readonly TokenType OpQuestionLeftBracket = CreateOperator("?[");
@@ -238,7 +237,7 @@ public sealed class TokenType
 	public static readonly TokenType OpStarStar = CreateOperator("**");
 	public static readonly TokenType OpStar = CreateOperator("*");
 	public static readonly TokenType OpSlash = CreateOperator("/");
-	public static readonly TokenType OpPercentPercent = CreateOperator("%%");
+	public static readonly TokenType OpPlusPercent = CreateOperator("+%");
 	public static readonly TokenType OpPercent = CreateOperator("%");
 	public static readonly TokenType OpQuestionQuestion = CreateOperator("??");
 	public static readonly TokenType OpQuestion = CreateOperator("?");

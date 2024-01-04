@@ -1,0 +1,28 @@
+﻿module helloWorld
+
+struct Vec2
+{
+	x:float
+	y:float
+	
+	constructor(x:float, y:float)
+	{
+		this.x = x
+		this.y = y
+	}
+}
+
+entry()
+{
+	print("Hello, World!")
+	//Vec2.new(1.0f32, 2.0f32)
+	return 0
+}
+
+// 65001u = UTF8
+fun setConsoleOutputEncoding(codePage:uint) external(entry = "set_console_output_encoding")
+fun getConsoleOutputEncoding() :> uint external(entry = "get_console_output_encoding")
+fun getCurrentTime() :> int64 external(entry = "get_current_time")
+fun print(text:string) external(entry = "print")
+fun printInt(value:int) external(entry = "print_int")
+fun printInt64(value:int64) external(entry = "print_long_long")

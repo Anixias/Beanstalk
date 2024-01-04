@@ -1,84 +1,242 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Beanstalk.Analysis.Semantics;
 using LLVMSharp.Interop;
+using ReferenceType = Beanstalk.Analysis.Semantics.ReferenceType;
+using Type = Beanstalk.Analysis.Semantics.Type;
 
 namespace Beanstalk.CodeGen;
 
-public unsafe class CodeGenerator
+public readonly struct LLVMBool
 {
-	private const string LibCResource = "Beanstalk.libc.src.beanstalk.a";
+	private readonly int value;
 
+	private LLVMBool(int value)
+	{
+		this.value = value;
+	}
+
+	public static readonly LLVMBool False = new(0);
+	public static readonly LLVMBool True = new(1);
+
+	public static implicit operator int(LLVMBool value)
+	{
+		return value.value;
+	}
+}
+
+public readonly unsafe struct Value
+{
+	public readonly LLVMOpaqueValue* value;
+
+	public static readonly LLVMOpaqueValue* NullPtr = (LLVMOpaqueValue*)IntPtr.Zero;
+	public static readonly Value Null = new(NullPtr);
+
+	public Value(LLVMOpaqueValue* value)
+	{
+		this.value = value;
+	}
+}
+
+public readonly unsafe struct OpaqueType
+{
+	public readonly LLVMOpaqueType* value;
+
+	public static readonly LLVMOpaqueType* NullPtr = (LLVMOpaqueType*)IntPtr.Zero;
+	public static readonly OpaqueType Null = new(NullPtr);
+
+	public OpaqueType(LLVMOpaqueType* value)
+	{
+		this.value = value;
+	}
+}
+
+public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpressionNode.IVisitor<Value>
+{
+	private enum CodeGenerationPass
+	{
+		TopLevelDeclarations,
+		MemberDeclarations,
+		Definitions,
+		Complete
+	}
+	
 	private LLVMOpaqueModule* currentModule;
 	private LLVMOpaqueContext* currentContext;
 	private LLVMOpaqueBuilder* currentBuilder;
-	
-	public void Generate(IEnumerable<ResolvedAst> asts, int optimizationLevel, string outputPath)
+	private CodeGenerationPass currentPass;
+	private readonly Dictionary<ISymbol, Value> valueSymbols = new(); 
+	private readonly Dictionary<ISymbol, OpaqueType> typeSymbols = new(); 
+
+	private static string ExtractResource(string resource)
 	{
+		var path = Path.Combine(Path.GetTempPath(), resource);
+		var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Beanstalk.Resources.{resource}");
+
+		if (stream is null)
+			throw new Exception($"Unable to extract resource '{resource}'");
+		
+		var bytes = new byte[(int)stream.Length];
+		if (stream.Read(bytes, 0, bytes.Length) != bytes.Length)
+			throw new Exception($"Unable to extract resource '{resource}'");
+		
+		File.WriteAllBytes(path, bytes);
+		return path;
+	}
+	
+	public string Generate(IEnumerable<ResolvedAst> asts, int optimizationLevel, string outputPath)
+	{
+		var objDirectory = Path.GetDirectoryName(outputPath) + "/obj/";
+		Directory.CreateDirectory(objDirectory);
+		foreach (var file in Directory.EnumerateFiles(objDirectory, "*", SearchOption.AllDirectories))
+		{
+			File.Delete(file);
+		}
+		
+		var binDirectory = Path.GetDirectoryName(outputPath) + "/bin/";
+		Directory.CreateDirectory(binDirectory);
+		outputPath = Path.Combine(binDirectory, Path.GetFileName(outputPath));
+		
 		var sourceFiles = new List<string>();
 		foreach (var ast in asts)
 		{
-			var outputDirectory = Path.GetDirectoryName(outputPath) + "/bin/";
-			Directory.CreateDirectory(outputDirectory);
-			
 			var relativePath = Path.GetRelativePath(ast.WorkingDirectory, ast.FilePath);
 			currentModule = LLVM.ModuleCreateWithName(ConvertString(relativePath));
 			currentContext = LLVM.GetModuleContext(currentModule);
 			currentBuilder = LLVM.CreateBuilderInContext(currentContext);
-			
-			/* === Entry Point Function ===
-			var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"),
-				LLVM.FunctionType(LLVM.Int32Type(), (LLVMOpaqueType**)IntPtr.Zero, 0u, 0));
-			var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, ConvertString("entry"));
-			LLVM.PositionBuilder(currentBuilder, entryBody, (LLVMOpaqueValue*)IntPtr.Zero);
-			LLVM.BuildRet(currentBuilder, LLVM.ConstInt(LLVM.Int32Type(), 0, 1));
-			if (LLVM.VerifyFunction(entryPoint, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
-				LLVM.InstructionEraseFromParent(entryPoint);*/
-			
+			currentPass = CodeGenerationPass.TopLevelDeclarations;
+			valueSymbols.Clear();
+			typeSymbols.Clear();
+
+			while (currentPass < CodeGenerationPass.Complete)
+			{
+				switch (ast.Root)
+				{
+					case ResolvedStatementNode statementNode:
+						statementNode.Accept(this);
+						break;
+				}
+
+				currentPass++;
+			}
+
 			LLVM.DumpModule(currentModule);
 
-			var outputBitCodePath = Path.Combine(outputDirectory, Path.ChangeExtension(relativePath, ".bc"));
+			var outputBitCodePath = Path.Combine(objDirectory, Path.ChangeExtension(relativePath, ".bc"));
 			LLVM.WriteBitcodeToFile(currentModule, ConvertString(outputBitCodePath));
 			sourceFiles.Add(outputBitCodePath);
 		}
+		
+		var clang = ExtractResource("clang.exe");
+		var llvmAr = ExtractResource("llvm-ar.exe");
+		var beanstalkLib = ExtractResource("beanstalk.lib");
 
-		Process process;
+		var beanstalkLibDirectory = Path.GetDirectoryName(beanstalkLib);
+		var beanstalkLibFileName = Path.GetFileName(beanstalkLib);
+		var beanstalkLibLinkArgs = $"--library-directory={beanstalkLibDirectory} -l{beanstalkLibFileName}";
+
 		var extension = Path.GetExtension(outputPath);
-		switch (extension)
+		try
 		{
-			case ".dll":
+			Process process;
+			switch (extension)
 			{
-				var processStartInfo = new ProcessStartInfo
+				case ".dll":
+				case ".so":
 				{
-					FileName = @"C:\Program Files\LLVM\bin\clang.exe",
-					Arguments = $"{string.Join(' ', sourceFiles)} --shared --output={outputPath}",
-					WindowStyle = ProcessWindowStyle.Hidden
-				};
+					var objectFiles = new List<string>();
+					foreach (var file in sourceFiles)
+					{
+						var objectFile = Path.ChangeExtension(file, ".o");
+						objectFiles.Add(objectFile);
 
-				process = new Process
-				{
-					StartInfo = processStartInfo
-				};
-			
-				process.Start();
-				process.WaitForExit();
-			}
-				break;
+						var processStartInfo = new ProcessStartInfo
+						{
+							FileName = clang,
+							Arguments = $"{file} --compile --output={objectFile}",
+							WindowStyle = ProcessWindowStyle.Hidden
+						};
 
-			case ".lib":
-			{
-				var objectFiles = new List<string>();
-				foreach (var file in sourceFiles)
+						process = new Process
+						{
+							StartInfo = processStartInfo
+						};
+
+						process.Start();
+						process.WaitForExit();
+					}
+
+					var clangStartInfo = new ProcessStartInfo
+					{
+						FileName = clang,
+						Arguments = $"{string.Join(' ', objectFiles)} {beanstalkLibLinkArgs} --shared -fPIC " +
+						            $"--output={outputPath}",
+						WindowStyle = ProcessWindowStyle.Hidden
+					};
+
+					process = new Process
+					{
+						StartInfo = clangStartInfo
+					};
+
+					process.Start();
+					process.WaitForExit();
+				}
+					break;
+
+				case ".lib":
+				case ".a":
 				{
-					var objectFile = Path.ChangeExtension(file, ".o");
-					objectFiles.Add(objectFile);
-					
+					var objectFiles = new List<string>();
+					foreach (var file in sourceFiles)
+					{
+						var objectFile = Path.ChangeExtension(file, ".o");
+						objectFiles.Add(objectFile);
+
+						var processStartInfo = new ProcessStartInfo
+						{
+							FileName = clang,
+							Arguments = $"{file} --compile --output={objectFile}",
+							WindowStyle = ProcessWindowStyle.Hidden
+						};
+
+						process = new Process
+						{
+							StartInfo = processStartInfo
+						};
+
+						process.Start();
+						process.WaitForExit();
+					}
+
+					var llvmArStartInfo = new ProcessStartInfo
+					{
+						FileName = llvmAr,
+						Arguments = $"rc {outputPath} {string.Join(' ', objectFiles)}",
+						WindowStyle = ProcessWindowStyle.Hidden
+					};
+
+					process = new Process
+					{
+						StartInfo = llvmArStartInfo
+					};
+
+					process.Start();
+					process.WaitForExit();
+				}
+					break;
+
+				case ".exe":
+				case "":
+				{
 					var processStartInfo = new ProcessStartInfo
 					{
-						FileName = @"C:\Program Files\LLVM\bin\clang.exe",
-						Arguments = $"{file} --compile --output={objectFile}",
-						WindowStyle = ProcessWindowStyle.Hidden
+						FileName = clang,
+						Arguments = $"{string.Join(' ', sourceFiles)} --output={outputPath} {beanstalkLibLinkArgs}",
+						WindowStyle = ProcessWindowStyle.Hidden,
+						UseShellExecute = false
 					};
 
 					process = new Process
@@ -89,51 +247,35 @@ public unsafe class CodeGenerator
 					process.Start();
 					process.WaitForExit();
 				}
-				
-				var llvmArStartInfo = new ProcessStartInfo
-				{
-					FileName = @"C:\Program Files\LLVM\bin\llvm-ar.exe",
-					Arguments = $"rc {outputPath} {string.Join(' ', objectFiles)}",
-					WindowStyle = ProcessWindowStyle.Hidden
-				};
+					break;
 
-				process = new Process
-				{
-					StartInfo = llvmArStartInfo
-				};
-
-				process.Start();
-				process.WaitForExit();
+				default:
+					throw new Exception("Unsupported output type");
 			}
-				break;
 
-			case ".exe":
-			{
-				var processStartInfo = new ProcessStartInfo
-				{
-					FileName = @"C:\Program Files\LLVM\bin\clang.exe",
-					Arguments = $"{string.Join(' ', sourceFiles)} --output={outputPath}",
-					WindowStyle = ProcessWindowStyle.Hidden
-				};
-
-				process = new Process
-				{
-					StartInfo = processStartInfo
-				};
-			
-				process.Start();
-				process.WaitForExit();
-			}
-				break;
-			
-			default:
-				throw new Exception("Unsupported output type");
+			return outputPath;
+		}
+		finally
+		{
+			File.Delete(clang);
+			File.Delete(llvmAr);
+			File.Delete(beanstalkLib);
 		}
 	}
 
 	private static sbyte* ConvertString(string text)
 	{
-		var bytes = Encoding.Default.GetBytes(text);
+		var bytes = Encoding.ASCII.GetBytes($"{text}\0");
+		fixed (byte* p = bytes)
+		{
+			return (sbyte*)p;
+		}
+	}
+
+	private static sbyte* ConvertUnicodeString(string text, out uint length)
+	{
+		var bytes = Encoding.UTF8.GetBytes($"{text}\0");
+		length = (uint)bytes.LongLength;
 		fixed (byte* p = bytes)
 		{
 			return (sbyte*)p;
@@ -146,66 +288,429 @@ public unsafe class CodeGenerator
 		Array.Resize(ref src, length);
 	}
 
-	private static Stream? OpenLibC()
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static T** ConvertArrayToPointer<T>(T*[] values) where T : unmanaged
 	{
-		var assembly = Assembly.GetExecutingAssembly();
-		return assembly.GetManifestResourceStream(LibCResource);
+		fixed (T** p = values)
+		{
+			return p;
+		}
 	}
 
-	private static LLVMOpaqueType* GetNativeType(NativeSymbol nativeSymbol)
+	private LLVMOpaqueType* GetType(Type? type)
+	{
+		switch (type)
+		{
+			default:
+				throw new NotImplementedException();
+			case null:
+				return LLVM.VoidType();
+			case ReferenceType referenceType:
+			{
+				var baseType = GetType(referenceType.baseType);
+				return LLVM.PointerType(baseType, 0u);
+			}
+			case BaseType baseType:
+			{
+				return baseType.typeSymbol switch
+				{
+					NativeSymbol nativeSymbol => GetNativeType(nativeSymbol),
+					_ => typeSymbols[baseType.typeSymbol].value
+				};
+			}
+		}
+	}
+
+	private LLVMOpaqueType* GetNativeType(NativeSymbol nativeSymbol)
 	{
 		if (nativeSymbol == TypeSymbol.Int8)
-			return LLVM.Int8Type();
+			return LLVM.Int8TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Int16)
-			return LLVM.Int16Type();
+			return LLVM.Int16TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Int32)
-			return LLVM.Int32Type();
+			return LLVM.Int32TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Int64)
-			return LLVM.Int64Type();
+			return LLVM.Int64TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Int128)
-			return LLVM.Int128Type();
+			return LLVM.Int128TypeInContext(currentContext);
 		
 		// LLVM Does not distinguish between signed and unsigned types except for via instructions generated
 		if (nativeSymbol == TypeSymbol.UInt8)
-			return LLVM.Int8Type();
+			return LLVM.Int8TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.UInt16)
-			return LLVM.Int16Type();
+			return LLVM.Int16TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.UInt32)
-			return LLVM.Int32Type();
+			return LLVM.Int32TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.UInt64)
-			return LLVM.Int64Type();
+			return LLVM.Int64TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.UInt128)
-			return LLVM.Int128Type();
+			return LLVM.Int128TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Float32)
-			return LLVM.FloatType();
+			return LLVM.FloatTypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Float64)
-			return LLVM.DoubleType();
+			return LLVM.DoubleTypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Float128)
-			return LLVM.FP128Type();
+			return LLVM.FP128TypeInContext(currentContext);
 		
 		// Todo: Handle fixed point types
 		
 		if (nativeSymbol == TypeSymbol.Bool)
-			return LLVM.Int1Type();
+			return LLVM.Int1TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Char)
-			return LLVM.Int16Type();
+			return LLVM.Int8TypeInContext(currentContext);
 		
-		// Todo: This is probably not correct
+		// Todo: This is not correct
 		if (nativeSymbol == TypeSymbol.String)
-			return LLVM.ArrayType(GetNativeType(TypeSymbol.Char), 0u);
+			return LLVM.PointerType(LLVM.Int8TypeInContext(currentContext), 0u);
 
-		return (LLVMOpaqueType*)IntPtr.Zero;
+		return LLVM.VoidTypeInContext(currentContext);
+	}
+
+	public void Visit(ResolvedProgramStatement programStatement)
+	{
+		foreach (var statement in programStatement.topLevelStatements)
+		{
+			statement.Accept(this);
+		}
+	}
+
+	public void Visit(ResolvedModuleStatement moduleStatement)
+	{
+		foreach (var statement in moduleStatement.topLevelStatements)
+		{
+			statement.Accept(this);
+		}
+	}
+
+	public void Visit(ResolvedStructDeclarationStatement structDeclarationStatement)
+	{
+		LLVMOpaqueType* structType;
+		var structSymbol = structDeclarationStatement.structSymbol;
+
+		switch (currentPass)
+		{
+			case CodeGenerationPass.TopLevelDeclarations:
+				structType = LLVM.StructCreateNamed(currentContext,
+					ConvertString(structSymbol.Name));
+				
+				typeSymbols.Add(structSymbol, new OpaqueType(structType));
+				break;
+			
+			case CodeGenerationPass.MemberDeclarations:
+				if (!typeSymbols.ContainsKey(structSymbol))
+					throw new Exception($"Struct '{structSymbol.Name}' " +
+					                    $"not forward declared");
+				
+				structType = typeSymbols[structSymbol].value;
+
+				var elementTypeList = new List<Type>();
+				foreach (var statement in structDeclarationStatement.statements)
+				{
+					switch (statement)
+					{
+						case ResolvedFieldDeclarationStatement fieldDeclarationStatement:
+							elementTypeList.Add(fieldDeclarationStatement.fieldSymbol.EvaluatedType!);
+							break;
+						case ResolvedConstructorDeclarationStatement constructorDeclarationStatement:
+							var constructorSymbol = constructorDeclarationStatement.constructorSymbol;
+							var parameterList = new List<OpaqueType>
+							{
+								new(GetType(constructorSymbol.This.EvaluatedType)) 
+							};
+
+							foreach (var parameter in constructorSymbol.Parameters)
+							{
+								parameterList.Add(new OpaqueType(GetType(parameter.EvaluatedType)));
+							}
+
+							var parameterTypes = new LLVMOpaqueType*[parameterList.Count];
+							for (var i = 0; i < parameterTypes.Length; i++)
+							{
+								parameterTypes[i] = parameterList[i].value;
+							}
+							
+							var constructorType = LLVM.FunctionType(structType, ConvertArrayToPointer(parameterTypes),
+								(uint)parameterTypes.LongLength, LLVMBool.False);
+							
+							var constructor = LLVM.AddFunction(currentModule,
+								ConvertString($"{structSymbol.Name}.new"), constructorType);
+							
+							valueSymbols.Add(constructorSymbol, new Value(constructor));
+							break;
+					}
+				}
+
+				var elementTypes = new LLVMOpaqueType*[elementTypeList.Count];
+				for (var i = 0; i < elementTypes.Length; i++)
+				{
+					elementTypes[i] = GetType(elementTypeList[i]);
+				}
+
+				LLVM.StructSetBody(structType, ConvertArrayToPointer(elementTypes), (uint)elementTypes.LongLength,
+					LLVMBool.False);
+				
+				structType = typeSymbols[structSymbol].value;
+				break;
+			
+			case CodeGenerationPass.Definitions:
+				if (!typeSymbols.ContainsKey(structSymbol))
+					throw new Exception($"Struct '{structSymbol.Name}' " +
+					                    $"not forward declared");
+				
+				structType = typeSymbols[structSymbol].value;
+				break;
+		}
+	}
+
+	public void Visit(ResolvedFieldDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedConstDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedEntryStatement entryStatement)
+	{
+		if (currentPass != CodeGenerationPass.Definitions)
+			return;
+		
+		// Creation
+		var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"),
+			LLVM.FunctionType(LLVM.Int32Type(), (LLVMOpaqueType**)IntPtr.Zero, 0u, LLVMBool.False));
+		
+		// Positioning
+		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, ConvertString("entry"));
+		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		
+		// Instructions
+		foreach (var statement in entryStatement.statements)
+		{
+			statement.Accept(this);
+			LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		}
+		
+		// Verification
+		if (LLVM.VerifyFunction(entryPoint, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(entryPoint);
+	}
+
+	public void Visit(ResolvedExternalFunctionStatement statement)
+	{
+		if (currentPass != CodeGenerationPass.TopLevelDeclarations)
+			return;
+		
+		var parameterList = statement.externalFunctionSymbol.Parameters;
+		var parameterTypes = new LLVMOpaqueType*[parameterList.Length];
+		var isVariadic = LLVMBool.False;
+
+		for (var i = 0; i < parameterTypes.Length; i++)
+		{
+			var parameter = parameterList[i];
+			parameterTypes[i] = GetType(parameter.EvaluatedType!);
+
+			if (parameter.IsVariadic)
+				isVariadic = LLVMBool.True;
+		}
+
+		var paramTypes = ConvertArrayToPointer(parameterTypes);
+		var returnType = GetType(statement.externalFunctionSymbol.ReturnType);
+	
+		var functionType = LLVM.FunctionType(returnType, paramTypes, (uint)parameterTypes.Length, isVariadic);
+		var name = statement.externalFunctionSymbol.Attributes.GetValueOrDefault("entry",
+			statement.externalFunctionSymbol.Name);
+		
+		var externalFunction = LLVM.AddFunction(currentModule, ConvertString(name),
+			functionType);
+		
+		valueSymbols.Add(statement.externalFunctionSymbol, new Value(externalFunction));
+	
+		// Verification
+		if (LLVM.VerifyFunction(externalFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(externalFunction);
+	}
+
+	public void Visit(ResolvedFunctionDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedConstructorDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedDestructorDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedExpressionStatement statement)
+	{
+		statement.value.Accept(this);
+	}
+
+	public void Visit(ResolvedReturnStatement statement)
+	{
+		if (statement.value?.Accept(this) is { } value)
+			LLVM.BuildRet(currentBuilder, value.value);
+		else
+			LLVM.BuildRetVoid(currentBuilder);
+	}
+
+	public void Visit(ResolvedSimpleStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedFunctionExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedExternalFunctionExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedFunctionCallExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedExternalFunctionCallExpression expression)
+	{
+		var functionSymbol = expression.functionSymbol;
+		var functionName = functionSymbol.Attributes.GetValueOrDefault("entry", functionSymbol.Name);
+
+		if (!valueSymbols.ContainsKey(expression.functionSymbol))
+			throw new Exception($"External function '{functionName}' not forward declared");
+		
+		var function = valueSymbols[expression.functionSymbol].value;
+		
+		// Todo: Function not found
+		if (function == Value.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
+			return Value.Null;
+			
+		var functionType = LLVM.GlobalGetValueType(function);
+
+		var arguments = new LLVMOpaqueValue*[expression.arguments.Length];
+		for (var i = 0; i < arguments.Length; i++)
+		{
+			arguments[i] = expression.arguments[i].Accept(this).value;
+		}
+
+		var returnType = LLVM.GetReturnType(functionType);
+		var args = ConvertArrayToPointer(arguments);
+		var argc = (uint)arguments.Length;
+		var name = returnType == LLVM.VoidTypeInContext(currentContext)
+			? ConvertString("")
+			: ConvertString(functionName);
+
+		var call = LLVM.BuildCall2(currentBuilder, functionType, function, args, argc, name);
+		return new Value(call);
+	}
+
+	public Value Visit(ResolvedVarExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedFieldExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedConstExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedTypeExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedLiteralExpression expression)
+	{
+		//LLVM.ConstInt(LLVM.Int32Type(), statement.value.Accept(this), 1)
+		// Todo: Handle signed values correctly, add other value types
+		return expression.token.Value switch
+		{
+			byte value => 
+				new Value(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), value, LLVMBool.False)),
+			
+			sbyte value => 
+				new Value(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+			
+			ushort value => 
+				new Value(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), value, LLVMBool.False)),
+			
+			short value => 
+				new Value(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+			
+			uint value => 
+				new Value(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), value, LLVMBool.False)),
+			
+			int value => 
+				new Value(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+			
+			ulong value => 
+				new Value(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), value, LLVMBool.False)),
+			
+			long value => 
+				new Value(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+			
+			string value =>
+				new Value(DefineStringLiteral(value)),
+			
+			_ => Value.Null
+		};
+
+		LLVMOpaqueValue* DefineStringLiteral(string value)
+		{
+			var charArray = ConvertUnicodeString(value, out var length);
+			var stringType = LLVM.ArrayType(GetNativeType(TypeSymbol.Char), length);
+			var stringRef = LLVM.AddGlobal(currentModule, stringType, ConvertString(""));
+			LLVM.SetInitializer(stringRef,
+				LLVM.ConstStringInContext(currentContext, charArray, length, LLVMBool.True));
+			LLVM.SetGlobalConstant(stringRef, LLVMBool.True);
+			LLVM.SetLinkage(stringRef, LLVMLinkage.LLVMPrivateLinkage);
+			LLVM.SetUnnamedAddress(stringRef, LLVMUnnamedAddr.LLVMGlobalUnnamedAddr);
+			LLVM.SetAlignment(stringRef, 1u);
+			
+			// Todo: Handle native pointer sizes
+			var zeroIndex = LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), 0uL, LLVMBool.True);
+			
+			// https://llvm.org/docs/GetElementPtr.html#why-is-the-extra-0-index-required
+			var indices = ConvertArrayToPointer(new LLVMOpaqueValue*[] { zeroIndex, zeroIndex });
+			var gep = LLVM.BuildInBoundsGEP2(currentBuilder, stringType, stringRef, indices, 2, ConvertString(""));
+
+			return gep;
+		}
+	}
+
+	public Value Visit(ResolvedSymbolExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedAccessExpression expression)
+	{
+		throw new NotImplementedException();
 	}
 }

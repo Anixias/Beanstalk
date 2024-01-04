@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
@@ -265,12 +266,44 @@ internal static class Program
 		}
 
 		var codeGenerator = new CodeGenerator();
-		codeGenerator.Generate(resolvedAsts, optimizationLevel, outputPath);
+		outputPath = codeGenerator.Generate(resolvedAsts, optimizationLevel, outputPath);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;
 		Console.ForegroundColor = ConsoleColor.Cyan;
 		await Console.Out.WriteLineAsync($"Compilation succeeded. ({duration} ms)");
 		Console.ResetColor();
+
+		if (!File.Exists(outputPath))
+			return;
+		
+		var processStartInfo = new ProcessStartInfo
+		{
+			FileName = outputPath,
+			Arguments = "",
+			WindowStyle = ProcessWindowStyle.Normal
+		};
+
+		var process = new Process
+		{
+			StartInfo = processStartInfo
+		};
+
+		process.Start();
+		await process.WaitForExitAsync();
+
+		switch (process.ExitCode)
+		{
+			case 0:
+				Console.ForegroundColor = ConsoleColor.Blue;
+				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode}");
+				Console.ResetColor();
+				break;
+			default:
+				Console.ForegroundColor = ConsoleColor.DarkRed;
+				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode}");
+				Console.ResetColor();
+				break;
+		}
 	}
 
 	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files,
@@ -319,6 +352,7 @@ internal static class Program
 		}
 
 		var resolver = new Resolver(collector);
+		var hadError = false;
 
 		for (var i = 0; i < collectedAsts.Count; i++)
 		{
@@ -332,8 +366,10 @@ internal static class Program
 			}
 			catch (Exception e)
 			{
+				hadError = true;
+				
 				Console.ForegroundColor = ConsoleColor.DarkRed;
-				Console.WriteLine(e.Message);
+				Console.WriteLine($"{e.Message}\n{e.StackTrace}");
 				Console.ResetColor();
 			}
 
@@ -346,7 +382,7 @@ internal static class Program
 			file.Print();
 		}
 
-		if (resolver.exceptions.Count > 0)
+		if (hadError || resolver.exceptions.Count > 0)
 		{
 			return false;
 		}

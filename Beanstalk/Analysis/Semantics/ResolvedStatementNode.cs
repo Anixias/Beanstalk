@@ -11,9 +11,13 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		T Visit(ResolvedStructDeclarationStatement structDeclarationStatement);
 		T Visit(ResolvedFieldDeclarationStatement statement);
 		T Visit(ResolvedConstDeclarationStatement statement);
+		T Visit(ResolvedEntryStatement statement);
+		T Visit(ResolvedExternalFunctionStatement statement);
 		T Visit(ResolvedFunctionDeclarationStatement statement);
 		T Visit(ResolvedConstructorDeclarationStatement statement);
 		T Visit(ResolvedDestructorDeclarationStatement statement);
+		T Visit(ResolvedExpressionStatement statement);
+		T Visit(ResolvedReturnStatement statement);
 		T Visit(ResolvedSimpleStatement statement);
 	}
 	
@@ -24,9 +28,13 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedStructDeclarationStatement structDeclarationStatement);
 		void Visit(ResolvedFieldDeclarationStatement statement);
 		void Visit(ResolvedConstDeclarationStatement statement);
+		void Visit(ResolvedEntryStatement entryStatement);
+		void Visit(ResolvedExternalFunctionStatement statement);
 		void Visit(ResolvedFunctionDeclarationStatement statement);
 		void Visit(ResolvedConstructorDeclarationStatement statement);
 		void Visit(ResolvedDestructorDeclarationStatement statement);
+		void Visit(ResolvedExpressionStatement statement);
+		void Visit(ResolvedReturnStatement statement);
 		void Visit(ResolvedSimpleStatement statement);
 	}
 
@@ -147,10 +155,54 @@ public sealed class ResolvedConstDeclarationStatement : ResolvedStatementNode
 public sealed class ResolvedFunctionDeclarationStatement : ResolvedStatementNode
 {
 	public readonly FunctionSymbol functionSymbol;
-	
-	public ResolvedFunctionDeclarationStatement(FunctionSymbol functionSymbol)
+	public readonly ResolvedStatementNode body;
+
+	public ResolvedFunctionDeclarationStatement(FunctionSymbol functionSymbol, ResolvedStatementNode body)
 	{
 		this.functionSymbol = functionSymbol;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedExternalFunctionStatement : ResolvedStatementNode
+{
+	public readonly ExternalFunctionSymbol externalFunctionSymbol;
+
+	public ResolvedExternalFunctionStatement(ExternalFunctionSymbol externalFunctionSymbol)
+	{
+		this.externalFunctionSymbol = externalFunctionSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedEntryStatement : ResolvedStatementNode
+{
+	public readonly EntrySymbol entrySymbol;
+	public readonly ImmutableArray<ResolvedStatementNode> statements;
+	
+	public ResolvedEntryStatement(EntrySymbol entrySymbol, IEnumerable<ResolvedStatementNode> statements)
+	{
+		this.entrySymbol = entrySymbol;
+		this.statements = statements.ToImmutableArray();
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -167,10 +219,12 @@ public sealed class ResolvedFunctionDeclarationStatement : ResolvedStatementNode
 public sealed class ResolvedConstructorDeclarationStatement : ResolvedStatementNode
 {
 	public readonly ConstructorSymbol constructorSymbol;
-	
-	public ResolvedConstructorDeclarationStatement(ConstructorSymbol constructorSymbol)
+	public readonly ResolvedStatementNode body;
+
+	public ResolvedConstructorDeclarationStatement(ConstructorSymbol constructorSymbol, ResolvedStatementNode body)
 	{
 		this.constructorSymbol = constructorSymbol;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -191,6 +245,46 @@ public sealed class ResolvedDestructorDeclarationStatement : ResolvedStatementNo
 	public ResolvedDestructorDeclarationStatement(DestructorSymbol destructorSymbol)
 	{
 		this.destructorSymbol = destructorSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedExpressionStatement : ResolvedStatementNode
+{
+	public readonly ResolvedExpressionNode value;
+	
+	public ResolvedExpressionStatement(ResolvedExpressionNode value)
+	{
+		this.value = value;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedReturnStatement : ResolvedStatementNode
+{
+	public readonly ResolvedExpressionNode? value;
+	
+	public ResolvedReturnStatement(ResolvedExpressionNode? value)
+	{
+		this.value = value;
 	}
 
 	public override void Accept(IVisitor visitor)

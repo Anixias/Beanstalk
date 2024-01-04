@@ -156,14 +156,31 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		return new ResolvedSimpleStatement(statement);
 	}
 
-	public ResolvedStatementNode Visit(CollectedFunctionDeclarationStatement statement)
+	public ResolvedStatementNode Visit(CollectedEntryStatement entryStatement)
 	{
-		return new ResolvedFunctionDeclarationStatement(statement.functionSymbol!);
+		var statements = new List<ResolvedStatementNode>();
+		foreach (var statement in entryStatement.statements)
+		{
+			statements.Add(statement.Accept(this));
+		}
+		
+		return new ResolvedEntryStatement(entryStatement.entrySymbol!, statements);
+	}
+
+	public ResolvedStatementNode Visit(CollectedFunctionDeclarationStatement functionDeclarationStatement)
+	{
+		return new ResolvedFunctionDeclarationStatement(functionDeclarationStatement.functionSymbol!,
+			functionDeclarationStatement.Accept(this));
+	}
+
+	public ResolvedStatementNode Visit(CollectedExternalFunctionStatement externalFunctionStatement)
+	{
+		return new ResolvedExternalFunctionStatement(externalFunctionStatement.externalFunctionSymbol!);
 	}
 
 	public ResolvedStatementNode Visit(CollectedConstructorDeclarationStatement statement)
 	{
-		return new ResolvedConstructorDeclarationStatement(statement.constructorSymbol!);
+		return new ResolvedConstructorDeclarationStatement(statement.constructorSymbol!, statement.body.Accept(this));
 	}
 
 	public ResolvedStatementNode Visit(CollectedDestructorDeclarationStatement statement)
@@ -183,8 +200,19 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		return new ResolvedSimpleStatement(statement);
 	}
 
+	public ResolvedStatementNode Visit(CollectedExpressionStatement statement)
+	{
+		return new ResolvedExpressionStatement(statement.statement.expression.Accept(this));
+	}
+
 	public ResolvedStatementNode Visit(CollectedSimpleStatement statement)
 	{
+		switch (statement.statementNode)
+		{
+			case ReturnStatement statementNode:
+				return new ResolvedReturnStatement(statementNode.expression?.Accept(this));
+		}
+		
 		// Todo
 		return new ResolvedSimpleStatement(statement);
 	}
@@ -224,6 +252,8 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		{
 			case ResolvedFunctionExpression functionExpression:
 				return new ResolvedFunctionCallExpression(functionExpression.functionSymbol, arguments);
+			case ResolvedExternalFunctionExpression functionExpression:
+				return new ResolvedExternalFunctionCallExpression(functionExpression.functionSymbol, arguments);
 			default:
 				throw NewResolutionException("Invalid function call target", expression.caller.range);
 		}
@@ -396,7 +426,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		}
 		else if (tokenType == TokenType.Identifier)
 		{
-			var symbol = CurrentScope.LookupSymbol(token.Text);
+			var symbol = LookupSymbolWithImports(token.Text);
 
 			if (symbol is null)
 				throw NewResolutionException($"Unable to resolve symbol '{token.Text}'", token);
@@ -406,6 +436,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				FieldSymbol fieldSymbol => new ResolvedFieldExpression(fieldSymbol),
 				ConstSymbol constSymbol => new ResolvedConstExpression(constSymbol),
 				FunctionSymbol functionSymbol => new ResolvedFunctionExpression(functionSymbol),
+				ExternalFunctionSymbol functionSymbol => new ResolvedExternalFunctionExpression(functionSymbol),
 				VarSymbol varSymbol => new ResolvedVarExpression(varSymbol),
 				TypeSymbol typeSymbol => new ResolvedTypeExpression(typeSymbol),
 				_ => throw NewResolutionException($"Unknown symbol class for symbol '{token.Text}'", token)
@@ -477,7 +508,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		    token.Type != TokenType.KeywordNUInt)
 			throw NewResolutionException($"Token '{token.Text}' is not a valid type", token);
 		
-		var symbol = CurrentScope.LookupSymbol(token.Text);
+		var symbol = LookupSymbolWithImports(token.Text);
 		if (symbol is not TypeSymbol typeSymbol)
 			throw NewResolutionException($"Symbol '{token.Text}' is not a valid type", token);
 			

@@ -13,11 +13,14 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedFieldDeclarationStatement statement);
 		T Visit(CollectedConstDeclarationStatement statement);
 		T Visit(CollectedDefStatement statement);
-		T Visit(CollectedFunctionDeclarationStatement statement);
+		T Visit(CollectedEntryStatement entryStatement);
+		T Visit(CollectedFunctionDeclarationStatement functionDeclarationStatement);
+		T Visit(CollectedExternalFunctionStatement externalFunctionStatement);
 		T Visit(CollectedConstructorDeclarationStatement statement);
 		T Visit(CollectedDestructorDeclarationStatement statement);
 		T Visit(CollectedCastDeclarationStatement statement);
 		T Visit(CollectedOperatorDeclarationStatement statement);
+		T Visit(CollectedExpressionStatement statement);
 		T Visit(CollectedSimpleStatement statement);
 	}
 	
@@ -29,11 +32,14 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedFieldDeclarationStatement statement);
 		void Visit(CollectedConstDeclarationStatement statement);
 		void Visit(CollectedDefStatement statement);
+		void Visit(CollectedEntryStatement statement);
 		void Visit(CollectedFunctionDeclarationStatement statement);
+		void Visit(CollectedExternalFunctionStatement statement);
 		void Visit(CollectedConstructorDeclarationStatement statement);
 		void Visit(CollectedDestructorDeclarationStatement statement);
 		void Visit(CollectedCastDeclarationStatement statement);
 		void Visit(CollectedOperatorDeclarationStatement statement);
+		void Visit(CollectedExpressionStatement statement);
 		void Visit(CollectedSimpleStatement statement);
 	}
 
@@ -183,14 +189,61 @@ public sealed class CollectedDefStatement : CollectedStatementNode
 	}
 }
 
+public sealed class CollectedEntryStatement : CollectedStatementNode
+{
+	public EntrySymbol? entrySymbol;
+	public readonly EntryStatement entryStatement;
+	public readonly ImmutableArray<CollectedStatementNode> statements;
+	
+	public CollectedEntryStatement(EntryStatement entryStatement, IEnumerable<CollectedStatementNode> statements)
+	{
+		this.entryStatement = entryStatement;
+		this.statements = statements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
 public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNode
 {
 	public FunctionSymbol? functionSymbol;
 	public readonly FunctionDeclarationStatement functionDeclarationStatement;
-	
-	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement)
+	public readonly CollectedStatementNode body;
+
+	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement,
+		CollectedStatementNode body)
 	{
 		this.functionDeclarationStatement = functionDeclarationStatement;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedExternalFunctionStatement : CollectedStatementNode
+{
+	public ExternalFunctionSymbol? externalFunctionSymbol;
+	public readonly ExternalFunctionStatement externalFunctionStatement;
+
+	public CollectedExternalFunctionStatement(ExternalFunctionStatement externalFunctionStatement)
+	{
+		this.externalFunctionStatement = externalFunctionStatement;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -208,10 +261,13 @@ public sealed class CollectedConstructorDeclarationStatement : CollectedStatemen
 {
 	public ConstructorSymbol? constructorSymbol;
 	public readonly ConstructorDeclarationStatement constructorDeclarationStatement;
-	
-	public CollectedConstructorDeclarationStatement(ConstructorDeclarationStatement constructorDeclarationStatement)
+	public readonly CollectedStatementNode body;
+
+	public CollectedConstructorDeclarationStatement(ConstructorDeclarationStatement constructorDeclarationStatement,
+		CollectedStatementNode body)
 	{
 		this.constructorDeclarationStatement = constructorDeclarationStatement;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -275,6 +331,26 @@ public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNo
 	public CollectedOperatorDeclarationStatement(OperatorDeclarationStatement operatorDeclarationStatement)
 	{
 		this.operatorDeclarationStatement = operatorDeclarationStatement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedExpressionStatement : CollectedStatementNode
+{
+	public readonly ExpressionStatement statement;
+
+	public CollectedExpressionStatement(ExpressionStatement statement)
+	{
+		this.statement = statement;
 	}
 
 	public override void Accept(IVisitor visitor)

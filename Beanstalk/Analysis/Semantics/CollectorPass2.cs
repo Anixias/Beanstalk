@@ -199,6 +199,63 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 	}
 
+	public void Visit(CollectedEntryStatement statement)
+	{
+		var entryStatement = statement.entryStatement;
+		var body = new Scope(CurrentScope);
+		scopeStack.Push(body);
+
+		var parameters = new List<ParameterSymbol>();
+		foreach (var parameter in entryStatement.parameters)
+		{
+			if (parameter.isVariadic)
+				exceptions.Add(NewCollectionException("Entry point cannot have variadic parameters",
+					parameter.identifier));
+
+			if (parameter.isMutable)
+				exceptions.Add(NewCollectionException("Entry point cannot have mutable parameters",
+					parameter.identifier));
+			
+			var varSymbol = new VarSymbol(parameter.identifier.Text, false);
+			if (parameter.type is not null)
+			{
+				var invalidTypes = new List<Token>();
+				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
+
+				if (invalidTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+			}
+
+			if (parameter.defaultExpression is { } defaultExpression)
+			{
+				exceptions.Add(NewCollectionException("Entry point parameters cannot have a default value",
+					parameter.identifier));
+				
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, false));
+				continue;
+			}
+
+			parameters.Add(new ParameterSymbol(varSymbol, null, false));
+		}
+
+		foreach (var parameter in parameters)
+		{
+			body.AddSymbol(parameter);
+		}
+
+		var entrySymbol = new EntrySymbol(parameters, body);
+
+		statement.entrySymbol = entrySymbol;
+		scopeStack.Pop();
+		CurrentScope.AddSymbol(entrySymbol);
+	}
+
 	public void Visit(CollectedFunctionDeclarationStatement statement)
 	{
 		var functionDeclarationStatement = statement.functionDeclarationStatement;
@@ -251,7 +308,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
 				continue;
 			}
 			
@@ -260,7 +317,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
 
-			parameters.Add(new ParameterSymbol(varSymbol, null));
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
 		}
 
 		Type? returnType = null;
@@ -314,6 +371,97 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 	}
 
+	public void Visit(CollectedExternalFunctionStatement statement)
+	{
+		
+		var externalFunctionStatement = statement.externalFunctionStatement;
+
+		var parameters = new List<ParameterSymbol>();
+		var requireDefault = false;
+		var additionalParametersAllowed = true;
+		foreach (var parameter in externalFunctionStatement.parameters)
+		{
+			if (!additionalParametersAllowed)
+				exceptions.Add(NewCollectionException("Cannot define additional parameters after a " +
+				                                      "variadic parameter", parameter.identifier));
+			
+			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
+
+			if (parameter.type is not null)
+			{
+				var invalidTypes = new List<Token>();
+				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
+
+				if (invalidTypes.Count > 0)
+				{
+					foreach (var invalidType in invalidTypes)
+					{
+						exceptions.Add(NewCollectionException(
+							$"Could not find a type named '{invalidType.Text}'", invalidType));
+					}
+				}
+
+				if (parameter.isVariadic)
+				{
+					additionalParametersAllowed = false;
+					
+					if (varSymbol.EvaluatedType is not null && varSymbol.EvaluatedType is not ArrayType)
+						exceptions.Add(NewCollectionException("Variadic parameters must be array types",
+							parameter.identifier));
+				}
+			}
+
+			if (parameter.defaultExpression is { } defaultExpression)
+			{
+				requireDefault = true;
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
+				continue;
+			}
+			
+			if (requireDefault)
+				exceptions.Add(NewCollectionException(
+					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
+					"previous parameter specified a default value", parameter.identifier));
+
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
+		}
+
+		Type? returnType = null;
+		if (externalFunctionStatement.returnType is not null)
+		{
+			var invalidTypes = new List<Token>();
+			returnType = ResolveType(externalFunctionStatement.returnType, invalidTypes);
+			
+			if (invalidTypes.Count > 0)
+			{
+				foreach (var invalidType in invalidTypes)
+				{
+					exceptions.Add(NewCollectionException(
+						$"Could not find a type named '{invalidType.Text}'", invalidType));
+				}
+			}
+		}
+
+		var externalFunctionSymbol = new ExternalFunctionSymbol(externalFunctionStatement.identifier.Text, parameters,
+			externalFunctionStatement.attributes)
+		{
+			ReturnType = returnType
+		};
+
+		statement.externalFunctionSymbol = externalFunctionSymbol;
+
+		if (CurrentScope.LookupSymbol(externalFunctionSymbol.Name) is ExternalFunctionSymbol existingFunctionSymbol)
+		{
+			if (externalFunctionSymbol.SignatureMatches(existingFunctionSymbol))
+				throw NewCollectionException("External function signature matches existing external function signature",
+					externalFunctionStatement.identifier);
+		}
+		else
+		{
+			CurrentScope.AddSymbol(externalFunctionSymbol);
+		}
+	}
+
 	public void Visit(CollectedConstructorDeclarationStatement statement)
 	{
 		var constructorDeclarationStatement = statement.constructorDeclarationStatement;
@@ -358,7 +506,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
 				continue;
 			}
 			
@@ -367,15 +515,22 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
 
-			parameters.Add(new ParameterSymbol(varSymbol, null));
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
 		}
 
 		foreach (var parameter in parameters)
 		{
 			body.AddSymbol(parameter);
 		}
+		
+		// Intrinsic 'this'
+		var thisSymbol = new ParameterSymbol(new VarSymbol("this", false)
+		{
+			EvaluatedType = new ReferenceType(new BaseType(CurrentType), false)
+		}, null, false);
+		body.AddSymbol(thisSymbol);
 
-		var constructorSymbol = new ConstructorSymbol(CurrentType, parameters, body);
+		var constructorSymbol = new ConstructorSymbol(CurrentType, thisSymbol, parameters, body);
 
 		statement.constructorSymbol = constructorSymbol;
 		scopeStack.Pop();
@@ -474,7 +629,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		if (returnType is null)
 			return;
 				
-		var parameterSymbol = new ParameterSymbol(varSymbol, null);
+		var parameterSymbol = new ParameterSymbol(varSymbol, null, false);
 		body.AddSymbol(parameterSymbol);
 
 		var castSymbol = new CastOverloadSymbol(castDeclarationStatement.isImplicit, parameterSymbol,
@@ -568,8 +723,8 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (returnType is null)
 					return;
 						
-				var leftParameterSymbol = new ParameterSymbol(leftSymbol, null);
-				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null);
+				var leftParameterSymbol = new ParameterSymbol(leftSymbol, null, false);
+				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null, false);
 				body.AddSymbol(leftParameterSymbol);
 				body.AddSymbol(rightParameterSymbol);
 
@@ -633,7 +788,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (returnType is null)
 					return;
 				
-				var parameterSymbol = new ParameterSymbol(varSymbol, null);
+				var parameterSymbol = new ParameterSymbol(varSymbol, null, false);
 				body.AddSymbol(parameterSymbol);
 
 				var operatorSymbol = new UnaryOperatorOverloadSymbol(parameterSymbol,
@@ -659,6 +814,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				
 				break;
 		}
+	}
+
+	public void Visit(CollectedExpressionStatement statement)
+	{
+		// Do nothing
 	}
 
 	public void Visit(CollectedSimpleStatement statement)

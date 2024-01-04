@@ -462,7 +462,7 @@ public static class Parser
 				Consume(tokens, ref position, null, TokenType.OpEquals);
 				var attributeValue = Consume(tokens, ref position, null, TokenType.StringLiteral);
 
-				if (!attributes.TryAdd(attributeKey.Text, attributeValue.Text))
+				if (!attributes.TryAdd(attributeKey.Text, (string)attributeValue.Value!))
 					throw new ParseException(
 						$"Attribute '{attributeKey.Text}' is already defined for this function signature",
 						attributeKey);
@@ -726,7 +726,7 @@ public static class Parser
 		
 		var statements = new List<StatementNode>();
 
-		while (Peek(tokens, position) != endTokenType)
+		while (Peek(tokens, position) != TokenType.EndOfFile && Peek(tokens, position) != endTokenType)
 		{
 			try
 			{
@@ -1147,7 +1147,7 @@ public static class Parser
 		if (op == TokenType.OpSlash)
 			return BinaryExpression.Operation.Divide;
 		
-		if (op == TokenType.OpPercentPercent)
+		if (op == TokenType.OpPlusPercent)
 			return BinaryExpression.Operation.PosMod;
 		
 		if (op == TokenType.OpPercent)
@@ -1405,7 +1405,7 @@ public static class Parser
 	{
 		var expression = ParseExponentiationExpression(tokens, ref position);
 
-		while (Match(tokens, ref position, out var op, TokenType.OpStar, TokenType.OpSlash, TokenType.OpPercentPercent,
+		while (Match(tokens, ref position, out var op, TokenType.OpStar, TokenType.OpSlash, TokenType.OpPlusPercent,
 			       TokenType.OpPercent)) 
 		{
 			var right = ParseExponentiationExpression(tokens, ref position);
@@ -1416,7 +1416,7 @@ public static class Parser
 				operation = BinaryExpression.Operation.Multiply;
 			else if (op.Type == TokenType.OpSlash)
 				operation = BinaryExpression.Operation.Divide;
-			else if (op.Type == TokenType.OpPercentPercent)
+			else if (op.Type == TokenType.OpPlusPercent)
 				operation = BinaryExpression.Operation.PosMod;
 			else if (op.Type == TokenType.OpPercent)
 				operation = BinaryExpression.Operation.Modulo;
@@ -1542,6 +1542,83 @@ public static class Parser
 		position++;
 		var right = ParsePrefixUnaryExpression(tokens, ref position);
 		var range = op.Range.Join(right.range);
+		
+		// Unary(Literal, Negate) -> Negated Literal
+		if (right is TokenExpression tokenExpression)
+		{
+			var token = tokenExpression.token;
+			if (token.Type == TokenType.NumberLiteral)
+			{
+				switch (operation)
+				{
+					case UnaryExpression.Operation.Identity:
+						return tokenExpression;
+					
+					case UnaryExpression.Operation.Negate:
+						switch (token.Value)
+						{
+							case sbyte value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(sbyte)-value));	
+							
+							case short value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(short)-value));
+							
+							case int value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									-value));
+							
+							case long value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									-value));	
+						}
+						break;
+					
+					case UnaryExpression.Operation.BitwiseNegate:
+						switch (token.Value)
+						{
+							case sbyte value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(sbyte)~value));
+							
+							case byte value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(byte)~value));
+							
+							case short value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(short)~value));
+							
+							case ushort value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									(ushort)~value));
+							
+							case int value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									~value));
+							
+							case uint value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									~value));
+							
+							case long value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									~value));
+							
+							case ulong value:
+								return new TokenExpression(new Token(token.Type, token.Range, token.Source,
+									~value));
+						}
+						break;
+				}
+			}
+			else if (token.Type == TokenType.KeywordTrue || token.Type == TokenType.KeywordFalse)
+			{
+				if (operation == UnaryExpression.Operation.LogicalNot)
+					return new TokenExpression(new Token(token.Type, token.Range, token.Source, !(bool)token.Value!));
+			}
+		}
 			
 		return new UnaryExpression(right, operation, true, range);
 	}

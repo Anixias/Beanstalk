@@ -12,8 +12,8 @@ public abstract class StatementNode : IAstNode
 		T Visit(DllImportStatement statement);
 		T Visit(ExternalFunctionStatement statement);
 		T Visit(ModuleStatement statement);
-		T Visit(EntryStatement statement);
-		T Visit(FunctionDeclarationStatement statement);
+		T Visit(EntryStatement entryStatement);
+		T Visit(FunctionDeclarationStatement functionDeclarationStatement);
 		T Visit(ConstructorDeclarationStatement statement);
 		T Visit(DestructorDeclarationStatement statement);
 		T Visit(ExpressionStatement statement);

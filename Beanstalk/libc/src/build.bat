@@ -1,2 +1,2 @@
-gcc -c *.c
-ar rcs beanstalk.a *.o
+clang -c *.c
+ar rcs beanstalk.lib *.o

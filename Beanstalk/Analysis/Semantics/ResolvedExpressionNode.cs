@@ -11,6 +11,38 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 	{
 		Type = type;
 	}
+	public interface IVisitor<out T>
+	{
+		T Visit(ResolvedFunctionExpression expression);
+		T Visit(ResolvedExternalFunctionExpression expression);
+		T Visit(ResolvedFunctionCallExpression expression);
+		T Visit(ResolvedExternalFunctionCallExpression expression);
+		T Visit(ResolvedVarExpression expression);
+		T Visit(ResolvedFieldExpression expression);
+		T Visit(ResolvedConstExpression expression);
+		T Visit(ResolvedTypeExpression expression);
+		T Visit(ResolvedLiteralExpression expression);
+		T Visit(ResolvedSymbolExpression expression);
+		T Visit(ResolvedAccessExpression expression);
+	}
+	
+	public interface IVisitor
+	{
+		void Visit(ResolvedFunctionExpression expression);
+		void Visit(ResolvedExternalFunctionExpression expression);
+		void Visit(ResolvedFunctionCallExpression expression);
+		void Visit(ResolvedExternalFunctionCallExpression expression);
+		void Visit(ResolvedVarExpression expression);
+		void Visit(ResolvedFieldExpression expression);
+		void Visit(ResolvedConstExpression expression);
+		void Visit(ResolvedTypeExpression expression);
+		void Visit(ResolvedLiteralExpression expression);
+		void Visit(ResolvedSymbolExpression expression);
+		void Visit(ResolvedAccessExpression expression);
+	}
+
+	public abstract void Accept(IVisitor visitor);
+	public abstract T Accept<T>(IVisitor<T> visitor);
 }
 
 public sealed class ResolvedFunctionExpression : ResolvedExpressionNode
@@ -20,6 +52,37 @@ public sealed class ResolvedFunctionExpression : ResolvedExpressionNode
 	public ResolvedFunctionExpression(FunctionSymbol functionSymbol) : base(functionSymbol.EvaluatedType)
 	{
 		this.functionSymbol = functionSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedExternalFunctionExpression : ResolvedExpressionNode
+{
+	public readonly ExternalFunctionSymbol functionSymbol;
+
+	public ResolvedExternalFunctionExpression(ExternalFunctionSymbol functionSymbol) : base(
+		functionSymbol.EvaluatedType)
+	{
+		this.functionSymbol = functionSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -34,6 +97,39 @@ public sealed class ResolvedFunctionCallExpression : ResolvedExpressionNode
 		this.functionSymbol = functionSymbol;
 		this.arguments = arguments.ToImmutableArray();
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedExternalFunctionCallExpression : ResolvedExpressionNode
+{
+	public readonly ExternalFunctionSymbol functionSymbol;
+	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
+
+	public ResolvedExternalFunctionCallExpression(ExternalFunctionSymbol functionSymbol,
+		IEnumerable<ResolvedExpressionNode> arguments) : base(functionSymbol.EvaluatedType)
+	{
+		this.functionSymbol = functionSymbol;
+		this.arguments = arguments.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ResolvedVarExpression : ResolvedExpressionNode
@@ -43,6 +139,16 @@ public sealed class ResolvedVarExpression : ResolvedExpressionNode
 	public ResolvedVarExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType)
 	{
 		this.varSymbol = varSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -54,6 +160,16 @@ public sealed class ResolvedFieldExpression : ResolvedExpressionNode
 	{
 		this.fieldSymbol = fieldSymbol;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ResolvedConstExpression : ResolvedExpressionNode
@@ -63,6 +179,16 @@ public sealed class ResolvedConstExpression : ResolvedExpressionNode
 	public ResolvedConstExpression(ConstSymbol constSymbol) : base(constSymbol.EvaluatedType)
 	{
 		this.constSymbol = constSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -74,6 +200,16 @@ public sealed class ResolvedTypeExpression : ResolvedExpressionNode
 	{
 		this.typeSymbol = typeSymbol;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ResolvedLiteralExpression : ResolvedExpressionNode
@@ -83,6 +219,16 @@ public sealed class ResolvedLiteralExpression : ResolvedExpressionNode
 	public ResolvedLiteralExpression(Token token, Type? type) : base(type)
 	{
 		this.token = token;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }
 
@@ -99,6 +245,16 @@ public sealed class ResolvedSymbolExpression : ResolvedExpressionNode
 	{
 		this.symbol = symbol;
 	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
 }
 
 public sealed class ResolvedAccessExpression : ResolvedExpressionNode
@@ -110,5 +266,15 @@ public sealed class ResolvedAccessExpression : ResolvedExpressionNode
 	{
 		this.source = source;
 		this.target = target;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
 	}
 }

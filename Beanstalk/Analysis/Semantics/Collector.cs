@@ -177,8 +177,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(ExternalFunctionStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedExternalFunctionStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(ModuleStatement moduleStatement)
@@ -224,20 +223,26 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		return new CollectedModuleStatement(moduleSymbol!, topLevelStatements);
 	}
 
-	public CollectedStatementNode Visit(EntryStatement statement)
+	public CollectedStatementNode Visit(EntryStatement entryStatement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		var statements = new List<CollectedStatementNode>();
+		foreach (var statement in entryStatement.body.statements)
+		{
+			statements.Add(statement.Accept(this));
+		}
+		
+		return new CollectedEntryStatement(entryStatement, statements);
 	}
 
-	public CollectedStatementNode Visit(FunctionDeclarationStatement statement)
+	public CollectedStatementNode Visit(FunctionDeclarationStatement functionDeclarationStatement)
 	{
-		return new CollectedFunctionDeclarationStatement(statement);
+		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement,
+			functionDeclarationStatement.body.Accept(this));
 	}
 
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)
 	{
-		return new CollectedConstructorDeclarationStatement(statement);
+		return new CollectedConstructorDeclarationStatement(statement, statement.body.Accept(this));
 	}
 
 	public CollectedStatementNode Visit(DestructorDeclarationStatement statement)
@@ -247,8 +252,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(ExpressionStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		return new CollectedExpressionStatement(statement);
 	}
 
 	public CollectedStatementNode Visit(BlockStatement statement)
