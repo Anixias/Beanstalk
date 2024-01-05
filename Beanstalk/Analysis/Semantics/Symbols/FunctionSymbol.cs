@@ -2,8 +2,10 @@
 
 namespace Beanstalk.Analysis.Semantics;
 
-public sealed class FunctionSymbol : ISymbol
+public sealed class FunctionSymbol : IFunctionSymbol
 {
+	// Todo: Support instance methods
+	public bool IsStatic => true;
 	public string SymbolTypeName => "a function";
 	public string Name { get; }
 	public ImmutableArray<TypeParameterSymbol> TypeParameters { get; }

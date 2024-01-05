@@ -14,31 +14,41 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 	public interface IVisitor<out T>
 	{
 		T Visit(ResolvedFunctionExpression expression);
+		T Visit(ResolvedConstructorExpression expression);
 		T Visit(ResolvedExternalFunctionExpression expression);
 		T Visit(ResolvedFunctionCallExpression expression);
+		T Visit(ResolvedConstructorCallExpression expression);
 		T Visit(ResolvedExternalFunctionCallExpression expression);
+		T Visit(ResolvedThisExpression expression);
 		T Visit(ResolvedVarExpression expression);
 		T Visit(ResolvedFieldExpression expression);
 		T Visit(ResolvedConstExpression expression);
 		T Visit(ResolvedTypeExpression expression);
 		T Visit(ResolvedLiteralExpression expression);
 		T Visit(ResolvedSymbolExpression expression);
-		T Visit(ResolvedAccessExpression expression);
+		T Visit(ResolvedTypeAccessExpression expression);
+		T Visit(ResolvedValueAccessExpression expression);
+		T Visit(ResolvedAssignmentExpression expression);
 	}
 	
 	public interface IVisitor
 	{
 		void Visit(ResolvedFunctionExpression expression);
+		void Visit(ResolvedConstructorExpression expression);
 		void Visit(ResolvedExternalFunctionExpression expression);
 		void Visit(ResolvedFunctionCallExpression expression);
+		void Visit(ResolvedConstructorCallExpression expression);
 		void Visit(ResolvedExternalFunctionCallExpression expression);
+		void Visit(ResolvedThisExpression expression);
 		void Visit(ResolvedVarExpression expression);
 		void Visit(ResolvedFieldExpression expression);
 		void Visit(ResolvedConstExpression expression);
 		void Visit(ResolvedTypeExpression expression);
 		void Visit(ResolvedLiteralExpression expression);
 		void Visit(ResolvedSymbolExpression expression);
-		void Visit(ResolvedAccessExpression expression);
+		void Visit(ResolvedTypeAccessExpression expression);
+		void Visit(ResolvedValueAccessExpression expression);
+		void Visit(ResolvedAssignmentExpression expression);
 	}
 
 	public abstract void Accept(IVisitor visitor);
@@ -52,6 +62,26 @@ public sealed class ResolvedFunctionExpression : ResolvedExpressionNode
 	public ResolvedFunctionExpression(FunctionSymbol functionSymbol) : base(functionSymbol.EvaluatedType)
 	{
 		this.functionSymbol = functionSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedConstructorExpression : ResolvedExpressionNode
+{
+	public readonly ConstructorSymbol constructorSymbol;
+	
+	public ResolvedConstructorExpression(ConstructorSymbol constructorSymbol) : base(constructorSymbol.EvaluatedType)
+	{
+		this.constructorSymbol = constructorSymbol;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -109,6 +139,29 @@ public sealed class ResolvedFunctionCallExpression : ResolvedExpressionNode
 	}
 }
 
+public sealed class ResolvedConstructorCallExpression : ResolvedExpressionNode
+{
+	public readonly ConstructorSymbol constructorSymbol;
+	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
+
+	public ResolvedConstructorCallExpression(ConstructorSymbol constructorSymbol,
+		IEnumerable<ResolvedExpressionNode> arguments) : base(constructorSymbol.EvaluatedType)
+	{
+		this.constructorSymbol = constructorSymbol;
+		this.arguments = arguments.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
 public sealed class ResolvedExternalFunctionCallExpression : ResolvedExpressionNode
 {
 	public readonly ExternalFunctionSymbol functionSymbol;
@@ -139,6 +192,23 @@ public sealed class ResolvedVarExpression : ResolvedExpressionNode
 	public ResolvedVarExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType)
 	{
 		this.varSymbol = varSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedThisExpression : ResolvedExpressionNode
+{
+	public ResolvedThisExpression(Type type) : base(type)
+	{
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -257,15 +327,62 @@ public sealed class ResolvedSymbolExpression : ResolvedExpressionNode
 	}
 }
 
-public sealed class ResolvedAccessExpression : ResolvedExpressionNode
+public sealed class ResolvedTypeAccessExpression : ResolvedExpressionNode
 {
-	public readonly TypeSymbol source;
+	public readonly Type source;
 	public readonly ISymbol target;
 	
-	public ResolvedAccessExpression(TypeSymbol source, ISymbol target) : base(target.EvaluatedType)
+	public ResolvedTypeAccessExpression(Type source, ISymbol target) : base(target.EvaluatedType)
 	{
 		this.source = source;
 		this.target = target;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedValueAccessExpression : ResolvedExpressionNode
+{
+	public readonly ISymbol source;
+	public readonly ISymbol target;
+	
+	public ResolvedValueAccessExpression(ISymbol source, ISymbol target) : base(target.EvaluatedType)
+	{
+		this.source = source;
+		this.target = target;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedAssignmentExpression : ResolvedExpressionNode
+{
+	public readonly ISymbol left;
+	public readonly ResolvedExpressionNode right;
+	
+	public ResolvedAssignmentExpression(ISymbol left, ResolvedExpressionNode right) : base(left.EvaluatedType)
+	{
+		if (left is TypeSymbol)
+			throw new ArgumentException("Left side of assignment must be an lvalue", nameof(left));
+		
+		this.left = left;
+		this.right = right;
 	}
 
 	public override void Accept(IVisitor visitor)

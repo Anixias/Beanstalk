@@ -67,6 +67,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 	private LLVMOpaqueContext* currentContext;
 	private LLVMOpaqueBuilder* currentBuilder;
 	private CodeGenerationPass currentPass;
+	private ISymbol? currentFunction;
 	private readonly Dictionary<ISymbol, Value> valueSymbols = new(); 
 	private readonly Dictionary<ISymbol, OpaqueType> typeSymbols = new(); 
 
@@ -86,8 +87,10 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		return path;
 	}
 	
-	public string Generate(IEnumerable<ResolvedAst> asts, int optimizationLevel, string outputPath)
+	public string Generate(IEnumerable<ResolvedAst> asts, Target? target, int optimizationLevel, string outputPath)
 	{
+		LLVM.InitializeAllTargets();
+		
 		var objDirectory = Path.GetDirectoryName(outputPath) + "/obj/";
 		Directory.CreateDirectory(objDirectory);
 		foreach (var file in Directory.EnumerateFiles(objDirectory, "*", SearchOption.AllDirectories))
@@ -109,6 +112,9 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			currentPass = CodeGenerationPass.TopLevelDeclarations;
 			valueSymbols.Clear();
 			typeSymbols.Clear();
+			
+			if (target is not null)
+				LLVM.SetTarget(currentModule, target.triple.CString());
 
 			while (currentPass < CodeGenerationPass.Complete)
 			{
@@ -137,6 +143,8 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		var beanstalkLibFileName = Path.GetFileName(beanstalkLib);
 		var beanstalkLibLinkArgs = $"--library-directory={beanstalkLibDirectory} -l{beanstalkLibFileName}";
 
+		var targetArg = target is null ? "" : $"-target {target.triple}";
+		
 		var extension = Path.GetExtension(outputPath);
 		try
 		{
@@ -155,7 +163,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 						var processStartInfo = new ProcessStartInfo
 						{
 							FileName = clang,
-							Arguments = $"{file} --compile --output={objectFile}",
+							Arguments = $"{file} {targetArg} --compile --output={objectFile}",
 							WindowStyle = ProcessWindowStyle.Hidden
 						};
 
@@ -171,8 +179,8 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 					var clangStartInfo = new ProcessStartInfo
 					{
 						FileName = clang,
-						Arguments = $"{string.Join(' ', objectFiles)} {beanstalkLibLinkArgs} --shared -fPIC " +
-						            $"--output={outputPath}",
+						Arguments = $"{string.Join(' ', objectFiles)} {beanstalkLibLinkArgs}  --shared -fPIC " +
+						            $"--output={outputPath} {targetArg}",
 						WindowStyle = ProcessWindowStyle.Hidden
 					};
 
@@ -198,7 +206,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 						var processStartInfo = new ProcessStartInfo
 						{
 							FileName = clang,
-							Arguments = $"{file} --compile --output={objectFile}",
+							Arguments = $"{file} {targetArg} --compile --output={objectFile}",
 							WindowStyle = ProcessWindowStyle.Hidden
 						};
 
@@ -229,12 +237,14 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 					break;
 
 				case ".exe":
+				case ".bin":
 				case "":
 				{
 					var processStartInfo = new ProcessStartInfo
 					{
 						FileName = clang,
-						Arguments = $"{string.Join(' ', sourceFiles)} --output={outputPath} {beanstalkLibLinkArgs}",
+						Arguments = $"{string.Join(' ', sourceFiles)} {targetArg} --output={outputPath} " +
+						            $"{beanstalkLibLinkArgs}",
 						WindowStyle = ProcessWindowStyle.Hidden,
 						UseShellExecute = false
 					};
@@ -263,7 +273,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		}
 	}
 
-	private static sbyte* ConvertString(string text)
+	internal static sbyte* ConvertString(string text)
 	{
 		var bytes = Encoding.ASCII.GetBytes($"{text}\0");
 		fixed (byte* p = bytes)
@@ -282,12 +292,6 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		}
 	}
 
-	private static void PadToMultipleOf(ref byte[] src, int pad)
-	{
-		var length = (src.Length + pad - 1) / pad * pad;
-		Array.Resize(ref src, length);
-	}
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static T** ConvertArrayToPointer<T>(T*[] values) where T : unmanaged
 	{
@@ -303,13 +307,25 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		{
 			default:
 				throw new NotImplementedException();
+			
 			case null:
 				return LLVM.VoidType();
+			
+			case NullableType nullableType:
+			{
+				var baseType = GetType(nullableType.baseType);
+				return LLVM.PointerType(baseType, 0u);
+			}
+			
 			case ReferenceType referenceType:
 			{
 				var baseType = GetType(referenceType.baseType);
+				if (referenceType.baseType is NullableType)
+					return baseType;
+				
 				return LLVM.PointerType(baseType, 0u);
 			}
+			
 			case BaseType baseType:
 			{
 				return baseType.typeSymbol switch
@@ -402,17 +418,20 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		switch (currentPass)
 		{
 			case CodeGenerationPass.TopLevelDeclarations:
+			{
 				structType = LLVM.StructCreateNamed(currentContext,
 					ConvertString(structSymbol.Name));
-				
+
 				typeSymbols.Add(structSymbol, new OpaqueType(structType));
 				break;
-			
+			}
+
 			case CodeGenerationPass.MemberDeclarations:
+			{
 				if (!typeSymbols.ContainsKey(structSymbol))
 					throw new Exception($"Struct '{structSymbol.Name}' " +
 					                    $"not forward declared");
-				
+
 				structType = typeSymbols[structSymbol].value;
 
 				var elementTypeList = new List<Type>();
@@ -423,11 +442,12 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 						case ResolvedFieldDeclarationStatement fieldDeclarationStatement:
 							elementTypeList.Add(fieldDeclarationStatement.fieldSymbol.EvaluatedType!);
 							break;
+						
 						case ResolvedConstructorDeclarationStatement constructorDeclarationStatement:
 							var constructorSymbol = constructorDeclarationStatement.constructorSymbol;
 							var parameterList = new List<OpaqueType>
 							{
-								new(GetType(constructorSymbol.This.EvaluatedType)) 
+								new(GetType(constructorSymbol.This.EvaluatedType))
 							};
 
 							foreach (var parameter in constructorSymbol.Parameters)
@@ -440,13 +460,13 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 							{
 								parameterTypes[i] = parameterList[i].value;
 							}
-							
+
 							var constructorType = LLVM.FunctionType(structType, ConvertArrayToPointer(parameterTypes),
 								(uint)parameterTypes.LongLength, LLVMBool.False);
-							
+
 							var constructor = LLVM.AddFunction(currentModule,
 								ConvertString($"{structSymbol.Name}.new"), constructorType);
-							
+
 							valueSymbols.Add(constructorSymbol, new Value(constructor));
 							break;
 					}
@@ -460,28 +480,31 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 
 				LLVM.StructSetBody(structType, ConvertArrayToPointer(elementTypes), (uint)elementTypes.LongLength,
 					LLVMBool.False);
-				
+
 				structType = typeSymbols[structSymbol].value;
 				break;
-			
+			}
+
 			case CodeGenerationPass.Definitions:
-				if (!typeSymbols.ContainsKey(structSymbol))
-					throw new Exception($"Struct '{structSymbol.Name}' " +
-					                    $"not forward declared");
+			{
+				foreach (var statement in structDeclarationStatement.statements)
+				{
+					statement.Accept(this);
+				}
 				
-				structType = typeSymbols[structSymbol].value;
 				break;
+			}
 		}
 	}
 
 	public void Visit(ResolvedFieldDeclarationStatement statement)
 	{
-		throw new NotImplementedException();
+		// Do nothing
 	}
 
 	public void Visit(ResolvedConstDeclarationStatement statement)
 	{
-		throw new NotImplementedException();
+		// Do nothing
 	}
 
 	public void Visit(ResolvedEntryStatement entryStatement)
@@ -551,7 +574,28 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 
 	public void Visit(ResolvedConstructorDeclarationStatement statement)
 	{
-		throw new NotImplementedException();
+		if (currentPass != CodeGenerationPass.Definitions)
+			return;
+		
+		var constructorSymbol = statement.constructorSymbol;
+
+		if (!valueSymbols.ContainsKey(constructorSymbol))
+			throw new Exception($"Constructor for type '{constructorSymbol.Owner.Name}' not forward declared");
+		
+		var constructor = valueSymbols[constructorSymbol].value;
+		
+		// Todo: Function not found
+		if (constructor == Value.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
+			return;
+		
+		// Body
+		currentFunction = constructorSymbol;
+		statement.body.Accept(this);
+		currentFunction = null;
+	
+		// Verification
+		if (LLVM.VerifyFunction(constructor, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(constructor);
 	}
 
 	public void Visit(ResolvedDestructorDeclarationStatement statement)
@@ -572,12 +616,25 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			LLVM.BuildRetVoid(currentBuilder);
 	}
 
+	public void Visit(ResolvedBlockStatement statement)
+	{
+		foreach (var bodyStatement in statement.statements)
+		{
+			bodyStatement.Accept(this);
+		}
+	}
+
 	public void Visit(ResolvedSimpleStatement statement)
 	{
 		throw new NotImplementedException();
 	}
 
 	public Value Visit(ResolvedFunctionExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedConstructorExpression expression)
 	{
 		throw new NotImplementedException();
 	}
@@ -592,28 +649,66 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		throw new NotImplementedException();
 	}
 
+	public Value Visit(ResolvedConstructorCallExpression expression)
+	{
+		var ownerSymbol = expression.constructorSymbol.Owner;
+		var constructorSymbol = expression.constructorSymbol;
+
+		if (!valueSymbols.ContainsKey(constructorSymbol))
+			throw new Exception($"Constructor for type '{constructorSymbol.Owner.Name}' not forward declared");
+
+		if (!typeSymbols.ContainsKey(ownerSymbol))
+			throw new Exception($"Type '{ownerSymbol.Name}' not forward declared");
+		
+		var owner = typeSymbols[ownerSymbol].value;
+		var constructor = valueSymbols[constructorSymbol].value;
+		
+		// Todo: Function not found
+		if (constructor == Value.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
+			return Value.Null;
+		
+		// Allocate memory
+		// Todo: Memory management!
+		var allocation = LLVM.BuildAlloca(currentBuilder, owner, ConvertString(""));
+
+		var arguments = new LLVMOpaqueValue*[expression.arguments.Length + 1];
+		for (var i = 1; i < arguments.Length; i++)
+		{
+			arguments[i] = expression.arguments[i - 1].Accept(this).value;
+		}
+
+		arguments[0] = LLVM.BuildIntToPtr(currentBuilder, allocation, LLVM.PointerType(owner, 0u), ConvertString(""));
+		
+		var constructorType = LLVM.GlobalGetValueType(constructor);
+		var args = ConvertArrayToPointer(arguments);
+		var argc = (uint)arguments.Length;
+		var name = ConvertString("");
+
+		var call = LLVM.BuildCall2(currentBuilder, constructorType, constructor, args, argc, name);
+		return new Value(call);
+	}
+
 	public Value Visit(ResolvedExternalFunctionCallExpression expression)
 	{
 		var functionSymbol = expression.functionSymbol;
 		var functionName = functionSymbol.Attributes.GetValueOrDefault("entry", functionSymbol.Name);
 
-		if (!valueSymbols.ContainsKey(expression.functionSymbol))
+		if (!valueSymbols.ContainsKey(functionSymbol))
 			throw new Exception($"External function '{functionName}' not forward declared");
 		
-		var function = valueSymbols[expression.functionSymbol].value;
+		var function = valueSymbols[functionSymbol].value;
 		
 		// Todo: Function not found
 		if (function == Value.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
 			return Value.Null;
-			
-		var functionType = LLVM.GlobalGetValueType(function);
 
 		var arguments = new LLVMOpaqueValue*[expression.arguments.Length];
 		for (var i = 0; i < arguments.Length; i++)
 		{
 			arguments[i] = expression.arguments[i].Accept(this).value;
 		}
-
+		
+		var functionType = LLVM.GlobalGetValueType(function);
 		var returnType = LLVM.GetReturnType(functionType);
 		var args = ConvertArrayToPointer(arguments);
 		var argc = (uint)arguments.Length;
@@ -623,6 +718,11 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 
 		var call = LLVM.BuildCall2(currentBuilder, functionType, function, args, argc, name);
 		return new Value(call);
+	}
+
+	public Value Visit(ResolvedThisExpression expression)
+	{
+		throw new NotImplementedException();
 	}
 
 	public Value Visit(ResolvedVarExpression expression)
@@ -675,6 +775,12 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			long value => 
 				new Value(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
 			
+			float value => 
+				new Value(LLVM.ConstReal(LLVM.FloatTypeInContext(currentContext), value)),
+			
+			double value => 
+				new Value(LLVM.ConstReal(LLVM.DoubleTypeInContext(currentContext), value)),
+			
 			string value =>
 				new Value(DefineStringLiteral(value)),
 			
@@ -709,8 +815,29 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedAccessExpression expression)
+	public Value Visit(ResolvedTypeAccessExpression expression)
+	{
+		switch (expression.target)
+		{
+			default:
+				throw new NotImplementedException();
+			
+			case ConstructorSymbol symbol:
+				return valueSymbols[symbol];
+		}
+	}
+
+	public Value Visit(ResolvedValueAccessExpression expression)
 	{
 		throw new NotImplementedException();
+	}
+
+	public Value Visit(ResolvedAssignmentExpression expression)
+	{
+		if (!valueSymbols.TryGetValue(expression.left, out var symbol))
+			throw new Exception($"Unable to resolve symbol '{expression.left.Name}'");
+
+		var value = expression.right.Accept(this);
+		return new Value(LLVM.BuildStore(currentBuilder, value.value, symbol.value));
 	}
 }

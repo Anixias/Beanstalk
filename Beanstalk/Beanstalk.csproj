@@ -22,6 +22,7 @@
       <EmbeddedResource Include="Resources\clang.exe" />
       <EmbeddedResource Include="Resources\llvm-ar.exe" />
       <EmbeddedResource Include="Resources\beanstalk.lib" />
+      <None Remove="Resources\library.c" />
     </ItemGroup>
 
 </Project>

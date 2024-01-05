@@ -6,3 +6,8 @@ public interface ISymbol
 	string SymbolTypeName { get; }
 	Type? EvaluatedType { get; }
 }
+
+public interface IFunctionSymbol : ISymbol
+{
+	bool IsStatic { get; }
+}

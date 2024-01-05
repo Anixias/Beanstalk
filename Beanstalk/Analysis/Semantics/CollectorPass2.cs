@@ -137,12 +137,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		scopeStack.Pop();
 	}
 
-	public void Visit(CollectedStructStatement structStatement)
+	public void Visit(CollectedStructDeclarationStatement structDeclarationStatement)
 	{
-		scopeStack.Push(structStatement.structSymbol.Scope);
-		typeStack.Push(structStatement.structSymbol);
+		scopeStack.Push(structDeclarationStatement.structSymbol.Scope);
+		typeStack.Push(structDeclarationStatement.structSymbol);
 
-		foreach (var statement in structStatement.statements)
+		foreach (var statement in structDeclarationStatement.statements)
 		{
 			statement.Accept(this);
 		}
@@ -817,6 +817,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	}
 
 	public void Visit(CollectedExpressionStatement statement)
+	{
+		// Do nothing
+	}
+
+	public void Visit(CollectedBlockStatement statement)
 	{
 		// Do nothing
 	}

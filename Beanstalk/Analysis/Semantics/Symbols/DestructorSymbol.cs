@@ -1,7 +1,8 @@
 ﻿namespace Beanstalk.Analysis.Semantics;
 
-public sealed class DestructorSymbol : ISymbol
+public sealed class DestructorSymbol : IFunctionSymbol
 {
+	public bool IsStatic => false;
 	public string SymbolTypeName => "a destructor";
 	public Type? EvaluatedType => null;
 	public string Name { get; }

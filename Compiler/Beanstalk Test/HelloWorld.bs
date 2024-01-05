@@ -15,7 +15,7 @@ struct Vec2
 entry()
 {
 	print("Hello, World!")
-	//Vec2.new(1.0f32, 2.0f32)
+	Vec2.new(1.0f32, 2.0f32)
 	return 0
 }
 

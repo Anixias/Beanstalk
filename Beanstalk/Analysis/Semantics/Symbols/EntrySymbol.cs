@@ -2,8 +2,9 @@
 
 namespace Beanstalk.Analysis.Semantics;
 
-public sealed class EntrySymbol : ISymbol
+public sealed class EntrySymbol : IFunctionSymbol
 {
+	public bool IsStatic => true;
 	public string SymbolTypeName => "an entry point";
 	public string Name => "$entry";
 	public ImmutableArray<ParameterSymbol> Parameters { get; }

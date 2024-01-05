@@ -271,13 +271,13 @@ public sealed class IndexExpression : ExpressionNode
 
 public sealed class AssignmentExpression : ExpressionNode
 {
-	public readonly ExpressionNode target;
-	public readonly ExpressionNode expression;
+	public readonly ExpressionNode left;
+	public readonly ExpressionNode right;
 	
-	public AssignmentExpression(ExpressionNode target, ExpressionNode expression, TextRange range) : base(range)
+	public AssignmentExpression(ExpressionNode left, ExpressionNode right, TextRange range) : base(range)
 	{
-		this.target = target;
-		this.expression = expression;
+		this.left = left;
+		this.right = right;
 	}
 
 	public override void Accept(IVisitor visitor)

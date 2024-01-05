@@ -247,7 +247,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(DestructorDeclarationStatement statement)
 	{
-		return new CollectedDestructorDeclarationStatement(statement);
+		return new CollectedDestructorDeclarationStatement(statement, statement.body.Accept(this));
 	}
 
 	public CollectedStatementNode Visit(ExpressionStatement statement)
@@ -257,8 +257,13 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(BlockStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		var statements = new List<CollectedStatementNode>();
+		foreach (var bodyStatement in statement.statements)
+		{
+			statements.Add(bodyStatement.Accept(this));
+		}
+		
+		return new CollectedBlockStatement(statements);
 	}
 
 	public CollectedStatementNode Visit(IfStatement statement)
@@ -308,7 +313,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		}
 		
 		scopeStack.Pop();
-		return new CollectedStructStatement(structSymbol, statements);
+		return new CollectedStructDeclarationStatement(structSymbol, statements);
 	}
 
 	public CollectedStatementNode Visit(InterfaceDeclarationStatement statement)

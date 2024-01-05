@@ -2,11 +2,14 @@
 
 namespace Beanstalk.Analysis.Semantics;
 
-public sealed class ConstructorSymbol : ISymbol
+public sealed class ConstructorSymbol : IFunctionSymbol
 {
+	public bool IsStatic => false;
+	public const string InternalName = "$constructor";
 	public string SymbolTypeName => "a constructor";
 	public Type? EvaluatedType { get; }
-	public string Name { get; }
+	public TypeSymbol Owner { get; }
+	public string Name => InternalName;
 	public ParameterSymbol This { get; }
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Scope Body { get; }
@@ -15,7 +18,7 @@ public sealed class ConstructorSymbol : ISymbol
 	public ConstructorSymbol(TypeSymbol owner, ParameterSymbol @this, IEnumerable<ParameterSymbol> parameters,
 		Scope body)
 	{
-		Name = "$constructor";
+		Owner = owner;
 		This = @this;
 		Parameters = parameters.ToImmutableArray();
 		Body = body;

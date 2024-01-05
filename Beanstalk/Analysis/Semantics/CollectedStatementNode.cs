@@ -9,7 +9,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 	{
 		T Visit(CollectedProgramStatement programStatement);
 		T Visit(CollectedModuleStatement moduleStatement);
-		T Visit(CollectedStructStatement structStatement);
+		T Visit(CollectedStructDeclarationStatement structDeclarationStatement);
 		T Visit(CollectedFieldDeclarationStatement statement);
 		T Visit(CollectedConstDeclarationStatement statement);
 		T Visit(CollectedDefStatement statement);
@@ -21,6 +21,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedCastDeclarationStatement statement);
 		T Visit(CollectedOperatorDeclarationStatement statement);
 		T Visit(CollectedExpressionStatement statement);
+		T Visit(CollectedBlockStatement statement);
 		T Visit(CollectedSimpleStatement statement);
 	}
 	
@@ -28,7 +29,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 	{
 		void Visit(CollectedProgramStatement statement);
 		void Visit(CollectedModuleStatement statement);
-		void Visit(CollectedStructStatement structStatement);
+		void Visit(CollectedStructDeclarationStatement structDeclarationStatement);
 		void Visit(CollectedFieldDeclarationStatement statement);
 		void Visit(CollectedConstDeclarationStatement statement);
 		void Visit(CollectedDefStatement statement);
@@ -40,6 +41,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedCastDeclarationStatement statement);
 		void Visit(CollectedOperatorDeclarationStatement statement);
 		void Visit(CollectedExpressionStatement statement);
+		void Visit(CollectedBlockStatement statement);
 		void Visit(CollectedSimpleStatement statement);
 	}
 
@@ -95,12 +97,12 @@ public sealed class CollectedModuleStatement : CollectedStatementNode
 	}
 }
 
-public sealed class CollectedStructStatement : CollectedStatementNode
+public sealed class CollectedStructDeclarationStatement : CollectedStatementNode
 {
 	public readonly StructSymbol structSymbol;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
 	
-	public CollectedStructStatement(StructSymbol structSymbol, IEnumerable<CollectedStatementNode> statements)
+	public CollectedStructDeclarationStatement(StructSymbol structSymbol, IEnumerable<CollectedStatementNode> statements)
 	{
 		this.structSymbol = structSymbol;
 		this.statements = statements.ToImmutableArray();
@@ -285,10 +287,13 @@ public sealed class CollectedDestructorDeclarationStatement : CollectedStatement
 {
 	public DestructorSymbol? destructorSymbol;
 	public readonly DestructorDeclarationStatement destructorDeclarationStatement;
-	
-	public CollectedDestructorDeclarationStatement(DestructorDeclarationStatement destructorDeclarationStatement)
+	public readonly CollectedStatementNode body;
+
+	public CollectedDestructorDeclarationStatement(DestructorDeclarationStatement destructorDeclarationStatement,
+		CollectedStatementNode body)
 	{
 		this.destructorDeclarationStatement = destructorDeclarationStatement;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -351,6 +356,26 @@ public sealed class CollectedExpressionStatement : CollectedStatementNode
 	public CollectedExpressionStatement(ExpressionStatement statement)
 	{
 		this.statement = statement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedBlockStatement : CollectedStatementNode
+{
+	public readonly ImmutableArray<CollectedStatementNode> statements;
+
+	public CollectedBlockStatement(IEnumerable<CollectedStatementNode> statements)
+	{
+		this.statements = statements.ToImmutableArray();
 	}
 
 	public override void Accept(IVisitor visitor)

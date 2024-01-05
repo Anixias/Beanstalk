@@ -18,6 +18,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		T Visit(ResolvedDestructorDeclarationStatement statement);
 		T Visit(ResolvedExpressionStatement statement);
 		T Visit(ResolvedReturnStatement statement);
+		T Visit(ResolvedBlockStatement statement);
 		T Visit(ResolvedSimpleStatement statement);
 	}
 	
@@ -35,6 +36,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedDestructorDeclarationStatement statement);
 		void Visit(ResolvedExpressionStatement statement);
 		void Visit(ResolvedReturnStatement statement);
+		void Visit(ResolvedBlockStatement statement);
 		void Visit(ResolvedSimpleStatement statement);
 	}
 
@@ -205,6 +207,11 @@ public sealed class ResolvedEntryStatement : ResolvedStatementNode
 		this.statements = statements.ToImmutableArray();
 	}
 
+	public ResolvedEntryStatement(ImmutableArray<ResolvedStatementNode> statements)
+	{
+		this.statements = statements;
+	}
+
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
@@ -241,10 +248,12 @@ public sealed class ResolvedConstructorDeclarationStatement : ResolvedStatementN
 public sealed class ResolvedDestructorDeclarationStatement : ResolvedStatementNode
 {
 	public readonly DestructorSymbol destructorSymbol;
+	public readonly ResolvedStatementNode body;
 	
-	public ResolvedDestructorDeclarationStatement(DestructorSymbol destructorSymbol)
+	public ResolvedDestructorDeclarationStatement(DestructorSymbol destructorSymbol, ResolvedStatementNode body)
 	{
 		this.destructorSymbol = destructorSymbol;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -285,6 +294,26 @@ public sealed class ResolvedReturnStatement : ResolvedStatementNode
 	public ResolvedReturnStatement(ResolvedExpressionNode? value)
 	{
 		this.value = value;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedBlockStatement : ResolvedStatementNode
+{
+	public readonly ImmutableArray<ResolvedStatementNode> statements;
+	
+	public ResolvedBlockStatement(IEnumerable<ResolvedStatementNode> statements)
+	{
+		this.statements = statements.ToImmutableArray();
 	}
 
 	public override void Accept(IVisitor visitor)

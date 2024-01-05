@@ -1,7 +1,8 @@
 ﻿namespace Beanstalk.Analysis.Semantics;
 
-public sealed class CastOverloadSymbol : ISymbol
+public sealed class CastOverloadSymbol : IFunctionSymbol
 {
+	public bool IsStatic => true;
 	public string SymbolTypeName => "a cast overload";
 	public Type EvaluatedType => ReturnType;
 	public string Name { get; }

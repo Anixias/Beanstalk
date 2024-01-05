@@ -12,7 +12,7 @@ internal struct ProgramArgs
 	public string? InputPath { get; private set; }
 	public string? OutputPath { get; private set; }
 	public int? OptimizationLevel { get; private set; }
-	public int? BitTarget { get; private set; }
+	public Target? Target { get; private set; }
 
 	public static ProgramArgs? Parse(string[] args)
 	{
@@ -46,8 +46,8 @@ internal struct ProgramArgs
 				case "-opt":
 					programArgs.OptimizationLevel = int.Parse(Read());
 					break;
-				case "-bit":
-					programArgs.BitTarget = int.Parse(Read());
+				case "-target":
+					programArgs.Target = new Target(Read());
 					break;
 				default:
 					throw new ArgumentException($"Invalid parameter '{command}'.", nameof(command));
@@ -205,20 +205,6 @@ internal static class Program
 		}
 
 		var optimizationLevel = programArgs.Value.OptimizationLevel ?? 0;
-		var is64Bit = true;
-
-		switch (programArgs.Value.BitTarget)
-		{
-			case 64:
-			case null:
-				break;
-			case 32:
-				is64Bit = false;
-				break;
-			default:
-				await Console.Error.WriteLineAsync("Invalid target architecture. Use '-bit 32' or '-bit 64').");
-				return;
-		}
 
 		string workingDirectory;
 		var files = new List<FileDiagnostics>();
@@ -256,7 +242,8 @@ internal static class Program
 			return;
 		}
 
-		if (!Analyze(is64Bit, asts, files, out var resolvedAsts))
+		if (!Analyze(programArgs.Value.Target?.Is64Bit() ?? Environment.Is64BitOperatingSystem, asts, files,
+			    out var resolvedAsts))
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
@@ -266,7 +253,7 @@ internal static class Program
 		}
 
 		var codeGenerator = new CodeGenerator();
-		outputPath = codeGenerator.Generate(resolvedAsts, optimizationLevel, outputPath);
+		outputPath = codeGenerator.Generate(resolvedAsts, programArgs.Value.Target, optimizationLevel, outputPath);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;
 		Console.ForegroundColor = ConsoleColor.Cyan;
@@ -274,6 +261,9 @@ internal static class Program
 		Console.ResetColor();
 
 		if (!File.Exists(outputPath))
+			return;
+
+		if (Path.GetExtension(outputPath) != ".exe")
 			return;
 		
 		var processStartInfo = new ProcessStartInfo
@@ -298,6 +288,7 @@ internal static class Program
 				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode}");
 				Console.ResetColor();
 				break;
+			
 			default:
 				Console.ForegroundColor = ConsoleColor.DarkRed;
 				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode}");
