@@ -19,28 +19,76 @@ void print(const char* str)
     fputs(str, stdout);
 }
 
-void print_int(int value)
+const char* int8_to_string(char value)
 {
     if (value >= 0) {
-        int max_count = (int) ((ceil(log10(value)) + 1) * sizeof(char));
-        char str[max_count];
+        int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
         sprintf(str, "%d", value);
-        fputs(str, stdout);
+        return str;
     }
     else {
-        int max_count = (int) ((ceil(log10(-value)) + 1) * sizeof(char));
-        char str[max_count];
+        int max_count = (size_t) ((ceil(log10(-value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
         sprintf(str, "-%d", -value);
-        fputs(str, stdout);
+        return str;
     }
 }
 
-void print_long_long(long long value)
+const char* uint8_to_string(unsigned char value)
 {
-    int max_count = (int)((ceil(log10(value)) + 1) * sizeof(char));
-    char str[max_count];
-    sprintf(str, "%lld", value);
-    fputs(str, stdout);
+    int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+    char* str = malloc(max_count);
+    sprintf(str, "%d", value);
+    return str;
+}
+
+const char* int16_to_string(short value)
+{
+    if (value >= 0) {
+        int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
+        sprintf(str, "%d", value);
+        return str;
+    }
+    else {
+        int max_count = (size_t) ((ceil(log10(-value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
+        sprintf(str, "-%d", -value);
+        return str;
+    }
+}
+
+const char* uint16_to_string(unsigned short value)
+{
+    int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+    char* str = malloc(max_count);
+    sprintf(str, "%d", value);
+    return str;
+}
+
+const char* int32_to_string(int value)
+{
+    if (value >= 0) {
+        int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
+        sprintf(str, "%d", value);
+        return str;
+    }
+    else {
+        int max_count = (size_t) ((ceil(log10(-value)) + 1) * sizeof(char));
+        char* str = malloc(max_count);
+        sprintf(str, "-%d", -value);
+        return str;
+    }
+}
+
+const char* uint32_to_string(unsigned int value)
+{
+    int max_count = (size_t) ((ceil(log10(value)) + 1) * sizeof(char));
+    char* str = malloc(max_count);
+    sprintf(str, "%d", value);
+    return str;
 }
 
 // === Time ===

@@ -53,7 +53,7 @@ public abstract class ExpressionNode : IAstNode
 		void Visit(InterpolatedStringExpression expression);
 	}
 	
-	public readonly TextRange range;
+	public TextRange range;
 
 	protected ExpressionNode(TextRange range)
 	{
@@ -374,13 +374,15 @@ public sealed class BinaryExpression : ExpressionNode
 	
 	public readonly ExpressionNode left;
 	public readonly Operation operation;
+	public readonly Token op;
 	public readonly ExpressionNode right;
 
-	public BinaryExpression(ExpressionNode left, Operation operation, ExpressionNode right, TextRange range)
+	public BinaryExpression(ExpressionNode left, Operation operation, Token op, ExpressionNode right, TextRange range)
 		: base(range)
 	{
 		this.left = left;
 		this.operation = operation;
+		this.op = op;
 		this.right = right;
 	}
 
@@ -412,12 +414,15 @@ public sealed class UnaryExpression : ExpressionNode
 	
 	public readonly ExpressionNode operand;
 	public readonly Operation operation;
+	public readonly Token op;
 	public readonly bool isPrefix;
 
-	public UnaryExpression(ExpressionNode operand, Operation operation, bool isPrefix, TextRange range) : base(range)
+	public UnaryExpression(ExpressionNode operand, Operation operation, Token op, bool isPrefix, TextRange range) :
+		base(range)
 	{
 		this.operand = operand;
 		this.operation = operation;
+		this.op = op;
 		this.isPrefix = isPrefix;
 	}
 

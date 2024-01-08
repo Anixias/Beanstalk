@@ -20,6 +20,11 @@ public sealed class Scope : IEnumerable<Scope>
 		SymbolTable.Add(symbol);
 	}
 
+	public void AddOrShadowSymbol(ISymbol symbol)
+	{
+		SymbolTable.AddOrShadow(symbol);
+	}
+
 	public ISymbol? LookupSymbol(string name)
 	{
 		if (SymbolTable.Lookup(name) is { } symbol)

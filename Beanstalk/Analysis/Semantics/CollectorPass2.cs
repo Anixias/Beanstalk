@@ -6,8 +6,6 @@ namespace Beanstalk.Analysis.Semantics;
 public partial class Collector : CollectedStatementNode.IVisitor
 {
 	public readonly SymbolTable importedSymbols = new();
-	private readonly Stack<TypeSymbol> typeStack = new();
-	private TypeSymbol CurrentType => typeStack.Peek();
 	
 	public void Collect(CollectedAst ast)
 	{
@@ -202,8 +200,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedEntryStatement statement)
 	{
 		var entryStatement = statement.entryStatement;
-		var body = new Scope(CurrentScope);
-		scopeStack.Push(body);
+		scopeStack.Push(statement.scope);
 
 		var parameters = new List<ParameterSymbol>();
 		foreach (var parameter in entryStatement.parameters)
@@ -237,19 +234,19 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				exceptions.Add(NewCollectionException("Entry point parameters cannot have a default value",
 					parameter.identifier));
 				
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, false));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, false, (uint)parameters.Count));
 				continue;
 			}
 
-			parameters.Add(new ParameterSymbol(varSymbol, null, false));
+			parameters.Add(new ParameterSymbol(varSymbol, null, false, (uint)parameters.Count));
 		}
 
 		foreach (var parameter in parameters)
 		{
-			body.AddSymbol(parameter);
+			statement.scope.AddSymbol(parameter);
 		}
 
-		var entrySymbol = new EntrySymbol(parameters, body);
+		var entrySymbol = new EntrySymbol(parameters, statement.scope);
 
 		statement.entrySymbol = entrySymbol;
 		scopeStack.Pop();
@@ -259,15 +256,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedFunctionDeclarationStatement statement)
 	{
 		var functionDeclarationStatement = statement.functionDeclarationStatement;
-		var body = new Scope(CurrentScope);
-		scopeStack.Push(body);
+		scopeStack.Push(statement.scope);
 
 		var typeParameterSymbols = new List<TypeParameterSymbol>();
 		foreach (var typeParameter in functionDeclarationStatement.typeParameters)
 		{
 			var typeParameterSymbol = new TypeParameterSymbol(typeParameter.Text);
 			typeParameterSymbols.Add(typeParameterSymbol);
-			body.AddSymbol(typeParameterSymbol);
+			statement.scope.AddSymbol(typeParameterSymbol);
 		}
 
 		var parameters = new List<ParameterSymbol>();
@@ -308,7 +304,9 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic,
+					(uint)parameters.Count));
+				
 				continue;
 			}
 			
@@ -317,7 +315,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
 
-			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
 
 		Type? returnType = null;
@@ -338,11 +336,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 
 		foreach (var parameter in parameters)
 		{
-			body.AddSymbol(parameter);
+			statement.scope.AddSymbol(parameter);
 		}
 		
 		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text,
-			typeParameterSymbols, parameters, body)
+			typeParameterSymbols, parameters, statement.scope)
 		{
 			ReturnType = returnType
 		};
@@ -414,7 +412,9 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic,
+					(uint)parameters.Count));
+				
 				continue;
 			}
 			
@@ -423,7 +423,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
 
-			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
 
 		Type? returnType = null;
@@ -465,8 +465,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedConstructorDeclarationStatement statement)
 	{
 		var constructorDeclarationStatement = statement.constructorDeclarationStatement;
-		var body = new Scope(CurrentScope);
-		scopeStack.Push(body);
+		scopeStack.Push(statement.scope);
 
 		var parameters = new List<ParameterSymbol>();
 		var requireDefault = false;
@@ -506,7 +505,9 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
-				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic));
+				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, parameter.isVariadic,
+					(uint)parameters.Count));
+				
 				continue;
 			}
 			
@@ -515,22 +516,22 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
 
-			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic));
+			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
 
 		foreach (var parameter in parameters)
 		{
-			body.AddSymbol(parameter);
+			statement.scope.AddSymbol(parameter);
 		}
 		
 		// Intrinsic 'this'
 		var thisSymbol = new ParameterSymbol(new VarSymbol("this", false)
 		{
 			EvaluatedType = new ReferenceType(new BaseType(CurrentType), false)
-		}, null, false);
-		body.AddSymbol(thisSymbol);
+		}, null, false, 0u);
+		statement.scope.AddSymbol(thisSymbol);
 
-		var constructorSymbol = new ConstructorSymbol(CurrentType, thisSymbol, parameters, body);
+		var constructorSymbol = new ConstructorSymbol(CurrentType, thisSymbol, parameters, statement.scope);
 
 		statement.constructorSymbol = constructorSymbol;
 		scopeStack.Pop();
@@ -559,10 +560,9 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedDestructorDeclarationStatement statement)
 	{
 		var destructorDeclarationStatement = statement.destructorDeclarationStatement;
-		var body = new Scope(CurrentScope);
-		scopeStack.Push(body);
+		scopeStack.Push(statement.scope);
 
-		var destructorSymbol = new DestructorSymbol(body);
+		var destructorSymbol = new DestructorSymbol(statement.scope);
 
 		statement.destructorSymbol = destructorSymbol;
 		scopeStack.Pop();
@@ -581,7 +581,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedCastDeclarationStatement statement)
 	{
 		var castDeclarationStatement = statement.castDeclarationStatement;
-		var body = new Scope(CurrentScope);
 
 		var parameter = castDeclarationStatement.parameter;
 				
@@ -629,11 +628,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		if (returnType is null)
 			return;
 				
-		var parameterSymbol = new ParameterSymbol(varSymbol, null, false);
-		body.AddSymbol(parameterSymbol);
+		var parameterSymbol = new ParameterSymbol(varSymbol, null, false, 0u);
+		statement.scope.AddSymbol(parameterSymbol);
 
 		var castSymbol = new CastOverloadSymbol(castDeclarationStatement.isImplicit, parameterSymbol,
-			returnType, body);
+			returnType, statement.scope);
 
 		if (CurrentScope.LookupSymbol(castSymbol.Name) is not null)
 		{
@@ -650,7 +649,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedOperatorDeclarationStatement statement)
 	{
 		var operatorDeclarationStatement = statement.operatorDeclarationStatement;
-		var body = new Scope(CurrentScope);
 		switch (operatorDeclarationStatement.operation)
 		{
 			case BinaryOperationExpression binaryOperationExpression:
@@ -722,14 +720,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 
 				if (returnType is null)
 					return;
-						
-				var leftParameterSymbol = new ParameterSymbol(leftSymbol, null, false);
-				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null, false);
-				body.AddSymbol(leftParameterSymbol);
-				body.AddSymbol(rightParameterSymbol);
+				
+				var leftParameterSymbol = new ParameterSymbol(leftSymbol, null, false, 0u);
+				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null, false, 1u);
+				statement.scope.AddSymbol(leftParameterSymbol);
+				statement.scope.AddSymbol(rightParameterSymbol);
 
 				var operatorSymbol = new BinaryOperatorOverloadSymbol(leftParameterSymbol,
-					binaryOperationExpression.operation, rightParameterSymbol, returnType, body);
+					binaryOperationExpression.operation, rightParameterSymbol, returnType, statement.scope, false);
 
 				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
 				{
@@ -740,6 +738,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				}
 
 				CurrentScope.AddSymbol(operatorSymbol);
+				CurrentType.Operators.Add(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
 				break;
@@ -788,11 +787,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				if (returnType is null)
 					return;
 				
-				var parameterSymbol = new ParameterSymbol(varSymbol, null, false);
-				body.AddSymbol(parameterSymbol);
+				var parameterSymbol = new ParameterSymbol(varSymbol, null, false, 0u);
+				statement.scope.AddSymbol(parameterSymbol);
+				CurrentScope.AddSymbol(parameterSymbol);
 
 				var operatorSymbol = new UnaryOperatorOverloadSymbol(parameterSymbol,
-					unaryOperationExpression.operation, unaryOperationExpression.isPrefix, returnType, body);
+					unaryOperationExpression.operation, returnType, statement.scope, false);
 
 				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
 				{
@@ -803,6 +803,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				}
 
 				CurrentScope.AddSymbol(operatorSymbol);
+				CurrentType.Operators.Add(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
 				break;
@@ -822,6 +823,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	}
 
 	public void Visit(CollectedBlockStatement statement)
+	{
+		// Do nothing
+	}
+
+	public void Visit(CollectedVarDeclarationStatement statement)
 	{
 		// Do nothing
 	}

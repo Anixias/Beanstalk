@@ -1,21 +1,46 @@
-﻿module helloWorld
+﻿/*
+Todo:
+	- replace system that makes all function params into pointers with an allocation in the function body
+	- built-in casts
+	- built-in operations (in progress)
+	- string interpolation
+	- visibility/access modifiers
+	- return type inference
+	- error on cyclic references
+	- resolver should be able to determine constant expressions
+	- move size resolution into resolver
+		- utilize as many passes as needed until count of unresolved sizes reaches 0
+		- keep track of already visited types; skip them
+*/
+module helloWorld
 
-struct Vec2
+mutable struct Vec2
 {
-	x:float
-	y:float
+	var x:int
+	var y:int
 	
-	constructor(x:float, y:float)
+	constructor(x:int, y:int)
 	{
 		this.x = x
 		this.y = y
 	}
+	
+	operator(left:Vec2 + right:Vec2) :> Vec2 => Vec2.new(left.x + right.x, left.y + right.y)
+	//operator(left:Vec2 * right:int) :> Vec2 => Vec2.new(left.x * right, left.y * right)
+	//operator(left:int * right:Vec2) :> Vec2 => Vec2.new(left * right.x, left * right.y)
 }
 
 entry()
 {
-	print("Hello, World!")
-	Vec2.new(1.0f32, 2.0f32)
+	/*print("Hello, World!\n" + "test")
+	let vec = 5 * Vec2.new(1, 2) + Vec2.new(3, 5)*/
+	let vec = Vec2.new(3, 2)
+	print("(")
+	printInt(vec.x)
+	print(", ")
+	printInt(vec.y)
+	print(")\n")
+	
 	return 0
 }
 

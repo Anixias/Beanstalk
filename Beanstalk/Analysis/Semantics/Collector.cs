@@ -30,8 +30,12 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 {
 	public readonly bool is64Bit;
 	public readonly Scope globalScope = new();
+	
 	private readonly Stack<Scope> scopeStack = new();
 	private Scope CurrentScope => scopeStack.Peek();
+	private readonly Stack<TypeSymbol> typeStack = new();
+	private TypeSymbol CurrentType => typeStack.Peek();
+	
 	public readonly List<CollectionException> exceptions = [];
 	private string currentWorkingDirectory = "";
 	private string currentFilePath = "";
@@ -225,29 +229,54 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(EntryStatement entryStatement)
 	{
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+		
 		var statements = new List<CollectedStatementNode>();
 		foreach (var statement in entryStatement.body.statements)
 		{
 			statements.Add(statement.Accept(this));
 		}
+
+		scopeStack.Pop();
 		
-		return new CollectedEntryStatement(entryStatement, statements);
+		return new CollectedEntryStatement(entryStatement, scope, statements);
 	}
 
 	public CollectedStatementNode Visit(FunctionDeclarationStatement functionDeclarationStatement)
 	{
-		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement,
-			functionDeclarationStatement.body.Accept(this));
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = functionDeclarationStatement.body.Accept(this);
+
+		scopeStack.Pop();
+
+		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement, scope, body);
 	}
 
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)
 	{
-		return new CollectedConstructorDeclarationStatement(statement, statement.body.Accept(this));
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = statement.body.Accept(this);
+
+		scopeStack.Pop();
+		
+		return new CollectedConstructorDeclarationStatement(statement, scope, body);
 	}
 
 	public CollectedStatementNode Visit(DestructorDeclarationStatement statement)
 	{
-		return new CollectedDestructorDeclarationStatement(statement, statement.body.Accept(this));
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = statement.body.Accept(this);
+
+		scopeStack.Pop();
+		
+		return new CollectedDestructorDeclarationStatement(statement, scope, body);
 	}
 
 	public CollectedStatementNode Visit(ExpressionStatement statement)
@@ -257,13 +286,18 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(BlockStatement statement)
 	{
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+		
 		var statements = new List<CollectedStatementNode>();
 		foreach (var bodyStatement in statement.statements)
 		{
 			statements.Add(bodyStatement.Accept(this));
 		}
+
+		scopeStack.Pop();
 		
-		return new CollectedBlockStatement(statements);
+		return new CollectedBlockStatement(scope, statements);
 	}
 
 	public CollectedStatementNode Visit(IfStatement statement)
@@ -274,14 +308,24 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(MutableVarDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		var symbol = new VarSymbol(statement.identifier.Text, true);
+		
+		// Todo: Shadowing
+		CurrentScope.AddSymbol(symbol);
+
+		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
+			statement.initializer);
 	}
 
 	public CollectedStatementNode Visit(ImmutableVarDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		var symbol = new VarSymbol(statement.identifier.Text, false);
+		
+		// Todo: Shadowing
+		CurrentScope.AddSymbol(symbol);
+
+		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
+			statement.initializer);
 	}
 
 	public CollectedStatementNode Visit(ConstVarDeclarationStatement statement)
@@ -305,6 +349,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		CurrentScope.AddSymbol(structSymbol);
 		
 		scopeStack.Push(scope);
+		typeStack.Push(structSymbol);
 
 		var statements = new List<CollectedStatementNode>();
 		foreach (var topLevelStatement in structDeclarationStatement.statements)
@@ -312,6 +357,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			statements.Add(topLevelStatement.Accept(this));
 		}
 		
+		typeStack.Pop();
 		scopeStack.Pop();
 		return new CollectedStructDeclarationStatement(structSymbol, statements);
 	}
@@ -324,12 +370,26 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(CastDeclarationStatement statement)
 	{
-		return new CollectedCastDeclarationStatement(statement);
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = statement.body.Accept(this);
+
+		scopeStack.Pop();
+		
+		return new CollectedCastDeclarationStatement(statement, scope, body);
 	}
 
 	public CollectedStatementNode Visit(OperatorDeclarationStatement statement)
 	{
-		return new CollectedOperatorDeclarationStatement(statement);
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = statement.body.Accept(this);
+
+		scopeStack.Pop();
+		
+		return new CollectedOperatorDeclarationStatement(statement, scope, body);
 	}
 
 	public CollectedStatementNode Visit(FieldDeclarationStatement statement)
@@ -346,20 +406,30 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		switch (statement.mutability)
 		{
 			case FieldDeclarationStatement.Mutability.Mutable:
-				var mutableFieldSymbol = new FieldSymbol(name, true, statement.isStatic);
+				var mutableFieldSymbol = new FieldSymbol(name, true, statement.isStatic, CurrentType,
+					statement.isStatic ? 0u : CurrentType.NextFieldIndex());
+				
 				CurrentScope.AddSymbol(mutableFieldSymbol);
-				return new CollectedFieldDeclarationStatement(mutableFieldSymbol, syntaxType, statement.initializer);
+				return new CollectedFieldDeclarationStatement(mutableFieldSymbol, syntaxType, statement.initializer,
+					statement.range);
+			
 			case FieldDeclarationStatement.Mutability.Immutable:
-				var immutableFieldSymbol = new FieldSymbol(name, false, statement.isStatic);
+				var immutableFieldSymbol = new FieldSymbol(name, false, statement.isStatic, CurrentType,
+					statement.isStatic ? 0u : CurrentType.NextFieldIndex());
+				
 				CurrentScope.AddSymbol(immutableFieldSymbol);
-				return new CollectedFieldDeclarationStatement(immutableFieldSymbol, syntaxType, statement.initializer);
+				return new CollectedFieldDeclarationStatement(immutableFieldSymbol, syntaxType, statement.initializer,
+					statement.range);
+			
 			case FieldDeclarationStatement.Mutability.Constant:
 				if (statement.initializer is null)
 					throw NewCollectionException("Constant fields require an initializer", statement.identifier);
 				
 				var constantSymbol = new ConstSymbol(name, statement.isStatic);
 				CurrentScope.AddSymbol(constantSymbol);
-				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType, statement.initializer);
+				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType, statement.initializer,
+					statement.range);
+			
 			default:
 				throw NewCollectionException("Invalid field mutability; This should never happen! " +
 				                              "Please report this to the compiler developer");

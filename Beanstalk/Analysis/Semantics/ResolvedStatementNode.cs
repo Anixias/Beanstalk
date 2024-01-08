@@ -16,9 +16,11 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		T Visit(ResolvedFunctionDeclarationStatement statement);
 		T Visit(ResolvedConstructorDeclarationStatement statement);
 		T Visit(ResolvedDestructorDeclarationStatement statement);
+		T Visit(ResolvedOperatorDeclarationStatement statement);
 		T Visit(ResolvedExpressionStatement statement);
 		T Visit(ResolvedReturnStatement statement);
 		T Visit(ResolvedBlockStatement statement);
+		T Visit(ResolvedVarDeclarationStatement statement);
 		T Visit(ResolvedSimpleStatement statement);
 	}
 	
@@ -34,9 +36,11 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedFunctionDeclarationStatement statement);
 		void Visit(ResolvedConstructorDeclarationStatement statement);
 		void Visit(ResolvedDestructorDeclarationStatement statement);
+		void Visit(ResolvedOperatorDeclarationStatement statement);
 		void Visit(ResolvedExpressionStatement statement);
 		void Visit(ResolvedReturnStatement statement);
 		void Visit(ResolvedBlockStatement statement);
+		void Visit(ResolvedVarDeclarationStatement statement);
 		void Visit(ResolvedSimpleStatement statement);
 	}
 
@@ -198,7 +202,7 @@ public sealed class ResolvedExternalFunctionStatement : ResolvedStatementNode
 
 public sealed class ResolvedEntryStatement : ResolvedStatementNode
 {
-	public readonly EntrySymbol entrySymbol;
+	public readonly EntrySymbol? entrySymbol;
 	public readonly ImmutableArray<ResolvedStatementNode> statements;
 	
 	public ResolvedEntryStatement(EntrySymbol entrySymbol, IEnumerable<ResolvedStatementNode> statements)
@@ -267,6 +271,29 @@ public sealed class ResolvedDestructorDeclarationStatement : ResolvedStatementNo
 	}
 }
 
+public sealed class ResolvedOperatorDeclarationStatement : ResolvedStatementNode
+{
+	public readonly OperatorOverloadSymbol operatorOverloadSymbol;
+	public readonly ResolvedStatementNode body;
+
+	public ResolvedOperatorDeclarationStatement(OperatorOverloadSymbol operatorOverloadSymbol,
+		ResolvedStatementNode body)
+	{
+		this.operatorOverloadSymbol = operatorOverloadSymbol;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
 public sealed class ResolvedExpressionStatement : ResolvedStatementNode
 {
 	public readonly ResolvedExpressionNode value;
@@ -314,6 +341,28 @@ public sealed class ResolvedBlockStatement : ResolvedStatementNode
 	public ResolvedBlockStatement(IEnumerable<ResolvedStatementNode> statements)
 	{
 		this.statements = statements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedVarDeclarationStatement : ResolvedStatementNode
+{
+	public readonly VarSymbol varSymbol;
+	public readonly ResolvedExpressionNode? initializer;
+	
+	public ResolvedVarDeclarationStatement(VarSymbol varSymbol, ResolvedExpressionNode? initializer)
+	{
+		this.varSymbol = varSymbol;
+		this.initializer = initializer;
 	}
 
 	public override void Accept(IVisitor visitor)

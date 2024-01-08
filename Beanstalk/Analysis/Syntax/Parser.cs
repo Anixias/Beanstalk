@@ -756,6 +756,12 @@ public static class Parser
 		
 		if (TryParseDestructorDeclaration(tokens, ref position, out var destructorDeclaration))
 			return destructorDeclaration;
+		
+		if (TryParseCastDeclaration(tokens, ref position, out var castDeclaration))
+			return castDeclaration;
+		
+		if (TryParseOperatorDeclaration(tokens, ref position, out var operationDeclaration))
+			return operationDeclaration;
 
 		if (TryParseFieldDeclaration(tokens, ref position, out var fieldDeclaration))
 			return fieldDeclaration;
@@ -921,16 +927,6 @@ public static class Parser
 		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 		{
 			return functionDeclaration;
-		}
-		
-		if (TryParseCastDeclaration(tokens, ref position, out var castDeclaration))
-		{
-			return castDeclaration;
-		}
-		
-		if (TryParseOperatorDeclaration(tokens, ref position, out var operationDeclaration))
-		{
-			return operationDeclaration;
 		}
 		
 		if (TryParseStructDeclaration(tokens, ref position, diagnostics, out var structDeclaration))
@@ -1232,11 +1228,11 @@ public static class Parser
 	{
 		var expression = ParseEqualityExpression(tokens, ref position);
 
-		while (Match(tokens, ref position, TokenType.OpQuestionQuestion))
+		while (Match(tokens, ref position, out var op, TokenType.OpQuestionQuestion))
 		{
 			var right = ParseExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.NullCoalescence, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.NullCoalescence, op, right, range);
 		}
 
 		return expression;
@@ -1259,7 +1255,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 
 		return expression;
@@ -1269,11 +1265,11 @@ public static class Parser
 	{
 		var expression = ParseXorExpression(tokens, ref position);
 		
-		while (Match(tokens, ref position, TokenType.OpBar))
+		while (Match(tokens, ref position, out var op, TokenType.OpBar))
 		{
 			var right = ParseXorExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.Or, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.Or, op, right, range);
 		}
 
 		return expression;
@@ -1283,11 +1279,11 @@ public static class Parser
 	{
 		var expression = ParseAndExpression(tokens, ref position);
 		
-		while (Match(tokens, ref position, TokenType.OpHat))
+		while (Match(tokens, ref position, out var op, TokenType.OpHat))
 		{
 			var right = ParseAndExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.Xor, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.Xor, op, right, range);
 		}
 
 		return expression;
@@ -1297,11 +1293,11 @@ public static class Parser
 	{
 		var expression = ParseRelationalExpression(tokens, ref position);
 		
-		while (Match(tokens, ref position, TokenType.OpAmp))
+		while (Match(tokens, ref position, out var op, TokenType.OpAmp))
 		{
 			var right = ParseRelationalExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.And, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.And, op, right, range);
 		}
 
 		return expression;
@@ -1329,7 +1325,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 		else if (Match(tokens, ref position, out var castOp, TokenType.KeywordIs, TokenType.KeywordAs)) 
 		{
@@ -1344,7 +1340,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", castOp);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, castOp, right, range);
 		}
 
 		return expression;
@@ -1372,7 +1368,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 
 		return expression;
@@ -1395,7 +1391,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 
 		return expression;
@@ -1423,7 +1419,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 
 		return expression;
@@ -1433,11 +1429,11 @@ public static class Parser
 	{
 		var expression = ParseSwitchWithExpression(tokens, ref position);
 
-		if (Match(tokens, ref position, TokenType.OpStarStar)) 
+		if (Match(tokens, ref position, out var op, TokenType.OpStarStar)) 
 		{
 			var right = ParseExponentiationExpression(tokens, ref position);
 			var range = expression.range.Join(right.range);
-			expression = new BinaryExpression(expression, BinaryExpression.Operation.Power, right, range);
+			expression = new BinaryExpression(expression, BinaryExpression.Operation.Power, op, right, range);
 		}
 
 		return expression;
@@ -1491,7 +1487,7 @@ public static class Parser
 			else
 				throw new ParseException("Unexpected operation", op);
 			
-			expression = new BinaryExpression(expression, operation, right, range);
+			expression = new BinaryExpression(expression, operation, op, right, range);
 		}
 
 		return expression;
@@ -1620,7 +1616,7 @@ public static class Parser
 			}
 		}
 			
-		return new UnaryExpression(right, operation, true, range);
+		return new UnaryExpression(right, operation, op, true, range);
 	}
 
 	private static bool TryParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position,
@@ -1716,6 +1712,7 @@ public static class Parser
 		var start = position;
 		var expression = ParsePrimaryExpression(tokens, ref position);
 
+		var functionCallAllowed = true;
 		while (true)
 		{
 			var peek = Peek(tokens, position);
@@ -1730,7 +1727,12 @@ public static class Parser
 			// Function call
 			if (peek == TokenType.OpLeftParen)
 			{
+				if (!functionCallAllowed)
+					break;
+				
+				// Todo - handle function call chaining? not currently possible because of lack of semicolons
 				expression = ParseFunctionCallExpression(tokens, ref position, expression);
+				functionCallAllowed = false;
 				continue;
 			}
 			
@@ -1738,6 +1740,7 @@ public static class Parser
 			if (peek == TokenType.OpQuestionDot || peek == TokenType.OpDot)
 			{
 				expression = ParseAccessExpression(tokens, ref position, expression);
+				functionCallAllowed = true;
 				continue;
 			}
 			
@@ -1758,6 +1761,7 @@ public static class Parser
 					else throw;
 				}
 
+				functionCallAllowed = true;
 				continue;
 			}
 			
@@ -1765,14 +1769,17 @@ public static class Parser
 			if (peek == TokenType.OpLeftBrace)
 			{
 				expression = ParseInstantiationExpression(tokens, ref position, expression);
+				functionCallAllowed = true;
 				continue;
 			}
 			
 			// ++, --
 			if (GetPostfixUnaryOperation(peek) is { } operation)
 			{
+				var op = TokenAt(tokens, position)!;
 				var endToken = tokens[position++];
-				expression = new UnaryExpression(expression, operation, false, expression.range.Join(endToken.Range));
+				expression = new UnaryExpression(expression, operation, op, false,
+					expression.range.Join(endToken.Range));
 				continue;
 			}
 
@@ -2004,7 +2011,9 @@ public static class Parser
 		var expressions = new List<ExpressionNode>();
 		do
 		{
-			expressions.Add(ParseExpression(tokens, ref position));
+			var expression = ParseExpression(tokens, ref position);
+			expression.range = startToken.Range.Join(expression.range);
+			expressions.Add(expression);
 		} while (Match(tokens, ref position, TokenType.OpComma));
 		
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
@@ -2187,6 +2196,8 @@ public static class Parser
 				syntaxType = new NullableSyntaxType(syntaxType, syntaxType.range.Join(question.Range));
 				continue;
 			}
+			
+			// Todo: Possibly support nested types
 			
 			break;
 		}

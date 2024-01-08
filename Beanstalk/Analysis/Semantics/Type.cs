@@ -1,10 +1,75 @@
 ﻿using System.Collections.Immutable;
+using Beanstalk.Analysis.Syntax;
 
 namespace Beanstalk.Analysis.Semantics;
 
 public abstract class Type
 {
 	public abstract bool Equals(Type? type);
+
+	public static bool Matches(Type? left, Type? right)
+	{
+		if (left is null)
+			return right is null || right.Equals(left);
+		
+		return left.Equals(right);
+	}
+
+	public static Result<BinaryOperatorOverloadSymbol, string> FindOperator(Type? left, Type? right,
+		BinaryExpression.Operation operation)
+	{
+		if (left is null && right is null)
+			return Result<BinaryOperatorOverloadSymbol, string>.FromError("Operator not found");
+
+		var leftResult = left switch
+		{
+			BaseType type => type.typeSymbol.FindOperator(left, right, operation),
+			
+			ArrayType type =>
+				// Todo: Handle concrete implementations
+				TypeSymbol.Array.FindOperator(left, right, operation),
+			
+			NullableType type =>
+				// Todo: This is incorrect
+				FindOperator(type.baseType, right, operation).result,
+			
+			_ => FindOperator(right, left, operation).result
+		};
+
+		BinaryOperatorOverloadSymbol? rightResult = null;
+
+		if (!Matches(left, right))
+		{
+			rightResult = right switch
+			{
+				BaseType type => type.typeSymbol.FindOperator(left, right, operation),
+
+				ArrayType type =>
+					// Todo: Handle concrete implementations
+					TypeSymbol.Array.FindOperator(left, right, operation),
+
+				NullableType type =>
+					// Todo: This is incorrect
+					FindOperator(type.baseType, right, operation).result,
+
+				_ => FindOperator(right, left, operation).result
+			};
+		}
+
+		// Todo: Report more information about the ambiguity: The type that defines each, source file for each, etc.
+		if (leftResult is not null)
+		{
+			if (rightResult is not null)
+				return Result<BinaryOperatorOverloadSymbol, string>.FromError("Ambiguous invocation");
+			
+			return Result<BinaryOperatorOverloadSymbol, string>.FromSuccess(leftResult);
+		}
+
+		if (rightResult is not null)
+			return Result<BinaryOperatorOverloadSymbol, string>.FromSuccess(rightResult);
+		
+		return Result<BinaryOperatorOverloadSymbol, string>.FromError("Operator not found");
+	}
 }
 
 public abstract class WrapperType : Type
@@ -140,9 +205,12 @@ public sealed class NullableType : WrapperType
 
 	public override bool Equals(Type? type)
 	{
-		if (type is not NullableType nullableType)
-			return false;
+		if (type is null)
+			return true;
 
+		if (type is not NullableType nullableType)
+			return baseType.Equals(type);
+		
 		if (!baseType.Equals(nullableType.baseType))
 			return false;
 

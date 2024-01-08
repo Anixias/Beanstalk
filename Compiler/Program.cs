@@ -252,7 +252,11 @@ internal static class Program
 			return;
 		}
 
-		var codeGenerator = new CodeGenerator();
+		var codeGenerator = new CodeGenerator
+		{
+			Debug = true
+		};
+		
 		outputPath = codeGenerator.Generate(resolvedAsts, programArgs.Value.Target, optimizationLevel, outputPath);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;

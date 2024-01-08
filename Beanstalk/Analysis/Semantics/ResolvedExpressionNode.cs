@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Semantics;
@@ -21,10 +22,12 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 		T Visit(ResolvedExternalFunctionCallExpression expression);
 		T Visit(ResolvedThisExpression expression);
 		T Visit(ResolvedVarExpression expression);
+		T Visit(ResolvedParameterExpression expression);
 		T Visit(ResolvedFieldExpression expression);
 		T Visit(ResolvedConstExpression expression);
 		T Visit(ResolvedTypeExpression expression);
 		T Visit(ResolvedLiteralExpression expression);
+		T Visit(ResolvedBinaryExpression expression);
 		T Visit(ResolvedSymbolExpression expression);
 		T Visit(ResolvedTypeAccessExpression expression);
 		T Visit(ResolvedValueAccessExpression expression);
@@ -41,10 +44,12 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 		void Visit(ResolvedExternalFunctionCallExpression expression);
 		void Visit(ResolvedThisExpression expression);
 		void Visit(ResolvedVarExpression expression);
+		void Visit(ResolvedParameterExpression expression);
 		void Visit(ResolvedFieldExpression expression);
 		void Visit(ResolvedConstExpression expression);
 		void Visit(ResolvedTypeExpression expression);
 		void Visit(ResolvedLiteralExpression expression);
+		void Visit(ResolvedBinaryExpression expression);
 		void Visit(ResolvedSymbolExpression expression);
 		void Visit(ResolvedTypeAccessExpression expression);
 		void Visit(ResolvedValueAccessExpression expression);
@@ -205,6 +210,26 @@ public sealed class ResolvedVarExpression : ResolvedExpressionNode
 	}
 }
 
+public sealed class ResolvedParameterExpression : ResolvedExpressionNode
+{
+	public readonly ParameterSymbol parameterSymbol;
+	
+	public ResolvedParameterExpression(ParameterSymbol parameterSymbol) : base(parameterSymbol.EvaluatedType)
+	{
+		this.parameterSymbol = parameterSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
 public sealed class ResolvedThisExpression : ResolvedExpressionNode
 {
 	public ResolvedThisExpression(Type type) : base(type)
@@ -302,6 +327,34 @@ public sealed class ResolvedLiteralExpression : ResolvedExpressionNode
 	}
 }
 
+public sealed class ResolvedBinaryExpression : ResolvedExpressionNode
+{
+	public readonly ResolvedExpressionNode left;
+	public readonly ResolvedExpressionNode right;
+	public readonly BinaryExpression.Operation operation;
+	public readonly OperatorOverloadSymbol operatorSymbol;
+
+	public ResolvedBinaryExpression(ResolvedExpressionNode left, ResolvedExpressionNode right,
+		OperatorOverloadSymbol operatorSymbol, BinaryExpression.Operation operation) : base(
+		operatorSymbol.ReturnType)
+	{
+		this.left = left;
+		this.right = right;
+		this.operatorSymbol = operatorSymbol;
+		this.operation = operation;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
 public sealed class ResolvedSymbolExpression : ResolvedExpressionNode
 {
 	public readonly ISymbol symbol;
@@ -351,10 +404,10 @@ public sealed class ResolvedTypeAccessExpression : ResolvedExpressionNode
 
 public sealed class ResolvedValueAccessExpression : ResolvedExpressionNode
 {
-	public readonly ISymbol source;
+	public readonly ResolvedExpressionNode source;
 	public readonly ISymbol target;
 	
-	public ResolvedValueAccessExpression(ISymbol source, ISymbol target) : base(target.EvaluatedType)
+	public ResolvedValueAccessExpression(ResolvedExpressionNode source, ISymbol target) : base(target.EvaluatedType)
 	{
 		this.source = source;
 		this.target = target;
@@ -373,14 +426,12 @@ public sealed class ResolvedValueAccessExpression : ResolvedExpressionNode
 
 public sealed class ResolvedAssignmentExpression : ResolvedExpressionNode
 {
-	public readonly ISymbol left;
+	public readonly ResolvedExpressionNode left;
 	public readonly ResolvedExpressionNode right;
-	
-	public ResolvedAssignmentExpression(ISymbol left, ResolvedExpressionNode right) : base(left.EvaluatedType)
+
+	public ResolvedAssignmentExpression(ResolvedExpressionNode left, ResolvedExpressionNode right) : base(
+		left.Type)
 	{
-		if (left is TypeSymbol)
-			throw new ArgumentException("Left side of assignment must be an lvalue", nameof(left));
-		
 		this.left = left;
 		this.right = right;
 	}

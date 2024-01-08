@@ -1,15 +1,17 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Beanstalk.Analysis.Semantics;
+using Beanstalk.Analysis.Syntax;
 using LLVMSharp.Interop;
 using ReferenceType = Beanstalk.Analysis.Semantics.ReferenceType;
 using Type = Beanstalk.Analysis.Semantics.Type;
 
 namespace Beanstalk.CodeGen;
 
-public readonly struct LLVMBool
+internal readonly struct LLVMBool
 {
 	private readonly int value;
 
@@ -27,14 +29,14 @@ public readonly struct LLVMBool
 	}
 }
 
-public readonly unsafe struct Value
+public readonly unsafe struct OpaqueValue
 {
 	public readonly LLVMOpaqueValue* value;
 
-	public static readonly LLVMOpaqueValue* NullPtr = (LLVMOpaqueValue*)IntPtr.Zero;
-	public static readonly Value Null = new(NullPtr);
+	public static readonly LLVMOpaqueValue* NullPtr = (LLVMOpaqueValue*)nint.Zero;
+	public static readonly OpaqueValue Null = new(NullPtr);
 
-	public Value(LLVMOpaqueValue* value)
+	public OpaqueValue(LLVMOpaqueValue* value)
 	{
 		this.value = value;
 	}
@@ -43,33 +45,74 @@ public readonly unsafe struct Value
 public readonly unsafe struct OpaqueType
 {
 	public readonly LLVMOpaqueType* value;
+	public readonly List<FieldSymbol> fields = [];
+	public readonly LLVMOpaqueValue* needsStaticInitialization;
+	public readonly uint size;
 
-	public static readonly LLVMOpaqueType* NullPtr = (LLVMOpaqueType*)IntPtr.Zero;
-	public static readonly OpaqueType Null = new(NullPtr);
+	public static readonly LLVMOpaqueType* NullPtr = (LLVMOpaqueType*)nint.Zero;
+	public static readonly OpaqueType Null = new(NullPtr, 0u);
 
-	public OpaqueType(LLVMOpaqueType* value)
+	public OpaqueType(LLVMOpaqueType* value, uint size)
 	{
 		this.value = value;
+		this.size = size;
+		needsStaticInitialization = OpaqueValue.NullPtr;
+	}
+
+	public OpaqueType(LLVMOpaqueType* value, LLVMOpaqueValue* needsStaticInitialization, uint size)
+	{
+		this.value = value;
+		this.needsStaticInitialization = needsStaticInitialization;
+		this.size = size;
 	}
 }
 
-public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpressionNode.IVisitor<Value>
+public unsafe class FunctionContext
+{
+	public readonly IFunctionSymbol functionSymbol;
+	public readonly LLVMOpaqueType* functionType;
+	public readonly LLVMOpaqueValue* functionValue;
+	public readonly Dictionary<ParameterSymbol, OpaqueValue> parameterPointers = new();
+	public readonly bool hasThisRef;
+
+	public FunctionContext(IFunctionSymbol functionSymbol, LLVMOpaqueType* functionType, LLVMOpaqueValue* functionValue,
+		bool hasThisRef)
+	{
+		this.functionSymbol = functionSymbol;
+		this.functionType = functionType;
+		this.functionValue = functionValue;
+		this.hasThisRef = hasThisRef;
+	}
+}
+
+public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpressionNode.IVisitor<OpaqueValue>
 {
 	private enum CodeGenerationPass
 	{
 		TopLevelDeclarations,
 		MemberDeclarations,
+		MethodDeclarations,
 		Definitions,
 		Complete
 	}
 	
+	public bool Debug { get; set; }
+	
 	private LLVMOpaqueModule* currentModule;
 	private LLVMOpaqueContext* currentContext;
 	private LLVMOpaqueBuilder* currentBuilder;
+	private Target? currentTarget;
 	private CodeGenerationPass currentPass;
-	private ISymbol? currentFunction;
-	private readonly Dictionary<ISymbol, Value> valueSymbols = new(); 
-	private readonly Dictionary<ISymbol, OpaqueType> typeSymbols = new(); 
+	private readonly Dictionary<string, OpaqueValue> constantLiterals = new();
+	private readonly Dictionary<ISymbol, OpaqueValue> valueSymbols = new(); 
+	private readonly Dictionary<ISymbol, OpaqueType> typeSymbols = new();
+	private readonly Dictionary<IFunctionSymbol, FunctionContext> functionContexts = new();
+	private readonly Stack<FunctionContext> functionStack = new();
+	private FunctionContext CurrentFunctionContext => functionStack.Peek();
+	private readonly Stack<bool> lvalueStack = new();
+	private bool CurrentIsLValue => lvalueStack.TryPeek(out var isLValue) && isLValue;
+
+	private static readonly sbyte* EmptyString = ConvertString("");
 
 	private static string ExtractResource(string resource)
 	{
@@ -89,7 +132,14 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 	
 	public string Generate(IEnumerable<ResolvedAst> asts, Target? target, int optimizationLevel, string outputPath)
 	{
-		LLVM.InitializeAllTargets();
+		//LLVM.InitializeAllTargets();
+		currentTarget = target;
+		var passManager = LLVM.CreatePassManager();
+		
+		// Todo: Handle optimization levels correctly
+		//LLVM.AddInstructionCombiningPass(passManager);
+		//LLVM.AddInstructionSimplifyPass(passManager);
+		//LLVM.AddMemCpyOptPass(passManager);
 		
 		var objDirectory = Path.GetDirectoryName(outputPath) + "/obj/";
 		Directory.CreateDirectory(objDirectory);
@@ -110,8 +160,11 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			currentContext = LLVM.GetModuleContext(currentModule);
 			currentBuilder = LLVM.CreateBuilderInContext(currentContext);
 			currentPass = CodeGenerationPass.TopLevelDeclarations;
+			constantLiterals.Clear();
 			valueSymbols.Clear();
 			typeSymbols.Clear();
+			functionContexts.Clear();
+			functionStack.Clear();
 			
 			if (target is not null)
 				LLVM.SetTarget(currentModule, target.triple.CString());
@@ -128,12 +181,20 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 				currentPass++;
 			}
 
-			LLVM.DumpModule(currentModule);
+			// Todo: Handle errors?
+			LLVM.RunPassManager(passManager, currentModule);
+
+			if (Debug)
+				LLVM.DumpModule(currentModule);
 
 			var outputBitCodePath = Path.Combine(objDirectory, Path.ChangeExtension(relativePath, ".bc"));
-			LLVM.WriteBitcodeToFile(currentModule, ConvertString(outputBitCodePath));
+			if (LLVM.WriteBitcodeToFile(currentModule, ConvertString(outputBitCodePath)) != 0)
+				throw new InvalidOperationException($"Failed to emit IR for source file: {relativePath}");
+			
 			sourceFiles.Add(outputBitCodePath);
 		}
+
+		currentTarget = null;
 		
 		var clang = ExtractResource("clang.exe");
 		var llvmAr = ExtractResource("llvm-ar.exe");
@@ -337,6 +398,35 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		}
 	}
 
+	private uint GetSize(Type type)
+	{
+		var ptrSize = currentTarget?.PointerSize() ?? (uint)sizeof(nint);
+		switch (type)
+		{
+			default:
+				throw new NotImplementedException();
+			
+			case NullableType nullableType:
+			{
+				return ptrSize;
+			}
+			
+			case ReferenceType referenceType:
+			{
+				return ptrSize;
+			}
+			
+			case BaseType baseType:
+			{
+				return baseType.typeSymbol switch
+				{
+					NativeSymbol nativeSymbol => GetNativeSize(nativeSymbol),
+					_ => typeSymbols[baseType.typeSymbol].size
+				};
+			}
+		}
+	}
+
 	private LLVMOpaqueType* GetNativeType(NativeSymbol nativeSymbol)
 	{
 		if (nativeSymbol == TypeSymbol.Int8)
@@ -387,11 +477,67 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		if (nativeSymbol == TypeSymbol.Char)
 			return LLVM.Int8TypeInContext(currentContext);
 		
-		// Todo: This is not correct
 		if (nativeSymbol == TypeSymbol.String)
 			return LLVM.PointerType(LLVM.Int8TypeInContext(currentContext), 0u);
 
 		return LLVM.VoidTypeInContext(currentContext);
+	}
+
+	private uint GetNativeSize(NativeSymbol nativeSymbol)
+	{
+		if (nativeSymbol == TypeSymbol.Int8)
+			return 1u;
+
+		if (nativeSymbol == TypeSymbol.Int16)
+			return 2u;
+		
+		if (nativeSymbol == TypeSymbol.Int32)
+			return 4u;
+		
+		if (nativeSymbol == TypeSymbol.Int64)
+			return 8u;
+		
+		if (nativeSymbol == TypeSymbol.Int128)
+			return 16u;
+		
+		// LLVM Does not distinguish between signed and unsigned types except for via instructions generated
+		if (nativeSymbol == TypeSymbol.UInt8)
+			return 1u;
+		
+		if (nativeSymbol == TypeSymbol.UInt16)
+			return 2u;
+		
+		if (nativeSymbol == TypeSymbol.UInt32)
+			return 4u;
+		
+		if (nativeSymbol == TypeSymbol.UInt64)
+			return 8u;
+		
+		if (nativeSymbol == TypeSymbol.UInt128)
+			return 16u;
+		
+		if (nativeSymbol == TypeSymbol.Float32)
+			return 4u;
+		
+		if (nativeSymbol == TypeSymbol.Float64)
+			return 8u;
+		
+		if (nativeSymbol == TypeSymbol.Float128)
+			return 16u;
+		
+		// Todo: Handle fixed point types
+		
+		if (nativeSymbol == TypeSymbol.Bool)
+			return 1u;
+		
+		if (nativeSymbol == TypeSymbol.Char)
+			return 1u;
+		
+		// Todo: Verify this works as expected
+		if (nativeSymbol == TypeSymbol.String)
+			return 1u;
+
+		throw new InvalidOperationException("Failed to get alignment: Unsupported native type");
 	}
 
 	public void Visit(ResolvedProgramStatement programStatement)
@@ -412,17 +558,31 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 
 	public void Visit(ResolvedStructDeclarationStatement structDeclarationStatement)
 	{
-		LLVMOpaqueType* structType;
 		var structSymbol = structDeclarationStatement.structSymbol;
 
 		switch (currentPass)
 		{
 			case CodeGenerationPass.TopLevelDeclarations:
 			{
-				structType = LLVM.StructCreateNamed(currentContext,
+				var structType = LLVM.StructCreateNamed(currentContext,
 					ConvertString(structSymbol.Name));
 
-				typeSymbols.Add(structSymbol, new OpaqueType(structType));
+				OpaqueType opaqueType;
+				if (structSymbol.HasStaticFields)
+				{
+					var boolType = LLVM.Int1TypeInContext(currentContext);
+					var staticInitialized = LLVM.AddGlobal(currentModule, boolType,
+						ConvertString($"{structSymbol.Name}.staticInitialized"));
+
+					LLVM.SetInitializer(staticInitialized, LLVM.ConstInt(boolType, 0u, LLVMBool.False));
+					opaqueType = new OpaqueType(structType, staticInitialized, 0u);
+				}
+				else
+				{
+					opaqueType = new OpaqueType(structType, 0u);
+				}
+				
+				typeSymbols.Add(structSymbol, opaqueType);
 				break;
 			}
 
@@ -432,43 +592,24 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 					throw new Exception($"Struct '{structSymbol.Name}' " +
 					                    $"not forward declared");
 
-				structType = typeSymbols[structSymbol].value;
+				var structOpaqueType = typeSymbols[structSymbol];
+				var structType = structOpaqueType.value;
 
+				var totalBytes = 0u;
 				var elementTypeList = new List<Type>();
 				foreach (var statement in structDeclarationStatement.statements)
 				{
 					switch (statement)
 					{
 						case ResolvedFieldDeclarationStatement fieldDeclarationStatement:
+						{
+							if (fieldDeclarationStatement.fieldSymbol.IsStatic)
+								break;
+
 							elementTypeList.Add(fieldDeclarationStatement.fieldSymbol.EvaluatedType!);
+							structOpaqueType.fields.Add(fieldDeclarationStatement.fieldSymbol);
 							break;
-						
-						case ResolvedConstructorDeclarationStatement constructorDeclarationStatement:
-							var constructorSymbol = constructorDeclarationStatement.constructorSymbol;
-							var parameterList = new List<OpaqueType>
-							{
-								new(GetType(constructorSymbol.This.EvaluatedType))
-							};
-
-							foreach (var parameter in constructorSymbol.Parameters)
-							{
-								parameterList.Add(new OpaqueType(GetType(parameter.EvaluatedType)));
-							}
-
-							var parameterTypes = new LLVMOpaqueType*[parameterList.Count];
-							for (var i = 0; i < parameterTypes.Length; i++)
-							{
-								parameterTypes[i] = parameterList[i].value;
-							}
-
-							var constructorType = LLVM.FunctionType(structType, ConvertArrayToPointer(parameterTypes),
-								(uint)parameterTypes.LongLength, LLVMBool.False);
-
-							var constructor = LLVM.AddFunction(currentModule,
-								ConvertString($"{structSymbol.Name}.new"), constructorType);
-
-							valueSymbols.Add(constructorSymbol, new Value(constructor));
-							break;
+						}
 					}
 				}
 
@@ -476,12 +617,198 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 				for (var i = 0; i < elementTypes.Length; i++)
 				{
 					elementTypes[i] = GetType(elementTypeList[i]);
+					totalBytes += GetSize(elementTypeList[i]);
+				}
+
+				if (totalBytes == 0u)
+				{
+					// Todo: Handle empty structs
 				}
 
 				LLVM.StructSetBody(structType, ConvertArrayToPointer(elementTypes), (uint)elementTypes.LongLength,
 					LLVMBool.False);
 
-				structType = typeSymbols[structSymbol].value;
+				typeSymbols[structSymbol] = new OpaqueType(structOpaqueType.value,
+					structOpaqueType.needsStaticInitialization, totalBytes);
+
+				break;
+			}
+
+			case CodeGenerationPass.MethodDeclarations:
+			{
+				if (!typeSymbols.ContainsKey(structSymbol))
+					throw new Exception($"Struct '{structSymbol.Name}' " +
+					                    $"not forward declared");
+
+				var structOpaqueType = typeSymbols[structSymbol];
+				foreach (var statement in structDeclarationStatement.statements)
+				{
+					switch (statement)
+					{
+
+						case ResolvedConstructorDeclarationStatement constructorDeclarationStatement:
+						{
+							var constructorSymbol = constructorDeclarationStatement.constructorSymbol;
+							
+							var parameterNameList = new List<string>
+							{
+								new(constructorSymbol.This.Name)
+							};
+							
+							var parameterTypeList = new List<OpaqueType>
+							{
+								new(GetType(constructorSymbol.This.EvaluatedType),
+									GetSize(constructorSymbol.This.EvaluatedType!))
+							};
+
+							foreach (var parameter in constructorSymbol.Parameters)
+							{
+								var paramType = GetType(parameter.EvaluatedType);
+								var paramSize = GetSize(parameter.EvaluatedType!);
+								parameterNameList.Add(parameter.Name);
+								parameterTypeList.Add(new OpaqueType(paramType, paramSize));
+							}
+
+							var parameterTypes = new LLVMOpaqueType*[parameterTypeList.Count];
+							for (var i = 0; i < parameterTypes.Length; i++)
+							{
+								parameterTypes[i] = parameterTypeList[i].value;
+							}
+
+							var constructorType = LLVM.FunctionType(LLVM.VoidTypeInContext(currentContext),
+								ConvertArrayToPointer(parameterTypes), (uint)parameterTypes.LongLength, LLVMBool.False);
+
+							var constructor = LLVM.AddFunction(currentModule,
+								ConvertString($"{structSymbol.Name}.new"), constructorType);
+
+							if (Debug)
+							{
+								for (var i = 0; i < parameterTypes.Length; i++)
+								{
+									var param = LLVM.GetParam(constructor, (uint)i);
+									var name = parameterNameList[i];
+									var nameLength = (nuint)name.Length;
+									LLVM.SetValueName2(param, ConvertString(name), nameLength);
+								}
+							}
+
+							valueSymbols.Add(constructorSymbol, new OpaqueValue(constructor));
+							var context = new FunctionContext(constructorSymbol, constructorType, constructor, true);
+							functionContexts.Add(constructorSymbol, context);
+							break;
+						}
+						
+						case ResolvedOperatorDeclarationStatement operatorDeclarationStatement:
+						{
+							if (operatorDeclarationStatement.operatorOverloadSymbol.IsNative)
+								break;
+							
+							switch (operatorDeclarationStatement.operatorOverloadSymbol)
+							{
+								case BinaryOperatorOverloadSymbol operatorOverloadSymbol:
+								{
+									var parameterNameList = new string[]
+									{
+										new(operatorOverloadSymbol.Left.Name),
+										new(operatorOverloadSymbol.Right.Name)
+									};
+									
+									var parameterTypeList = new OpaqueType[]
+									{
+										new(GetType(operatorOverloadSymbol.Left.EvaluatedType), 
+											GetSize(operatorOverloadSymbol.Left.EvaluatedType!)),
+										
+										new(GetType(operatorOverloadSymbol.Right.EvaluatedType), 
+											GetSize(operatorOverloadSymbol.Right.EvaluatedType!))
+									};
+
+									var parameterTypes = new LLVMOpaqueType*[parameterTypeList.Length];
+									for (var i = 0; i < parameterTypes.Length; i++)
+									{
+										parameterTypes[i] = parameterTypeList[i].value;
+									}
+
+									var returnType = GetType(operatorOverloadSymbol.ReturnType);
+									var functionType = LLVM.FunctionType(returnType,
+										ConvertArrayToPointer(parameterTypes), (uint)parameterTypes.LongLength,
+										LLVMBool.False);
+
+									var function = LLVM.AddFunction(currentModule,
+										ConvertString(operatorOverloadSymbol.Name[1..]), functionType);
+
+									if (Debug)
+									{
+										for (var i = 0u; i < parameterTypes.Length; i++)
+										{
+											var param = LLVM.GetParam(function, i);
+											var name = parameterNameList[i];
+											var nameLength = (nuint)name.Length;
+											LLVM.SetValueName2(param, ConvertString(name), nameLength);
+										}
+									}
+
+									valueSymbols.Add(operatorOverloadSymbol, new OpaqueValue(function));
+									var context = new FunctionContext(operatorOverloadSymbol, functionType, function,
+										false);
+									
+									functionContexts.Add(operatorOverloadSymbol, context);
+									break;
+								}
+								
+								case UnaryOperatorOverloadSymbol operatorOverloadSymbol:
+								{
+									var parameterNameList = new string[]
+									{
+										new(operatorOverloadSymbol.Operand.Name)
+									};
+									
+									var parameterTypeList = new OpaqueType[]
+									{
+										new(GetType(operatorOverloadSymbol.Operand.EvaluatedType),
+											GetSize(operatorOverloadSymbol.Operand.EvaluatedType))
+									};
+
+									var parameterTypes = new LLVMOpaqueType*[parameterTypeList.Length];
+									for (var i = 0; i < parameterTypes.Length; i++)
+									{
+										parameterTypes[i] = parameterTypeList[i].value;
+									}
+
+									var returnType = GetType(operatorOverloadSymbol.ReturnType);
+									var functionType = LLVM.FunctionType(returnType,
+										ConvertArrayToPointer(parameterTypes), (uint)parameterTypes.LongLength,
+										LLVMBool.False);
+
+									var function = LLVM.AddFunction(currentModule,
+										ConvertString(operatorOverloadSymbol.Name[1..]), functionType);
+
+									if (Debug)
+									{
+										for (var i = 0u; i < parameterTypes.Length; i++)
+										{
+											var param = LLVM.GetParam(function, i);
+											var name = parameterNameList[i];
+											var nameLength = (nuint)name.Length;
+											LLVM.SetValueName2(param, ConvertString(name), nameLength);
+										}
+									}
+
+									valueSymbols.Add(operatorOverloadSymbol, new OpaqueValue(function));
+									var context = new FunctionContext(operatorOverloadSymbol, functionType, function,
+										false);
+									functionContexts.Add(operatorOverloadSymbol, context);
+									break;
+								}
+							}
+
+							break;
+						}
+					}
+				}
+
+				typeSymbols[structSymbol] = new OpaqueType(structOpaqueType.value,
+					structOpaqueType.needsStaticInitialization, structOpaqueType.size);
+
 				break;
 			}
 
@@ -513,19 +840,23 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			return;
 		
 		// Creation
-		var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"),
-			LLVM.FunctionType(LLVM.Int32Type(), (LLVMOpaqueType**)IntPtr.Zero, 0u, LLVMBool.False));
+		var entryType = LLVM.FunctionType(LLVM.Int32Type(), (LLVMOpaqueType**)nint.Zero, 0u, LLVMBool.False);
+		var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"), entryType);
 		
 		// Positioning
-		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, ConvertString("entry"));
+		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, EmptyString);
 		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
 		
 		// Instructions
+		var context = new FunctionContext(entryStatement.entrySymbol!, entryType, entryPoint, false);
+		functionContexts.Add(entryStatement.entrySymbol!, context);
+		functionStack.Push(context);
 		foreach (var statement in entryStatement.statements)
 		{
 			statement.Accept(this);
-			LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+			//LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
 		}
+		functionStack.Pop();
 		
 		// Verification
 		if (LLVM.VerifyFunction(entryPoint, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
@@ -560,7 +891,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		var externalFunction = LLVM.AddFunction(currentModule, ConvertString(name),
 			functionType);
 		
-		valueSymbols.Add(statement.externalFunctionSymbol, new Value(externalFunction));
+		valueSymbols.Add(statement.externalFunctionSymbol, new OpaqueValue(externalFunction));
 	
 		// Verification
 		if (LLVM.VerifyFunction(externalFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
@@ -569,6 +900,7 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 
 	public void Visit(ResolvedFunctionDeclarationStatement statement)
 	{
+		// Todo
 		throw new NotImplementedException();
 	}
 
@@ -580,18 +912,64 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		var constructorSymbol = statement.constructorSymbol;
 
 		if (!valueSymbols.ContainsKey(constructorSymbol))
-			throw new Exception($"Constructor for type '{constructorSymbol.Owner.Name}' not forward declared");
+			throw new InvalidOperationException($"Constructor for type '{constructorSymbol.Owner.Name}' " +
+			                                    "not forward declared");
 		
 		var constructor = valueSymbols[constructorSymbol].value;
 		
-		// Todo: Function not found
-		if (constructor == Value.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
-			return;
+		if (constructor == OpaqueValue.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
+			throw new InvalidOperationException(
+				$"Unable to resolve constructor for type '{constructorSymbol.Owner.Name}'");
 		
 		// Body
-		currentFunction = constructorSymbol;
+		if (!functionContexts.TryGetValue(constructorSymbol, out var context))
+			throw new InvalidOperationException("Constructor missing function context");
+		
+		// Positioning
+		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, constructor, EmptyString);
+		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		
+		// Instructions
+		if (!typeSymbols.TryGetValue(constructorSymbol.Owner, out var ownerType))
+			throw new InvalidOperationException($"Unable to resolve type '{constructorSymbol.Owner.Name}'");
+
+		var thisParam = LLVM.GetFirstParam(constructor);
+		if (thisParam == OpaqueValue.NullPtr || LLVM.IsUndef(thisParam) == LLVMBool.True)
+			throw new InvalidOperationException("Unable to retrieve implicit 'this' parameter");
+		
+		functionStack.Push(context);
+		
+		// Default initializers
+		foreach (var field in constructorSymbol.Owner.SymbolTable.Values.OfType<FieldSymbol>())
+		{
+			if (field.IsStatic)
+				continue;
+
+			if (field.Initializer is not { } initializer)
+				continue;
+
+			var elementPtr = LLVM.BuildStructGEP2(currentBuilder, ownerType.value, thisParam, field.Index,
+				ConvertString(field.Name));
+
+			var initializerValue = initializer.Accept(this);
+			LLVM.BuildStore(currentBuilder, initializerValue.value, elementPtr);
+		}
+		
+		// Parameters
+		foreach (var parameter in constructorSymbol.Parameters)
+		{
+			var param = LLVM.GetParam(constructor, parameter.Index + 1u);
+			var pointerType = LLVM.PointerType(GetType(parameter.EvaluatedType), 0u);
+			var parameterSize = GetSize(parameter.EvaluatedType!);
+			var pointer = BuildAlloca(pointerType, $"{parameter.Name}.addr", parameterSize);
+			BuildStore(param, pointer, parameterSize);
+			CurrentFunctionContext.parameterPointers.Add(parameter, new OpaqueValue(pointer));
+		}
+		
+		// Body statements
 		statement.body.Accept(this);
-		currentFunction = null;
+		LLVM.BuildRetVoid(currentBuilder);
+		functionStack.Pop();
 	
 		// Verification
 		if (LLVM.VerifyFunction(constructor, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
@@ -601,6 +979,74 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 	public void Visit(ResolvedDestructorDeclarationStatement statement)
 	{
 		throw new NotImplementedException();
+	}
+
+	public void Visit(ResolvedOperatorDeclarationStatement statement)
+	{
+		if (currentPass != CodeGenerationPass.Definitions)
+			return;
+		
+		var operatorOverloadSymbol = statement.operatorOverloadSymbol;
+
+		if (!valueSymbols.ContainsKey(operatorOverloadSymbol))
+			throw new InvalidOperationException("Operator overload not forward declared");
+		
+		var operatorOverload = valueSymbols[operatorOverloadSymbol].value;
+		
+		if (operatorOverload == OpaqueValue.NullPtr || LLVM.IsUndef(operatorOverload) == LLVMBool.True)
+			throw new InvalidOperationException("Unable to resolve operator overload");
+		
+		// Body
+		if (!functionContexts.TryGetValue(operatorOverloadSymbol, out var context))
+			throw new InvalidOperationException("Operator overload missing function context");
+		
+		// Positioning
+		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, operatorOverload, EmptyString);
+		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		
+		// Parameters
+		functionStack.Push(context);
+		switch (operatorOverloadSymbol)
+		{
+			case BinaryOperatorOverloadSymbol symbol:
+			{
+				var leftParam = LLVM.GetParam(operatorOverload, 0u);
+				var leftPtrType = LLVM.PointerType(GetType(symbol.Left.EvaluatedType), 0u);
+				var leftSize = GetSize(symbol.Left.EvaluatedType!);
+				var leftPtr = BuildAlloca(leftPtrType, $"{symbol.Left.Name}.addr", leftSize);
+				BuildStore(leftParam, leftPtr, leftSize);
+				CurrentFunctionContext.parameterPointers.Add(symbol.Left, new OpaqueValue(leftPtr));
+				
+				var rightParam = LLVM.GetParam(operatorOverload, 1u);
+				var rightPtrType = LLVM.PointerType(GetType(symbol.Right.EvaluatedType), 0u);
+				var rightSize = GetSize(symbol.Right.EvaluatedType!);
+				var rightPtr = BuildAlloca(rightPtrType, $"{symbol.Right.Name}.addr", rightSize);
+				BuildStore(rightParam, rightPtr, rightSize);
+				CurrentFunctionContext.parameterPointers.Add(symbol.Right, new OpaqueValue(rightPtr));
+				
+				break;
+			}
+
+			case UnaryOperatorOverloadSymbol symbol:
+			{
+				var param = LLVM.GetParam(operatorOverload, 0u);
+				var pointerType = LLVM.PointerType(GetType(symbol.Operand.EvaluatedType), 0u);
+				var operandSize = GetSize(symbol.Operand.EvaluatedType!);
+				var pointer = BuildAlloca(pointerType, $"{symbol.Operand.Name}.addr", operandSize);
+				BuildStore(param, pointer, operandSize);
+				CurrentFunctionContext.parameterPointers.Add(symbol.Operand, new OpaqueValue(pointer));
+				
+				break;
+			}
+		}
+		
+		// Instructions
+		statement.body.Accept(this);
+		functionStack.Pop();
+	
+		// Verification
+		if (LLVM.VerifyFunction(operatorOverload, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(operatorOverload);
 	}
 
 	public void Visit(ResolvedExpressionStatement statement)
@@ -624,32 +1070,49 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		}
 	}
 
+	public void Visit(ResolvedVarDeclarationStatement statement)
+	{
+		var type = GetType(statement.varSymbol.EvaluatedType);
+		if (type == LLVM.VoidTypeInContext(currentContext))
+			throw new InvalidOperationException($"Type of variable '{statement.varSymbol.Name}' cannot be inferred");
+		
+		var size = GetSize(statement.varSymbol.EvaluatedType!);
+		var allocation = BuildAlloca(type, statement.varSymbol.Name, size);
+
+		valueSymbols.Add(statement.varSymbol, new OpaqueValue(allocation));
+
+		if (statement.initializer?.Accept(this) is { } initializer)
+		{
+			BuildStore(initializer.value, allocation, size);
+		}
+	}
+
 	public void Visit(ResolvedSimpleStatement statement)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedFunctionExpression expression)
+	public OpaqueValue Visit(ResolvedFunctionExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedConstructorExpression expression)
+	public OpaqueValue Visit(ResolvedConstructorExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedExternalFunctionExpression expression)
+	public OpaqueValue Visit(ResolvedExternalFunctionExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedFunctionCallExpression expression)
+	public OpaqueValue Visit(ResolvedFunctionCallExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedConstructorCallExpression expression)
+	public OpaqueValue Visit(ResolvedConstructorCallExpression expression)
 	{
 		var ownerSymbol = expression.constructorSymbol.Owner;
 		var constructorSymbol = expression.constructorSymbol;
@@ -660,35 +1123,37 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		if (!typeSymbols.ContainsKey(ownerSymbol))
 			throw new Exception($"Type '{ownerSymbol.Name}' not forward declared");
 		
-		var owner = typeSymbols[ownerSymbol].value;
+		var ownerValue = typeSymbols[ownerSymbol];
+		var owner = ownerValue.value;
 		var constructor = valueSymbols[constructorSymbol].value;
 		
-		// Todo: Function not found
-		if (constructor == Value.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
-			return Value.Null;
+		if (constructor == OpaqueValue.NullPtr || LLVM.IsUndef(constructor) == LLVMBool.True)
+			throw new InvalidOperationException(
+				$"Unable to resolve constructor for type '{constructorSymbol.Owner.Name}'");
 		
 		// Allocate memory
 		// Todo: Memory management!
-		var allocation = LLVM.BuildAlloca(currentBuilder, owner, ConvertString(""));
+		var thisAllocation = BuildAlloca(owner, $"{ownerSymbol.Name}.new", ownerValue.size);
 
 		var arguments = new LLVMOpaqueValue*[expression.arguments.Length + 1];
 		for (var i = 1; i < arguments.Length; i++)
 		{
-			arguments[i] = expression.arguments[i - 1].Accept(this).value;
+			var arg = expression.arguments[i - 1];
+			arguments[i] = arg.Accept(this).value;
 		}
 
-		arguments[0] = LLVM.BuildIntToPtr(currentBuilder, allocation, LLVM.PointerType(owner, 0u), ConvertString(""));
-		
-		var constructorType = LLVM.GlobalGetValueType(constructor);
-		var args = ConvertArrayToPointer(arguments);
-		var argc = (uint)arguments.Length;
-		var name = ConvertString("");
+		arguments[0] = thisAllocation;
+		BuildCall(constructor, arguments, "");
 
-		var call = LLVM.BuildCall2(currentBuilder, constructorType, constructor, args, argc, name);
-		return new Value(call);
+		if (!CurrentIsLValue)
+		{
+			return new OpaqueValue(BuildLoad(owner, thisAllocation, "", ownerValue.size));
+		}
+
+		return new OpaqueValue(thisAllocation);
 	}
 
-	public Value Visit(ResolvedExternalFunctionCallExpression expression)
+	public OpaqueValue Visit(ResolvedExternalFunctionCallExpression expression)
 	{
 		var functionSymbol = expression.functionSymbol;
 		var functionName = functionSymbol.Attributes.GetValueOrDefault("entry", functionSymbol.Name);
@@ -698,9 +1163,8 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		
 		var function = valueSymbols[functionSymbol].value;
 		
-		// Todo: Function not found
-		if (function == Value.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
-			return Value.Null;
+		if (function == OpaqueValue.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
+			throw new InvalidOperationException($"Unable to resolve external function '{functionSymbol.Name}'");
 
 		var arguments = new LLVMOpaqueValue*[expression.arguments.Length];
 		for (var i = 0; i < arguments.Length; i++)
@@ -710,88 +1174,111 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		
 		var functionType = LLVM.GlobalGetValueType(function);
 		var returnType = LLVM.GetReturnType(functionType);
-		var args = ConvertArrayToPointer(arguments);
-		var argc = (uint)arguments.Length;
 		var name = returnType == LLVM.VoidTypeInContext(currentContext)
-			? ConvertString("")
-			: ConvertString(functionName);
+			? ""
+			: functionName;
 
-		var call = LLVM.BuildCall2(currentBuilder, functionType, function, args, argc, name);
-		return new Value(call);
+		return new OpaqueValue(BuildCall(function, arguments, name));
 	}
 
-	public Value Visit(ResolvedThisExpression expression)
+	public OpaqueValue Visit(ResolvedThisExpression expression)
+	{
+		if (!CurrentFunctionContext.hasThisRef)
+			throw new InvalidOperationException("'this' is not valid in the current function context");
+
+		return new OpaqueValue(LLVM.GetFirstParam(CurrentFunctionContext.functionValue));
+	}
+
+	public OpaqueValue Visit(ResolvedVarExpression expression)
+	{
+		if (!valueSymbols.ContainsKey(expression.varSymbol))
+			throw new InvalidOperationException($"Variable '{expression.varSymbol.Name}' is invalid");
+		
+		var pointer = valueSymbols[expression.varSymbol].value;
+		
+		if (CurrentIsLValue)
+			return new OpaqueValue(pointer);
+
+		var type = expression.varSymbol.EvaluatedType!;
+		return new OpaqueValue(BuildLoad(GetType(type), pointer, "", GetSize(type)));
+	}
+
+	public OpaqueValue Visit(ResolvedParameterExpression expression)
+	{
+		var param = CurrentFunctionContext.parameterPointers[expression.parameterSymbol].value;
+
+		if (CurrentIsLValue)
+			return new OpaqueValue(param);
+
+		return new OpaqueValue(BuildLoad(GetType(expression.Type), param, expression.parameterSymbol.Name,
+			GetSize(expression.Type!)));
+	}
+
+	public OpaqueValue Visit(ResolvedFieldExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedVarExpression expression)
+	public OpaqueValue Visit(ResolvedConstExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedFieldExpression expression)
+	public OpaqueValue Visit(ResolvedTypeExpression expression)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedConstExpression expression)
-	{
-		throw new NotImplementedException();
-	}
-
-	public Value Visit(ResolvedTypeExpression expression)
-	{
-		throw new NotImplementedException();
-	}
-
-	public Value Visit(ResolvedLiteralExpression expression)
+	public OpaqueValue Visit(ResolvedLiteralExpression expression)
 	{
 		//LLVM.ConstInt(LLVM.Int32Type(), statement.value.Accept(this), 1)
 		// Todo: Handle signed values correctly, add other value types
 		return expression.token.Value switch
 		{
 			byte value => 
-				new Value(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), value, LLVMBool.False)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), value, LLVMBool.False)),
 			
 			sbyte value => 
-				new Value(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int8TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
 			
 			ushort value => 
-				new Value(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), value, LLVMBool.False)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), value, LLVMBool.False)),
 			
 			short value => 
-				new Value(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int16TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
 			
 			uint value => 
-				new Value(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), value, LLVMBool.False)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), value, LLVMBool.False)),
 			
 			int value => 
-				new Value(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int32TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
 			
 			ulong value => 
-				new Value(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), value, LLVMBool.False)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), value, LLVMBool.False)),
 			
 			long value => 
-				new Value(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
+				new OpaqueValue(LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), (ulong)value, LLVMBool.True)),
 			
 			float value => 
-				new Value(LLVM.ConstReal(LLVM.FloatTypeInContext(currentContext), value)),
+				new OpaqueValue(LLVM.ConstReal(LLVM.FloatTypeInContext(currentContext), value)),
 			
 			double value => 
-				new Value(LLVM.ConstReal(LLVM.DoubleTypeInContext(currentContext), value)),
+				new OpaqueValue(LLVM.ConstReal(LLVM.DoubleTypeInContext(currentContext), value)),
 			
 			string value =>
-				new Value(DefineStringLiteral(value)),
+				new OpaqueValue(DefineStringLiteral(value)),
 			
-			_ => Value.Null
+			_ => OpaqueValue.Null
 		};
 
 		LLVMOpaqueValue* DefineStringLiteral(string value)
 		{
+			if (constantLiterals.TryGetValue(value, out var existingConstant))
+				return existingConstant.value;
+			
 			var charArray = ConvertUnicodeString(value, out var length);
 			var stringType = LLVM.ArrayType(GetNativeType(TypeSymbol.Char), length);
-			var stringRef = LLVM.AddGlobal(currentModule, stringType, ConvertString(""));
+			var stringRef = LLVM.AddGlobal(currentModule, stringType, EmptyString);
 			LLVM.SetInitializer(stringRef,
 				LLVM.ConstStringInContext(currentContext, charArray, length, LLVMBool.True));
 			LLVM.SetGlobalConstant(stringRef, LLVMBool.True);
@@ -804,18 +1291,119 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 			
 			// https://llvm.org/docs/GetElementPtr.html#why-is-the-extra-0-index-required
 			var indices = ConvertArrayToPointer(new LLVMOpaqueValue*[] { zeroIndex, zeroIndex });
-			var gep = LLVM.BuildInBoundsGEP2(currentBuilder, stringType, stringRef, indices, 2, ConvertString(""));
+			var gep = LLVM.BuildInBoundsGEP2(currentBuilder, stringType, stringRef, indices, 2, EmptyString);
+			constantLiterals.Add(value, new OpaqueValue(gep));
 
 			return gep;
 		}
 	}
 
-	public Value Visit(ResolvedSymbolExpression expression)
+	public OpaqueValue Visit(ResolvedBinaryExpression expression)
+	{
+		lvalueStack.Push(false);
+		var left = expression.left.Accept(this).value;
+		var right = expression.right.Accept(this).value;
+		lvalueStack.Pop();
+		
+		var operatorSymbol = expression.operatorSymbol;
+
+		if (operatorSymbol.IsNative)
+		{
+			var stringType = TypeSymbol.String.EvaluatedType;
+			if (expression.left.Type == stringType || expression.right.Type == stringType)
+			{
+				return BuildStringConcatenation(expression.left.Type, left, expression.right.Type, right);
+			}
+			
+			var isFloatingPoint = false;
+
+			switch (expression.left.Type)
+			{
+				case BaseType type:
+					if (type.typeSymbol == TypeSymbol.Float32)
+						isFloatingPoint = true;
+					else if (type.typeSymbol == TypeSymbol.Float64)
+						isFloatingPoint = true;
+					else if (type.typeSymbol == TypeSymbol.Float128)
+						isFloatingPoint = true;
+					
+					break;
+			}
+
+			if (!isFloatingPoint)
+			{
+				switch (expression.right.Type)
+				{
+					case BaseType type:
+						if (type.typeSymbol == TypeSymbol.Float32)
+							isFloatingPoint = true;
+						else if (type.typeSymbol == TypeSymbol.Float64)
+							isFloatingPoint = true;
+						else if (type.typeSymbol == TypeSymbol.Float128)
+							isFloatingPoint = true;
+						
+						break;
+				}
+			}
+
+			var resultValue = expression.operation switch
+			{
+				BinaryExpression.Operation.Add => isFloatingPoint
+					? LLVM.BuildFAdd(currentBuilder, left, right, EmptyString)
+					: LLVM.BuildAdd(currentBuilder, left, right, EmptyString),
+				
+				BinaryExpression.Operation.Multiply => isFloatingPoint
+					? LLVM.BuildFMul(currentBuilder, left, right, EmptyString)
+					: LLVM.BuildMul(currentBuilder, left, right, EmptyString),
+				
+				_ => throw new InvalidOperationException("Unsupported binary operator for native types")
+			};
+
+			if (!CurrentIsLValue)
+				return new OpaqueValue(resultValue);
+
+			var nativeAllocation = LLVM.BuildAlloca(currentBuilder, GetType(expression.Type), EmptyString);
+			LLVM.BuildStore(currentBuilder, resultValue, nativeAllocation);
+			return new OpaqueValue(nativeAllocation);
+		}
+
+		if (!valueSymbols.ContainsKey(operatorSymbol))
+			throw new Exception($"Operator '{operatorSymbol.Name}' not forward declared");
+		
+		var function = valueSymbols[operatorSymbol].value;
+		
+		if (function == OpaqueValue.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
+			throw new InvalidOperationException($"Unable to resolve external function '{operatorSymbol.Name}'");
+
+		var arguments = new[]
+		{
+			left,
+			right
+		};
+
+		var call = BuildCall(function, arguments, "");
+
+		if (!CurrentIsLValue)
+			return new OpaqueValue(call);
+
+		var size = GetSize(expression.Type!);
+		var allocation = BuildAlloca(GetType(expression.Type!), "", size);
+		BuildStore(call, allocation, size);
+		return new OpaqueValue(allocation);
+	}
+
+	private OpaqueValue BuildStringConcatenation(Type? leftType, LLVMOpaqueValue* left, Type? rightType,
+		LLVMOpaqueValue* right)
 	{
 		throw new NotImplementedException();
 	}
 
-	public Value Visit(ResolvedTypeAccessExpression expression)
+	public OpaqueValue Visit(ResolvedSymbolExpression expression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public OpaqueValue Visit(ResolvedTypeAccessExpression expression)
 	{
 		switch (expression.target)
 		{
@@ -827,17 +1415,63 @@ public unsafe class CodeGenerator : ResolvedStatementNode.IVisitor, ResolvedExpr
 		}
 	}
 
-	public Value Visit(ResolvedValueAccessExpression expression)
+	public OpaqueValue Visit(ResolvedValueAccessExpression expression)
 	{
-		throw new NotImplementedException();
+		var (index, name) = expression.target switch
+		{
+			FieldSymbol fieldSymbol => (fieldSymbol.Index, fieldSymbol.Name),
+			_ => throw new InvalidOperationException("Value access target is not valid")
+		};
+
+		lvalueStack.Push(true);
+		var source = expression.source.Accept(this).value;
+		lvalueStack.Pop();
+		
+		var sourceType = LLVM.TypeOf(source);
+		if (sourceType != LLVM.PointerTypeInContext(currentContext, 0u))
+		{
+			throw new InvalidOperationException("Value access target must be a reference");
+		}
+
+		var loadedName = name;
+		if (Debug)
+		{
+			loadedName = expression.source switch
+			{
+				ResolvedThisExpression => $"this.{name}",
+				ResolvedVarExpression resolvedExpression => resolvedExpression.varSymbol.Name + $".{name}",
+				ResolvedFieldExpression resolvedExpression => resolvedExpression.fieldSymbol.Name + $".{name}",
+				ResolvedConstExpression resolvedExpression => resolvedExpression.constSymbol.Name + $".{name}",
+				ResolvedParameterExpression resolvedExpression => resolvedExpression.parameterSymbol.Name + $".{name}",
+				_ => loadedName
+			};
+		}
+
+		var type = GetType(expression.source.Type);
+		var elementPtr = LLVM.BuildStructGEP2(currentBuilder, type, source, index, ConvertString($"{loadedName}.addr"));
+		
+		if (CurrentIsLValue)
+			return new OpaqueValue(elementPtr);
+
+		return new OpaqueValue(BuildLoad(GetType(expression.target.EvaluatedType), elementPtr, loadedName,
+			GetSize(expression.target.EvaluatedType!)));
 	}
 
-	public Value Visit(ResolvedAssignmentExpression expression)
+	public OpaqueValue Visit(ResolvedAssignmentExpression expression)
 	{
-		if (!valueSymbols.TryGetValue(expression.left, out var symbol))
-			throw new Exception($"Unable to resolve symbol '{expression.left.Name}'");
+		lvalueStack.Push(true);
+		var left = expression.left.Accept(this).value;
+		lvalueStack.Pop();
+		
+		lvalueStack.Push(false);
+		var right = expression.right.Accept(this).value;
+		lvalueStack.Pop();
 
-		var value = expression.right.Accept(this);
-		return new Value(LLVM.BuildStore(currentBuilder, value.value, symbol.value));
+		var size = GetSize(expression.left.Type!);
+		BuildStore(right, left, size);
+		if (!CurrentIsLValue)
+			return new OpaqueValue(BuildLoad(GetType(expression.left.Type), left, "", size));
+
+		return new OpaqueValue(left);
 	}
 }

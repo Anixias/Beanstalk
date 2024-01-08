@@ -52,6 +52,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 	private TypeSymbol CurrentType => typeStack.Peek();
 	private readonly Stack<IFunctionSymbol> functionStack = new();
 	private IFunctionSymbol CurrentFunction => functionStack.Peek();
+	private bool StaticContext => !functionStack.TryPeek(out var currentFunction) || currentFunction.IsStatic;
 	private IBuffer currentSource = StringBuffer.Empty;
 	private string currentWorkingDirectory = "";
 	private string currentFilePath = "";
@@ -106,7 +107,14 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in programStatement.topLevelStatements)
 		{
-			statements.Add(statement.Accept(this));
+			try
+			{
+				statements.Add(statement.Accept(this));
+			}
+			catch (ResolutionException e)
+			{
+				exceptions.Add(e);
+			}
 		}
 
 		if (moduleSymbol is not null)
@@ -123,7 +131,14 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in moduleStatement.topLevelStatements)
 		{
-			statements.Add(statement.Accept(this));
+			try
+			{
+				statements.Add(statement.Accept(this));
+			}
+			catch (ResolutionException e)
+			{
+				exceptions.Add(e);
+			}
 		}
 
 		scopeStack.Pop();
@@ -139,7 +154,14 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in structDeclarationStatement.statements)
 		{
-			statements.Add(statement.Accept(this));
+			try
+			{
+				statements.Add(statement.Accept(this));
+			}
+			catch (ResolutionException e)
+			{
+				exceptions.Add(e);
+			}
 		}
 
 		typeStack.Pop();
@@ -150,7 +172,18 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedFieldDeclarationStatement statement)
 	{
-		return new ResolvedFieldDeclarationStatement(statement.fieldSymbol, statement.initializer?.Accept(this));
+		if (!CurrentType.IsMutable && statement.fieldSymbol.IsMutable)
+			throw NewResolutionException(
+				$"Cannot declare field '{statement.fieldSymbol.Name}' as mutable because the parent type " +
+				$"'{CurrentType.Name}' is immutable", statement.range);
+
+		var initializer = statement.initializer?.Accept(this);
+		statement.fieldSymbol.Initializer = initializer;
+
+		if (statement.fieldSymbol.IsStatic)
+			CurrentType.HasStaticFields = true;
+		
+		return new ResolvedFieldDeclarationStatement(statement.fieldSymbol, initializer);
 	}
 
 	public ResolvedStatementNode Visit(CollectedConstDeclarationStatement statement)
@@ -165,22 +198,33 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedEntryStatement entryStatement)
 	{
+		scopeStack.Push(entryStatement.entrySymbol!.Body);
 		functionStack.Push(entryStatement.entrySymbol!);
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in entryStatement.statements)
 		{
-			statements.Add(statement.Accept(this));
+			try
+			{
+				statements.Add(statement.Accept(this));
+			}
+			catch (ResolutionException e)
+			{
+				exceptions.Add(e);
+			}
 		}
 		functionStack.Pop();
+		scopeStack.Pop();
 		
 		return new ResolvedEntryStatement(entryStatement.entrySymbol!, statements);
 	}
 
 	public ResolvedStatementNode Visit(CollectedFunctionDeclarationStatement functionDeclarationStatement)
 	{
+		scopeStack.Push(functionDeclarationStatement.functionSymbol!.Body);
 		functionStack.Push(functionDeclarationStatement.functionSymbol!);
 		var body = functionDeclarationStatement.body.Accept(this);
 		functionStack.Pop();
+		scopeStack.Pop();
 		
 		return new ResolvedFunctionDeclarationStatement(functionDeclarationStatement.functionSymbol!, body);
 	}
@@ -192,18 +236,22 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedConstructorDeclarationStatement statement)
 	{
+		scopeStack.Push(statement.constructorSymbol!.Body);
 		functionStack.Push(statement.constructorSymbol!);
 		var body = statement.body.Accept(this);
 		functionStack.Pop();
+		scopeStack.Pop();
 		
 		return new ResolvedConstructorDeclarationStatement(statement.constructorSymbol!, body);
 	}
 
 	public ResolvedStatementNode Visit(CollectedDestructorDeclarationStatement statement)
 	{
+		scopeStack.Push(statement.destructorSymbol!.Body);
 		functionStack.Push(statement.destructorSymbol!);
 		var body = statement.body.Accept(this);
 		functionStack.Pop();
+		scopeStack.Pop();
 		
 		return new ResolvedDestructorDeclarationStatement(statement.destructorSymbol!, body);
 	}
@@ -216,8 +264,13 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedOperatorDeclarationStatement statement)
 	{
-		// Todo
-		return new ResolvedSimpleStatement(statement);
+		scopeStack.Push(statement.operatorOverloadSymbol!.Body);
+		functionStack.Push(statement.operatorOverloadSymbol!);
+		var body = statement.body.Accept(this);
+		functionStack.Pop();
+		scopeStack.Pop();
+		
+		return new ResolvedOperatorDeclarationStatement(statement.operatorOverloadSymbol!, body);
 	}
 
 	public ResolvedStatementNode Visit(CollectedExpressionStatement statement)
@@ -227,13 +280,35 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedBlockStatement statement)
 	{
+		scopeStack.Push(statement.scope);
+		
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var bodyStatement in statement.statements)
 		{
 			statements.Add(bodyStatement.Accept(this));
 		}
 
+		scopeStack.Pop();
 		return new ResolvedBlockStatement(statements);
+	}
+
+	public ResolvedStatementNode Visit(CollectedVarDeclarationStatement statement)
+	{
+		var type = statement.syntaxType?.Accept(this);
+		var initializer = statement.initializer?.Accept(this);
+
+		if (type is null)
+		{
+			if (initializer is null)
+				throw NewResolutionException($"Type of variable '{statement.varSymbol.Name}' cannot be inferred",
+					statement.varToken);
+
+			type = initializer.Type;
+		}
+
+		statement.varSymbol.EvaluatedType = type;
+
+		return new ResolvedVarDeclarationStatement(statement.varSymbol, initializer);
 	}
 
 	public ResolvedStatementNode Visit(CollectedSimpleStatement statement)
@@ -322,7 +397,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		{
 			case TokenExpression tokenExpression:
 			{
-				if (!IsValidAccessTarget(tokenExpression.token.Type))
+				if (!IsTokenValidAccessTarget(tokenExpression.token.Type))
 					throw NewResolutionException($"Invalid access target '{tokenExpression.token.Text}'",
 						tokenExpression.token);
 
@@ -330,88 +405,9 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				if (sourceExpression is ResolvedTypeExpression)
 					staticAccess = true;
 
-				if (sourceExpression.Type is not BaseType sourceType)
-					throw NewResolutionException("Unable to determine access source's type", tokenExpression.token);
+				// Todo: Support native types, array types, nullable types, etc.
 
-				// Todo: Support native types
-				switch (sourceType.typeSymbol)
-				{
-					case StructSymbol structSymbol:
-					{
-						var target = structSymbol.Scope.SymbolTable.Lookup(
-							expression.target.Type == TokenType.KeywordNew
-								? ConstructorSymbol.InternalName
-								: expression.target.Text);
-
-						if (target is null)
-							throw NewResolutionException($"Symbol '{expression.target.Text}' not found",
-								expression.target);
-						
-						if (staticAccess)
-						{
-							var cannotBeStaticException = NewResolutionException(
-								$"Symbol '{target.Name}' cannot be accessed from a static context",
-								expression.target);
-							
-							switch (target)
-							{
-								case ConstSymbol symbol:
-									if (!symbol.IsStatic)
-										throw cannotBeStaticException;
-									
-									break;
-								
-								case FieldSymbol symbol:
-									if (!symbol.IsStatic)
-										throw cannotBeStaticException;
-									
-									break;
-								
-								// Todo: Implement once static functions are added
-								/*case FunctionSymbol symbol:
-									if (!symbol.IsStatic)
-										throw cannotBeStatic;
-									
-									break;*/
-							}
-							
-							return new ResolvedTypeAccessExpression(sourceType, target);
-						}
-
-						var mustBeStaticException = NewResolutionException(
-							$"Symbol '{target.Name}' must be accessed from a static context. " +
-							$"Did you mean '{structSymbol.Name}.{expression.target.Text}'?", expression.target);
-						
-						switch (target)
-						{
-							case ConstSymbol symbol:
-								if (symbol.IsStatic)
-									throw mustBeStaticException;
-								
-								break;
-							
-							case FieldSymbol symbol:
-								if (symbol.IsStatic)
-									throw mustBeStaticException;
-								
-								break;
-							
-							// Todo: Implement once static functions are added
-							/*case FunctionSymbol symbol:
-								if (!symbol.IsStatic)
-									throw mustBeStaticException;
-								
-								break;*/
-							
-							default:
-								throw mustBeStaticException;
-						}
-						
-						return new ResolvedValueAccessExpression(structSymbol, target);
-					}
-				}
-
-				break;
+				return ResolveAccess(sourceExpression, expression.source.range, expression.target, staticAccess);
 			}
 
 			case AccessExpression sourceAccessExpression:
@@ -420,6 +416,27 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				var sourceExpression = (ResolvedValueAccessExpression)sourceAccessExpression.Accept(this);
 				var source = sourceExpression.source;
 				break;
+			}
+
+			case BinaryExpression sourceBinaryExpression:
+			{
+				if (sourceBinaryExpression.Accept(this) is not ResolvedBinaryExpression binaryExpression)
+					throw NewResolutionException("Invalid access target", expression.range);
+
+				return ResolveAccess(binaryExpression, sourceBinaryExpression.range, expression.target, false);
+			}
+
+			case FunctionCallExpression functionCallExpression:
+			{
+				switch (functionCallExpression.Accept(this))
+				{
+					// Todo: Support all function call types
+					default:
+						throw NewResolutionException("Invalid access target", expression.range);
+
+					case ResolvedConstructorCallExpression callExpression:
+						return ResolveAccess(callExpression, functionCallExpression.range, expression.target, false);
+				}
 			}
 
 			case SyntaxType syntaxType:
@@ -438,7 +455,92 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		throw new NotImplementedException();
 	}
 
-	private bool IsValidAccessTarget(TokenType tokenType)
+	private ResolvedExpressionNode ResolveAccess(ResolvedExpressionNode sourceExpression, TextRange sourceRange,
+		Token target, bool staticAccess)
+	{
+		if (sourceExpression.Type is not BaseType sourceType)
+			throw NewResolutionException("Unable to determine access source's type", sourceRange);
+
+		switch (sourceType.typeSymbol)
+		{
+			case StructSymbol structSymbol:
+			{
+				var targetSymbol = structSymbol.Scope.SymbolTable.Lookup(
+					target.Type == TokenType.KeywordNew
+						? ConstructorSymbol.InternalName
+						: target.Text);
+
+				if (targetSymbol is null)
+					throw NewResolutionException($"Symbol '{target.Text}' not found",
+						target);
+				
+				if (staticAccess)
+				{
+					var cannotBeStaticException = NewResolutionException(
+						$"Symbol '{targetSymbol.Name}' cannot be accessed from a static context", target);
+					
+					switch (targetSymbol)
+					{
+						case ConstSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStaticException;
+							
+							break;
+						
+						case FieldSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStaticException;
+							
+							break;
+						
+						// Todo: Implement once static functions are added
+						/*case FunctionSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStatic;
+							
+							break;*/
+					}
+					
+					return new ResolvedTypeAccessExpression(sourceType, targetSymbol);
+				}
+
+				var mustBeStaticException = NewResolutionException(
+					$"Symbol '{targetSymbol.Name}' must be accessed from a static context. " +
+					$"Did you mean '{structSymbol.Name}.{target.Text}'?", target);
+				
+				switch (targetSymbol)
+				{
+					case ConstSymbol symbol:
+						if (symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;
+					
+					case FieldSymbol symbol:
+						if (symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;
+					
+					// Todo: Implement once static functions are added
+					/*case FunctionSymbol symbol:
+						if (!symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;*/
+					
+					default:
+						throw mustBeStaticException;
+				}
+				
+				return new ResolvedValueAccessExpression(sourceExpression, targetSymbol);
+			}
+		}
+		
+		throw NewResolutionException("Invalid access target", sourceRange);
+	}
+
+	private bool IsTokenValidAccessTarget(TokenType tokenType)
 	{
 		return TokenType.NativeDataTypes.Contains(tokenType) || tokenType == TokenType.Identifier ||
 		       tokenType == TokenType.KeywordThis;
@@ -455,7 +557,6 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		var left = expression.left.Accept(this);
 		var right = expression.right.Accept(this);
 
-		ISymbol leftTarget;
 		switch (left)
 		{
 			case ResolvedTypeAccessExpression leftExpression:
@@ -468,12 +569,10 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 							if (CurrentFunction is not ConstructorSymbol)
 							{
 								throw NewResolutionException(
-									"Mutable fields cannot be modified outside of a constructor",
+									"Immutable fields cannot be modified outside of a constructor",
 									expression.left.range);
 							}
 						}
-
-						leftTarget = fieldSymbol;
 						break;
 					
 					default:
@@ -494,12 +593,10 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 							if (CurrentFunction is not ConstructorSymbol)
 							{
 								throw NewResolutionException(
-									"Mutable fields cannot be modified outside of a constructor",
+									"Immutable fields cannot be modified outside of a constructor",
 									expression.left.range);
 							}
 						}
-						
-						leftTarget = fieldSymbol;
 						break;
 					
 					default:
@@ -517,16 +614,25 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					if (CurrentFunction is not ConstructorSymbol)
 					{
 						throw NewResolutionException(
-							"Mutable fields cannot be modified outside of a constructor",
+							"Immutable fields cannot be modified outside of a constructor",
 							expression.left.range);
 					}
 				}
-				
-				leftTarget = leftExpression.fieldSymbol;
 				break;
 			}
 			
-			case ResolvedConstExpression leftExpression:
+			case ResolvedVarExpression leftExpression:
+			{
+				if (!leftExpression.varSymbol.IsMutable)
+				{
+					throw NewResolutionException(
+						"Immutable variables cannot be reassigned",
+						expression.left.range);
+				}
+				break;
+			}
+			
+			case ResolvedConstExpression:
 				throw NewResolutionException("Constants cannot be reassigned", expression.left.range);
 			
 			case ResolvedFunctionExpression leftExpression:
@@ -537,7 +643,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				throw NewResolutionException($"Symbol '{leftExpression.functionSymbol.Name}' " +
 				                             $"is not a valid assignment target", expression.left.range);
 			
-			case ResolvedConstructorExpression leftExpression:
+			case ResolvedConstructorExpression:
 				throw NewResolutionException("Constructors are not a valid assignment target", expression.left.range);
 					
 			default:
@@ -546,7 +652,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		}
 		
 		// Todo: Type check with implicit casts if needed
-		return new ResolvedAssignmentExpression(leftTarget, right);
+		return new ResolvedAssignmentExpression(left, right);
 	}
 
 	public ResolvedExpressionNode Visit(LambdaExpression expression)
@@ -561,7 +667,21 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedExpressionNode Visit(BinaryExpression expression)
 	{
-		throw new NotImplementedException();
+		var left = expression.left.Accept(this);
+		var right = expression.right.Accept(this);
+		
+		// Todo: Handle 1-deep implicit casts
+
+		var operatorSymbol = Type.FindOperator(left.Type, right.Type, expression.operation);
+		if (operatorSymbol is null)
+			throw NewResolutionException($"Cannot apply operator '{expression.op.Text}' for operands of type " +
+			                             $"'{left.Type?.ToString() ?? "null"}' and " +
+			                             $"'{right.Type?.ToString() ?? "null"}'", expression.op);
+
+		if (operatorSymbol.hasError)
+			throw NewResolutionException(operatorSymbol.error!, expression.op);
+		
+		return new ResolvedBinaryExpression(left, right, operatorSymbol.result!, expression.operation);
 	}
 
 	public ResolvedExpressionNode Visit(UnaryExpression expression)
@@ -650,19 +770,19 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			switch (symbol)
 			{
 				case FieldSymbol fieldSymbol:
-					if (CurrentFunction.IsStatic && !fieldSymbol.IsStatic)
+					if (StaticContext && !fieldSymbol.IsStatic)
 						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
 					
 					return new ResolvedFieldExpression(fieldSymbol);
 				
 				case ConstSymbol constSymbol:
-					if (CurrentFunction.IsStatic && !constSymbol.IsStatic)
+					if (StaticContext && !constSymbol.IsStatic)
 						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
 
 					return new ResolvedConstExpression(constSymbol);
 				
 				case FunctionSymbol functionSymbol:
-					if (CurrentFunction.IsStatic && !functionSymbol.IsStatic)
+					if (StaticContext && !functionSymbol.IsStatic)
 						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
 
 					return new ResolvedFunctionExpression(functionSymbol);
@@ -673,6 +793,9 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				case VarSymbol varSymbol:
 					return new ResolvedVarExpression(varSymbol);
 				
+				case ParameterSymbol parameterSymbol:
+					return new ResolvedParameterExpression(parameterSymbol);
+				
 				case TypeSymbol typeSymbol:
 					return new ResolvedTypeExpression(typeSymbol);
 				
@@ -682,7 +805,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		}
 		else if (tokenType == TokenType.KeywordThis)
 		{
-			if (CurrentFunction.IsStatic)
+			if (StaticContext)
 				throw NewResolutionException("'this' is not valid within a static context", token);
 			
 			return new ResolvedThisExpression(CurrentType.EvaluatedType);

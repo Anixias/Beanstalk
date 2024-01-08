@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using Beanstalk.Analysis.Syntax;
+using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Semantics;
 
@@ -22,6 +23,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedOperatorDeclarationStatement statement);
 		T Visit(CollectedExpressionStatement statement);
 		T Visit(CollectedBlockStatement statement);
+		T Visit(CollectedVarDeclarationStatement statement);
 		T Visit(CollectedSimpleStatement statement);
 	}
 	
@@ -42,6 +44,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedOperatorDeclarationStatement statement);
 		void Visit(CollectedExpressionStatement statement);
 		void Visit(CollectedBlockStatement statement);
+		void Visit(CollectedVarDeclarationStatement statement);
 		void Visit(CollectedSimpleStatement statement);
 	}
 
@@ -124,13 +127,15 @@ public sealed class CollectedFieldDeclarationStatement : CollectedStatementNode
 	public readonly FieldSymbol fieldSymbol;
 	public readonly SyntaxType? syntaxType;
 	public readonly ExpressionNode? initializer;
+	public readonly TextRange range;
 
 	public CollectedFieldDeclarationStatement(FieldSymbol fieldSymbol, SyntaxType? syntaxType,
-		ExpressionNode? initializer)
+		ExpressionNode? initializer, TextRange range)
 	{
 		this.fieldSymbol = fieldSymbol;
 		this.syntaxType = syntaxType;
 		this.initializer = initializer;
+		this.range = range;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -149,13 +154,15 @@ public sealed class CollectedConstDeclarationStatement : CollectedStatementNode
 	public readonly ConstSymbol constSymbol;
 	public readonly SyntaxType? syntaxType;
 	public readonly ExpressionNode initializer;
+	public readonly TextRange range;
 
 	public CollectedConstDeclarationStatement(ConstSymbol constSymbol, SyntaxType? syntaxType,
-		ExpressionNode initializer)
+		ExpressionNode initializer, TextRange range)
 	{
 		this.constSymbol = constSymbol;
 		this.syntaxType = syntaxType;
 		this.initializer = initializer;
+		this.range = range;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -194,12 +201,15 @@ public sealed class CollectedDefStatement : CollectedStatementNode
 public sealed class CollectedEntryStatement : CollectedStatementNode
 {
 	public EntrySymbol? entrySymbol;
+	public readonly Scope scope;
 	public readonly EntryStatement entryStatement;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
-	
-	public CollectedEntryStatement(EntryStatement entryStatement, IEnumerable<CollectedStatementNode> statements)
+
+	public CollectedEntryStatement(EntryStatement entryStatement, Scope scope,
+		IEnumerable<CollectedStatementNode> statements)
 	{
 		this.entryStatement = entryStatement;
+		this.scope = scope;
 		this.statements = statements.ToImmutableArray();
 	}
 
@@ -218,12 +228,14 @@ public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNo
 {
 	public FunctionSymbol? functionSymbol;
 	public readonly FunctionDeclarationStatement functionDeclarationStatement;
+	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
 
-	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement,
+	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement, Scope scope,
 		CollectedStatementNode body)
 	{
 		this.functionDeclarationStatement = functionDeclarationStatement;
+		this.scope = scope;
 		this.body = body;
 	}
 
@@ -263,12 +275,14 @@ public sealed class CollectedConstructorDeclarationStatement : CollectedStatemen
 {
 	public ConstructorSymbol? constructorSymbol;
 	public readonly ConstructorDeclarationStatement constructorDeclarationStatement;
+	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
 
 	public CollectedConstructorDeclarationStatement(ConstructorDeclarationStatement constructorDeclarationStatement,
-		CollectedStatementNode body)
+		Scope scope, CollectedStatementNode body)
 	{
 		this.constructorDeclarationStatement = constructorDeclarationStatement;
+		this.scope = scope;
 		this.body = body;
 	}
 
@@ -287,12 +301,14 @@ public sealed class CollectedDestructorDeclarationStatement : CollectedStatement
 {
 	public DestructorSymbol? destructorSymbol;
 	public readonly DestructorDeclarationStatement destructorDeclarationStatement;
+	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
 
 	public CollectedDestructorDeclarationStatement(DestructorDeclarationStatement destructorDeclarationStatement,
-		CollectedStatementNode body)
+		Scope scope, CollectedStatementNode body)
 	{
 		this.destructorDeclarationStatement = destructorDeclarationStatement;
+		this.scope = scope;
 		this.body = body;
 	}
 
@@ -311,10 +327,15 @@ public sealed class CollectedCastDeclarationStatement : CollectedStatementNode
 {
 	public CastOverloadSymbol? castOverloadSymbol;
 	public readonly CastDeclarationStatement castDeclarationStatement;
-	
-	public CollectedCastDeclarationStatement(CastDeclarationStatement castDeclarationStatement)
+	public readonly Scope scope;
+	public readonly CollectedStatementNode body;
+
+	public CollectedCastDeclarationStatement(CastDeclarationStatement castDeclarationStatement, Scope scope,
+		CollectedStatementNode body)
 	{
 		this.castDeclarationStatement = castDeclarationStatement;
+		this.scope = scope;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -332,10 +353,15 @@ public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNo
 {
 	public OperatorOverloadSymbol? operatorOverloadSymbol;
 	public readonly OperatorDeclarationStatement operatorDeclarationStatement;
-	
-	public CollectedOperatorDeclarationStatement(OperatorDeclarationStatement operatorDeclarationStatement)
+	public readonly Scope scope;
+	public readonly CollectedStatementNode body;
+
+	public CollectedOperatorDeclarationStatement(OperatorDeclarationStatement operatorDeclarationStatement, Scope scope,
+		CollectedStatementNode body)
 	{
 		this.operatorDeclarationStatement = operatorDeclarationStatement;
+		this.scope = scope;
+		this.body = body;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -371,11 +397,40 @@ public sealed class CollectedExpressionStatement : CollectedStatementNode
 
 public sealed class CollectedBlockStatement : CollectedStatementNode
 {
+	public readonly Scope scope;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
 
-	public CollectedBlockStatement(IEnumerable<CollectedStatementNode> statements)
+	public CollectedBlockStatement(Scope scope, IEnumerable<CollectedStatementNode> statements)
 	{
+		this.scope = scope;
 		this.statements = statements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedVarDeclarationStatement : CollectedStatementNode
+{
+	public readonly VarSymbol varSymbol;
+	public readonly Token varToken;
+	public readonly SyntaxType? syntaxType;
+	public readonly ExpressionNode? initializer;
+
+	public CollectedVarDeclarationStatement(VarSymbol varSymbol, Token varToken, SyntaxType? syntaxType,
+		ExpressionNode? initializer)
+	{
+		this.varSymbol = varSymbol;
+		this.varToken = varToken;
+		this.initializer = initializer;
+		this.syntaxType = syntaxType;
 	}
 
 	public override void Accept(IVisitor visitor)

@@ -2,6 +2,9 @@
 
 public sealed class StringBuffer(string text) : IBuffer
 {
+	// Todo: Cache line starts
+	// Todo: Add function to get specific line's text
+	
 	public static readonly IBuffer Empty = new StringBuffer("");
 	public char this[int position] => text[position];
 	public int Length => text.Length;
