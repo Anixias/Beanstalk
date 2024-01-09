@@ -25,11 +25,12 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 		T Visit(ResolvedStringCallExpression expression);
 		T Visit(ResolvedExternalFunctionCallExpression expression);
 		T Visit(ResolvedThisExpression expression);
-		T Visit(ResolvedVarExpression expression);
-		T Visit(ResolvedParameterExpression expression);
+		T Visit(ResolvedVarSymbolExpression symbolExpression);
+		T Visit(ResolvedParameterSymbolExpression symbolExpression);
 		T Visit(ResolvedFieldExpression expression);
 		T Visit(ResolvedConstExpression expression);
 		T Visit(ResolvedTypeSymbolExpression symbolExpression);
+		T Visit(ResolvedImportGroupingSymbolExpression symbolExpression);
 		T Visit(ResolvedLiteralExpression expression);
 		T Visit(ResolvedBinaryExpression expression);
 		T Visit(ResolvedSymbolExpression expression);
@@ -49,11 +50,12 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 		void Visit(ResolvedStringCallExpression expression);
 		void Visit(ResolvedExternalFunctionCallExpression expression);
 		void Visit(ResolvedThisExpression expression);
-		void Visit(ResolvedVarExpression expression);
-		void Visit(ResolvedParameterExpression expression);
+		void Visit(ResolvedVarSymbolExpression symbolExpression);
+		void Visit(ResolvedParameterSymbolExpression symbolExpression);
 		void Visit(ResolvedFieldExpression expression);
 		void Visit(ResolvedConstExpression expression);
 		void Visit(ResolvedTypeSymbolExpression symbolExpression);
+		void Visit(ResolvedImportGroupingSymbolExpression symbolExpression);
 		void Visit(ResolvedLiteralExpression expression);
 		void Visit(ResolvedBinaryExpression expression);
 		void Visit(ResolvedSymbolExpression expression);
@@ -242,11 +244,11 @@ public sealed class ResolvedExternalFunctionCallExpression : ResolvedExpressionN
 	}
 }
 
-public sealed class ResolvedVarExpression : ResolvedExpressionNode
+public sealed class ResolvedVarSymbolExpression : ResolvedExpressionNode
 {
 	public readonly VarSymbol varSymbol;
 	
-	public ResolvedVarExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType, false)
+	public ResolvedVarSymbolExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType, false)
 	{
 		this.varSymbol = varSymbol;
 	}
@@ -262,11 +264,11 @@ public sealed class ResolvedVarExpression : ResolvedExpressionNode
 	}
 }
 
-public sealed class ResolvedParameterExpression : ResolvedExpressionNode
+public sealed class ResolvedParameterSymbolExpression : ResolvedExpressionNode
 {
 	public readonly ParameterSymbol parameterSymbol;
 	
-	public ResolvedParameterExpression(ParameterSymbol parameterSymbol) : base(parameterSymbol.EvaluatedType, false)
+	public ResolvedParameterSymbolExpression(ParameterSymbol parameterSymbol) : base(parameterSymbol.EvaluatedType, false)
 	{
 		this.parameterSymbol = parameterSymbol;
 	}
@@ -347,6 +349,28 @@ public sealed class ResolvedTypeSymbolExpression : ResolvedExpressionNode
 	public ResolvedTypeSymbolExpression(TypeSymbol typeSymbol) : base(typeSymbol.EvaluatedType, false)
 	{
 		this.typeSymbol = typeSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedImportGroupingSymbolExpression : ResolvedExpressionNode
+{
+	public readonly ImportGroupingSymbol importGroupingSymbol;
+	
+	// Todo: Are import grouping symbols considered to be compile-time constants?
+	public ResolvedImportGroupingSymbolExpression(ImportGroupingSymbol importGroupingSymbol)
+		: base(importGroupingSymbol.EvaluatedType, false)
+	{
+		this.importGroupingSymbol = importGroupingSymbol;
 	}
 
 	public override void Accept(IVisitor visitor)

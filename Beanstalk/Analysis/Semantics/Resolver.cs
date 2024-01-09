@@ -96,9 +96,76 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		}
 	}
 
+	public void Verify()
+	{
+		VerifyFunctionOverloads(scopeStack.First());
+	}
+	
+	private void VerifyFunctionOverloads(Scope scope)
+	{
+		foreach (var childScope in scope)
+		{
+			VerifyFunctionOverloads(childScope);
+		}
+
+		foreach (var symbol in scope.SymbolTable.Values)
+		{
+			switch (symbol)
+			{
+				case FunctionSymbol functionSymbol:
+				{
+					var functionList = new List<FunctionSymbol> { functionSymbol };
+					foreach (var overload in functionSymbol.Overloads)
+					{
+						functionList.Add(overload);
+					}
+
+					for (var j = 0; j < functionList.Count; j++)
+					{
+						for (var i = j + 1; i < functionList.Count; i++)
+						{
+							var left = functionList[j];
+							var right = functionList[i];
+							
+							// Todo: Reporting of the source (left) location
+							if (left.SignatureMatches(right))
+								exceptions.Add(new ResolutionException("Function signature matches existing function",
+									right.Source, right.SignatureRange, currentWorkingDirectory, currentFilePath));
+						}
+					}
+					break;
+				}
+
+				case ExternalFunctionSymbol functionSymbol:
+				{
+					var functionList = new List<ExternalFunctionSymbol> { functionSymbol };
+					foreach (var overload in functionSymbol.Overloads)
+					{
+						functionList.Add(overload);
+					}
+
+					for (var j = 0; j < functionList.Count; j++)
+					{
+						for (var i = j + 1; i < functionList.Count; i++)
+						{
+							var left = functionList[j];
+							var right = functionList[i];
+							
+							// Todo: Reporting of the source (left) location
+							if (left.SignatureMatches(right))
+								exceptions.Add(new ResolutionException("Function signature matches existing function",
+									right.Source, right.SignatureRange, currentWorkingDirectory, currentFilePath));
+						}
+					}
+					break;
+				}
+			}
+		}
+	}
+
 	public ResolvedStatementNode Visit(CollectedProgramStatement programStatement)
 	{
-		importedSymbols = programStatement.importedSymbols;
+		importedSymbols = programStatement.importedSymbols!;
 		var moduleSymbol = programStatement.moduleSymbol;
 
 		if (moduleSymbol is not null)
@@ -119,9 +186,10 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 		if (moduleSymbol is not null)
 			scopeStack.Pop();
-
+		
+		var program = new ResolvedProgramStatement(importedSymbols, moduleSymbol, statements);
 		importedSymbols = null;
-		return new ResolvedProgramStatement(moduleSymbol, statements);
+		return program;
 	}
 
 	public ResolvedStatementNode Visit(CollectedModuleStatement moduleStatement)
@@ -428,8 +496,20 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						tokenExpression.token);
 
 				var sourceExpression = tokenExpression.Accept(this);
-				if (sourceExpression is ResolvedTypeSymbolExpression)
-					staticAccess = true;
+				switch (sourceExpression)
+				{
+					case ResolvedImportGroupingSymbolExpression groupingSymbolExpression:
+					{
+						var target =
+							groupingSymbolExpression.importGroupingSymbol.Symbols.Lookup(expression.target.Text);
+
+						return ResolveSymbolExpression(target, expression.target);
+					}
+					
+					case ResolvedTypeSymbolExpression:
+						staticAccess = true;
+						break;
+				}
 
 				// Todo: Support native types, array types, nullable types, etc.
 
@@ -439,9 +519,23 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			case AccessExpression sourceAccessExpression:
 			{
 				// Todo
-				var sourceExpression = (ResolvedValueAccessExpression)sourceAccessExpression.Accept(this);
-				var source = sourceExpression.source;
-				break;
+				var sourceExpression = sourceAccessExpression.Accept(this);
+				switch (sourceExpression)
+				{
+					case ResolvedImportGroupingSymbolExpression groupingSymbolExpression:
+					{
+						var target =
+							groupingSymbolExpression.importGroupingSymbol.Symbols.Lookup(expression.target.Text);
+
+						return ResolveSymbolExpression(target, expression.target);
+					}
+					
+					case ResolvedTypeSymbolExpression:
+						staticAccess = true;
+						break;
+				}
+				
+				return ResolveAccess(sourceExpression, expression.source.range, expression.target, staticAccess);
 			}
 
 			case BinaryExpression sourceBinaryExpression:
@@ -468,7 +562,6 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			case SyntaxType syntaxType:
 			{
 				// Todo
-				throw new NotImplementedException();
 				staticAccess = true;
 				var source = syntaxType.Accept(this);
 				break;
@@ -661,7 +754,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				break;
 			}
 			
-			case ResolvedVarExpression leftExpression:
+			case ResolvedVarSymbolExpression leftExpression:
 			{
 				if (!leftExpression.varSymbol.IsMutable)
 				{
@@ -807,57 +900,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		else if (tokenType == TokenType.Identifier)
 		{
 			var symbol = LookupSymbolWithImports(token.Text);
-
-			if (symbol is null)
-				throw NewResolutionException($"Unable to resolve symbol '{token.Text}'", token);
-
-			switch (symbol)
-			{
-				case FieldSymbol fieldSymbol:
-					if (StaticContext && !fieldSymbol.IsStatic)
-						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
-					if (fieldSymbol.IsStatic)
-					{
-						return new ResolvedFieldExpression(fieldSymbol);
-					}
-					
-					var thisExpression = new ResolvedThisExpression(CurrentType.EvaluatedType);
-					return new ResolvedValueAccessExpression(thisExpression, fieldSymbol);
-				
-				case ConstSymbol constSymbol:
-					if (StaticContext && !constSymbol.IsStatic)
-						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
-					return new ResolvedConstExpression(constSymbol);
-				
-				case FunctionSymbol functionSymbol:
-					if (StaticContext && !functionSymbol.IsStatic)
-						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
-					return new ResolvedFunctionSymbolExpression(functionSymbol);
-				
-				case StringFunctionSymbol stringFunctionSymbol:
-					if (StaticContext && !stringFunctionSymbol.IsStatic)
-						throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
-					return new ResolvedStringFunctionSymbolExpression(stringFunctionSymbol);
-				
-				case ExternalFunctionSymbol functionSymbol:
-					return new ResolvedExternalFunctionSymbolExpression(functionSymbol);
-				
-				case VarSymbol varSymbol:
-					return new ResolvedVarExpression(varSymbol);
-				
-				case ParameterSymbol parameterSymbol:
-					return new ResolvedParameterExpression(parameterSymbol);
-				
-				case TypeSymbol typeSymbol:
-					return new ResolvedTypeSymbolExpression(typeSymbol);
-				
-				default:
-					throw NewResolutionException($"Unknown symbol class for symbol '{token.Text}'", token);
-			}
+			return ResolveSymbolExpression(symbol, token);
 		}
 		else if (tokenType == TokenType.KeywordThis)
 		{
@@ -868,6 +911,63 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		}
 
 		return new ResolvedLiteralExpression(token, type);
+	}
+
+	private ResolvedExpressionNode ResolveSymbolExpression(ISymbol? symbol, Token token)
+	{
+		if (symbol is null)
+			throw NewResolutionException($"Unable to resolve symbol '{token.Text}'", token);
+
+		switch (symbol)
+		{
+			case FieldSymbol fieldSymbol:
+				if (StaticContext && !fieldSymbol.IsStatic)
+					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
+
+				if (fieldSymbol.IsStatic)
+				{
+					return new ResolvedFieldExpression(fieldSymbol);
+				}
+				
+				var thisExpression = new ResolvedThisExpression(CurrentType.EvaluatedType);
+				return new ResolvedValueAccessExpression(thisExpression, fieldSymbol);
+			
+			case ConstSymbol constSymbol:
+				if (StaticContext && !constSymbol.IsStatic)
+					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
+
+				return new ResolvedConstExpression(constSymbol);
+			
+			case FunctionSymbol functionSymbol:
+				if (StaticContext && !functionSymbol.IsStatic)
+					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
+
+				return new ResolvedFunctionSymbolExpression(functionSymbol);
+			
+			case StringFunctionSymbol stringFunctionSymbol:
+				if (StaticContext && !stringFunctionSymbol.IsStatic)
+					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
+
+				return new ResolvedStringFunctionSymbolExpression(stringFunctionSymbol);
+			
+			case ExternalFunctionSymbol functionSymbol:
+				return new ResolvedExternalFunctionSymbolExpression(functionSymbol);
+			
+			case VarSymbol varSymbol:
+				return new ResolvedVarSymbolExpression(varSymbol);
+			
+			case ParameterSymbol parameterSymbol:
+				return new ResolvedParameterSymbolExpression(parameterSymbol);
+			
+			case TypeSymbol typeSymbol:
+				return new ResolvedTypeSymbolExpression(typeSymbol);
+			
+			case ImportGroupingSymbol importGroupingSymbol:
+				return new ResolvedImportGroupingSymbolExpression(importGroupingSymbol);
+			
+			default:
+				throw NewResolutionException($"Unknown symbol class for symbol '{token.Text}'", token);
+		}
 	}
 
 	private TypeSymbol FindType(Token token)

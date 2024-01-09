@@ -208,7 +208,15 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(ExternalFunctionStatement statement)
 	{
-		return new CollectedExternalFunctionStatement(statement);
+		var externalFunctionSymbol = new ExternalFunctionSymbol(statement.identifier.Text, statement.attributes,
+			statement.identifier.Source, statement.signatureRange);
+
+		if (CurrentScope.LookupSymbol(externalFunctionSymbol.Name) is ExternalFunctionSymbol existingFunctionSymbol)
+			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
+		else
+			CurrentScope.AddSymbol(externalFunctionSymbol);
+		
+		return new CollectedExternalFunctionStatement(externalFunctionSymbol, statement);
 	}
 
 	public CollectedStatementNode Visit(ModuleStatement moduleStatement)
@@ -278,8 +286,16 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		var body = functionDeclarationStatement.body.Accept(this);
 
 		scopeStack.Pop();
+		
+		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text, scope,
+			functionDeclarationStatement.identifier.Source, functionDeclarationStatement.signatureRange);
 
-		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement, scope, body);
+		if (CurrentScope.LookupSymbol(functionSymbol.Name) is FunctionSymbol existingFunctionSymbol)
+			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
+		else
+			CurrentScope.AddSymbol(functionSymbol);
+
+		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement, functionSymbol, body);
 	}
 
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)

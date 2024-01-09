@@ -1,6 +1,5 @@
 ﻿/*
 Todo:
-	- handle import statements in collector/resolver (groupings, etc.)
 	- built-in casts
 	- built-in operations (in progress)
 	- string interpolation
@@ -8,29 +7,42 @@ Todo:
 		(tls stands for 'top-level statements' and include types, external functions, and functions
 		- (none):
 			- on tls: same as 'local'
-			- in types: same as 'public'
+			- in types: same as 'pub'
 		- private:
 			- on tls: only valid for nested types (if I add them); only visible to owning type; cannot be imported
 			- in types: only visible to owning type
-		- public:
+		- pub (public):
 			- on tls: visible anywhere; may be imported
 			- in types: visible anywhere
 		- local: visible anywhere in the file it's declared in; cannot be imported
-			- within a type marked with 'local', all 'public' access is equivalent to 'local'
+			- within a type marked with 'local', all 'pub' access is equivalent to 'local'
 		- internal: visible in the top-most module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod' and all children of 'mod'
-			- within a type marked with 'internal', all 'public' access is equivalent to 'internal'
+			- within a type marked with 'internal', all 'pub' access is equivalent to 'internal'
 		- restricted: visible in the module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod.a.b' and all children of 'mod.a.b'
-			- within a type marked with 'restricted', all 'public' access is equivalent to 'restricted'
+			- within a type marked with 'restricted', all 'pub' access is equivalent to 'restricted'
 	- return type inference
+	- default keyword
 	- error on cyclic references
 	- resolver should be able to determine constant expressions
 	- move size resolution into resolver
 		- utilize as many passes as needed until count of unresolved sizes reaches 0
 		- keep track of already visited types; skip them
 */
+import bs.io.console.* as Console
+
 module hello.World
+
+struct Owner
+{
+	v:Vec2 = Vec2.new(0, 0, "owned")
+	i:int = 3
+	
+	constructor()
+	{
+	}
+}
 
 var struct Vec2
 {
@@ -55,26 +67,16 @@ var struct Vec2
 
 entry()
 {
-	print("Hello, World!\n")
-	/*let vec = 5 * Vec2.new(1, 2, "a") + Vec2.new(3, 5, "b")
-	print("(")
-	printInt(vec.x)
-	print(", ")
-	printInt(vec.y)
-	print(")\n")
-	print(vec.string())*/
+	Console.print("Hello, World!\n")
 	let vec = Vec2.new(1, 2, "ab")
-	print(vec.string())
-	printInt(strlen("Hello!"))
-	//printInt(Vec2.a)
-	
+	Console.print(vec.string())
+	let owner = Owner.new()
+	printInt(owner.v.x)
+	printInt(owner.v.y)
+	Console.print(owner.v.string())
 	return 0
 }
 
-// 65001u = UTF8
-var fun setConsoleOutputEncoding(codePage:uint) => external(entry = "set_console_output_encoding")
-var fun getConsoleOutputEncoding() :> uint => external(entry = "get_console_output_encoding")
-var fun print(text:string) => external(entry = "print")
 var fun printInt(value:int) => external(entry = "print_int")
 var fun printInt64(value:int64) => external(entry = "print_long_long")
 fun getCurrentTime() :> int64 => external(entry = "get_current_time")

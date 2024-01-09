@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Semantics;
 
@@ -9,20 +10,21 @@ public sealed class FunctionSymbol : IFunctionSymbol
 	public string SymbolTypeName => "a function";
 	public bool IsConstant => false;
 	public string Name { get; }
-	public ImmutableArray<TypeParameterSymbol> TypeParameters { get; }
-	public ImmutableArray<ParameterSymbol> Parameters { get; }
+	public ImmutableArray<TypeParameterSymbol> TypeParameters { get; set; }
+	public ImmutableArray<ParameterSymbol> Parameters { get; set; }
+	public IBuffer Source { get; }
+	public TextRange SignatureRange { get; }
 	public Type? ReturnType { get; set; }
 	public Scope Body { get; }
 	public List<FunctionSymbol> Overloads { get; } = [];
 	public Type? EvaluatedType => GetFunctionType();
 
-	public FunctionSymbol(string name, IEnumerable<TypeParameterSymbol> typeParameters,
-		IEnumerable<ParameterSymbol> parameters, Scope body)
+	public FunctionSymbol(string name, Scope body, IBuffer source, TextRange signatureRange)
 	{
 		Name = name;
-		TypeParameters = typeParameters.ToImmutableArray();
-		Parameters = parameters.ToImmutableArray();
 		Body = body;
+		SignatureRange = signatureRange;
+		Source = source;
 	}
 
 	public bool SignatureMatches(FunctionSymbol functionSymbol)

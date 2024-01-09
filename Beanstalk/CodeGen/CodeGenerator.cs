@@ -202,7 +202,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 				LLVM.DumpModule(currentModule);
 
 			var outputBitCodePath = Path.Combine(objDirectory, Path.ChangeExtension(relativePath, ".bc"));
-			if (LLVM.WriteBitcodeToFile(currentModule, ConvertString(outputBitCodePath)) != 0)
+			Directory.CreateDirectory(Path.GetDirectoryName(outputBitCodePath)!);
+			if (LLVM.WriteBitcodeToFile(currentModule, ConvertString(outputBitCodePath)) != LLVM.LLVMErrorSuccess)
 				throw new InvalidOperationException($"Failed to emit IR for source file: {relativePath}");
 			
 			sourceFiles.Add(outputBitCodePath);
@@ -556,6 +557,9 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	public void Visit(ResolvedProgramStatement programStatement)
 	{
+		if (currentPass == CodeGenerationPass.TopLevelDeclarations)
+			ImportSymbols(programStatement.importedSymbols);
+		
 		foreach (var statement in programStatement.topLevelStatements)
 		{
 			statement.Accept(this);
@@ -578,25 +582,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		{
 			case CodeGenerationPass.TopLevelDeclarations:
 			{
-				var structType = LLVM.StructCreateNamed(currentContext,
-					ConvertString(structSymbol.Name));
-
-				OpaqueType opaqueType;
-				if (structSymbol.HasStaticFields)
-				{
-					var boolType = LLVM.Int1TypeInContext(currentContext);
-					var staticInitialized = LLVM.AddGlobal(currentModule, boolType,
-						ConvertString($"{structSymbol.Name}.staticInitialized"));
-
-					LLVM.SetInitializer(staticInitialized, LLVM.ConstInt(boolType, 0u, LLVMBool.False));
-					opaqueType = new OpaqueType(structType, staticInitialized, 0u);
-				}
-				else
-				{
-					opaqueType = new OpaqueType(structType, 0u);
-				}
-				
-				typeSymbols.Add(structSymbol, opaqueType);
+				DeclareStruct(structSymbol);
 				break;
 			}
 
@@ -924,35 +910,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	{
 		if (currentPass != CodeGenerationPass.TopLevelDeclarations)
 			return;
-		
-		var parameterList = statement.externalFunctionSymbol.Parameters;
-		var parameterTypes = new LLVMOpaqueType*[parameterList.Length];
-		var isVariadic = LLVMBool.False;
 
-		for (var i = 0; i < parameterTypes.Length; i++)
-		{
-			var parameter = parameterList[i];
-			parameterTypes[i] = GetType(parameter.EvaluatedType!);
-
-			if (parameter.IsVariadic)
-				isVariadic = LLVMBool.True;
-		}
-
-		var paramTypes = ConvertArrayToPointer(parameterTypes);
-		var returnType = GetType(statement.externalFunctionSymbol.ReturnType);
-	
-		var functionType = LLVM.FunctionType(returnType, paramTypes, (uint)parameterTypes.Length, isVariadic);
-		var name = statement.externalFunctionSymbol.Attributes.GetValueOrDefault("entry",
-			statement.externalFunctionSymbol.Name);
-		
-		var externalFunction = LLVM.AddFunction(currentModule, ConvertString(name),
-			functionType);
-		
-		valueSymbols.Add(statement.externalFunctionSymbol, new OpaqueValue(externalFunction));
-	
-		// Verification
-		if (LLVM.VerifyFunction(externalFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
-			LLVM.InstructionEraseFromParent(externalFunction);
+		DeclareExternalFunction(statement.externalFunctionSymbol);
 	}
 
 	public void Visit(ResolvedFunctionDeclarationStatement statement)
@@ -1005,8 +964,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			if (field.Initializer is not { } initializer)
 				continue;
 
-			var elementPtr = LLVM.BuildStructGEP2(currentBuilder, ownerType.value, thisParam, field.Index,
-				ConvertString(field.Name));
+			var elementPtr = BuildStructGEP(ownerType.value, thisParam, field.Index, field.Name);
 
 			var initializerValue = initializer.Accept(this);
 			LLVM.BuildStore(currentBuilder, initializerValue.value, elementPtr);
@@ -1315,29 +1273,29 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		return new OpaqueValue(LLVM.GetFirstParam(CurrentFunctionContext.functionValue));
 	}
 
-	public OpaqueValue Visit(ResolvedVarExpression expression)
+	public OpaqueValue Visit(ResolvedVarSymbolExpression symbolExpression)
 	{
-		if (!valueSymbols.ContainsKey(expression.varSymbol))
-			throw new InvalidOperationException($"Variable '{expression.varSymbol.Name}' is invalid");
+		if (!valueSymbols.ContainsKey(symbolExpression.varSymbol))
+			throw new InvalidOperationException($"Variable '{symbolExpression.varSymbol.Name}' is invalid");
 		
-		var pointer = valueSymbols[expression.varSymbol].value;
+		var pointer = valueSymbols[symbolExpression.varSymbol].value;
 		
 		if (CurrentIsLValue)
 			return new OpaqueValue(pointer);
 
-		var type = expression.varSymbol.EvaluatedType!;
+		var type = symbolExpression.varSymbol.EvaluatedType!;
 		return new OpaqueValue(BuildLoad(GetType(type), pointer, "", GetSize(type)));
 	}
 
-	public OpaqueValue Visit(ResolvedParameterExpression expression)
+	public OpaqueValue Visit(ResolvedParameterSymbolExpression symbolExpression)
 	{
-		var param = CurrentFunctionContext.parameterPointers[expression.parameterSymbol].value;
+		var param = CurrentFunctionContext.parameterPointers[symbolExpression.parameterSymbol].value;
 
 		if (CurrentIsLValue)
 			return new OpaqueValue(param);
 
-		return new OpaqueValue(BuildLoad(GetType(expression.Type), param, expression.parameterSymbol.Name,
-			GetSize(expression.Type!)));
+		return new OpaqueValue(BuildLoad(GetType(symbolExpression.Type), param, symbolExpression.parameterSymbol.Name,
+			GetSize(symbolExpression.Type!)));
 	}
 
 	public OpaqueValue Visit(ResolvedFieldExpression expression)
@@ -1351,6 +1309,11 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	}
 
 	public OpaqueValue Visit(ResolvedTypeSymbolExpression symbolExpression)
+	{
+		throw new NotImplementedException();
+	}
+
+	public OpaqueValue Visit(ResolvedImportGroupingSymbolExpression symbolExpression)
 	{
 		throw new NotImplementedException();
 	}
@@ -1567,22 +1530,24 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			loadedName = expression.source switch
 			{
 				ResolvedThisExpression => $"this.{name}",
-				ResolvedVarExpression resolvedExpression => resolvedExpression.varSymbol.Name + $".{name}",
+				ResolvedVarSymbolExpression resolvedExpression => resolvedExpression.varSymbol.Name + $".{name}",
 				ResolvedFieldExpression resolvedExpression => resolvedExpression.fieldSymbol.Name + $".{name}",
 				ResolvedConstExpression resolvedExpression => resolvedExpression.constSymbol.Name + $".{name}",
-				ResolvedParameterExpression resolvedExpression => resolvedExpression.parameterSymbol.Name + $".{name}",
+				ResolvedParameterSymbolExpression resolvedExpression => resolvedExpression.parameterSymbol.Name + 
+				                                                        $".{name}",
 				_ => loadedName
 			};
 		}
 
 		var type = GetType(expression.source.Type);
-		var elementPtr = LLVM.BuildStructGEP2(currentBuilder, type, source, index, ConvertString($"{loadedName}.addr"));
+		var elementPtr = BuildStructGEP(type, source, index, $"{loadedName}.addr");
 		
 		if (CurrentIsLValue)
 			return new OpaqueValue(elementPtr);
 
-		return new OpaqueValue(BuildLoad(GetType(expression.target.EvaluatedType), elementPtr, loadedName,
-			GetSize(expression.target.EvaluatedType!)));
+		var targetType = GetType(expression.target.EvaluatedType!);
+		var targetSize = GetSize(expression.target.EvaluatedType!);
+		return new OpaqueValue(BuildLoad(targetType, elementPtr, loadedName, targetSize));
 	}
 
 	public OpaqueValue Visit(ResolvedAssignmentExpression expression)

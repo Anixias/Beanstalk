@@ -52,11 +52,14 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 
 public sealed class ResolvedProgramStatement : ResolvedStatementNode
 {
+	public readonly SymbolTable importedSymbols;
 	public readonly ModuleSymbol? moduleSymbol;
 	public readonly ImmutableArray<ResolvedStatementNode> topLevelStatements;
 
-	public ResolvedProgramStatement(ModuleSymbol? moduleSymbol, IEnumerable<ResolvedStatementNode> topLevelStatements)
+	public ResolvedProgramStatement(SymbolTable importedSymbols, ModuleSymbol? moduleSymbol,
+		IEnumerable<ResolvedStatementNode> topLevelStatements)
 	{
+		this.importedSymbols = importedSymbols;
 		this.moduleSymbol = moduleSymbol;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}

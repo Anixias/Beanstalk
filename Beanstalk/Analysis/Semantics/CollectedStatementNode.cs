@@ -228,16 +228,15 @@ public sealed class CollectedEntryStatement : CollectedStatementNode
 
 public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNode
 {
-	public FunctionSymbol? functionSymbol;
+	public readonly FunctionSymbol functionSymbol;
 	public readonly FunctionDeclarationStatement functionDeclarationStatement;
-	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
 
-	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement, Scope scope,
-		CollectedStatementNode body)
+	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement,
+		FunctionSymbol functionSymbol, CollectedStatementNode body)
 	{
 		this.functionDeclarationStatement = functionDeclarationStatement;
-		this.scope = scope;
+		this.functionSymbol = functionSymbol;
 		this.body = body;
 	}
 
@@ -254,11 +253,13 @@ public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNo
 
 public sealed class CollectedExternalFunctionStatement : CollectedStatementNode
 {
-	public ExternalFunctionSymbol? externalFunctionSymbol;
+	public readonly ExternalFunctionSymbol externalFunctionSymbol;
 	public readonly ExternalFunctionStatement externalFunctionStatement;
 
-	public CollectedExternalFunctionStatement(ExternalFunctionStatement externalFunctionStatement)
+	public CollectedExternalFunctionStatement(ExternalFunctionSymbol externalFunctionSymbol,
+		ExternalFunctionStatement externalFunctionStatement)
 	{
+		this.externalFunctionSymbol = externalFunctionSymbol;
 		this.externalFunctionStatement = externalFunctionStatement;
 	}
 

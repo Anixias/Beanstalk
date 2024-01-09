@@ -1,4 +1,5 @@
-﻿using Beanstalk.Analysis.Syntax;
+﻿using System.Collections.Immutable;
+using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Semantics;
@@ -55,7 +56,6 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		if (statement.identifier.Type == TokenType.OpStar)
 		{
 			// Import all functions and types from the module
-			
 			SymbolTable symbolTableToUpdate;
 			if (statement.alias is { } groupingAlias)
 			{
@@ -326,14 +326,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	public void Visit(CollectedFunctionDeclarationStatement statement)
 	{
 		var functionDeclarationStatement = statement.functionDeclarationStatement;
-		scopeStack.Push(statement.scope);
+		scopeStack.Push(statement.functionSymbol.Body);
 
 		var typeParameterSymbols = new List<TypeParameterSymbol>();
 		foreach (var typeParameter in functionDeclarationStatement.typeParameters)
 		{
 			var typeParameterSymbol = new TypeParameterSymbol(typeParameter.Text);
 			typeParameterSymbols.Add(typeParameterSymbol);
-			statement.scope.AddSymbol(typeParameterSymbol);
+			statement.functionSymbol.Body.AddSymbol(typeParameterSymbol);
 		}
 
 		var parameters = new List<ParameterSymbol>();
@@ -406,42 +406,18 @@ public partial class Collector : CollectedStatementNode.IVisitor
 
 		foreach (var parameter in parameters)
 		{
-			statement.scope.AddSymbol(parameter);
+			statement.functionSymbol.Body.AddSymbol(parameter);
 		}
-		
-		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text,
-			typeParameterSymbols, parameters, statement.scope)
-		{
-			ReturnType = returnType
-		};
 
-		statement.functionSymbol = functionSymbol;
+		statement.functionSymbol.Parameters = parameters.ToImmutableArray();
+		statement.functionSymbol.TypeParameters = typeParameterSymbols.ToImmutableArray();
+		statement.functionSymbol.ReturnType = returnType;
+
 		scopeStack.Pop();
-
-		if (CurrentScope.LookupSymbol(functionSymbol.Name) is FunctionSymbol existingFunctionSymbol)
-		{
-			if (functionSymbol.SignatureMatches(existingFunctionSymbol))
-				throw NewCollectionException("Function signature matches existing function signature",
-					functionDeclarationStatement.identifier);
-
-			foreach (var existingOverload in existingFunctionSymbol.Overloads)
-			{
-				if (functionSymbol.SignatureMatches(existingOverload))
-					throw NewCollectionException("Function signature matches existing function signature",
-						functionDeclarationStatement.identifier);
-			}
-			
-			existingFunctionSymbol.Overloads.Add(functionSymbol);
-		}
-		else
-		{
-			CurrentScope.AddSymbol(functionSymbol);
-		}
 	}
 
 	public void Visit(CollectedExternalFunctionStatement statement)
 	{
-		
 		var externalFunctionStatement = statement.externalFunctionStatement;
 
 		var parameters = new List<ParameterSymbol>();
@@ -512,24 +488,8 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			}
 		}
 
-		var externalFunctionSymbol = new ExternalFunctionSymbol(externalFunctionStatement.identifier.Text, parameters,
-			externalFunctionStatement.attributes)
-		{
-			ReturnType = returnType
-		};
-
-		statement.externalFunctionSymbol = externalFunctionSymbol;
-
-		if (CurrentScope.LookupSymbol(externalFunctionSymbol.Name) is ExternalFunctionSymbol existingFunctionSymbol)
-		{
-			if (externalFunctionSymbol.SignatureMatches(existingFunctionSymbol))
-				throw NewCollectionException("External function signature matches existing external function signature",
-					externalFunctionStatement.identifier);
-		}
-		else
-		{
-			CurrentScope.AddSymbol(externalFunctionSymbol);
-		}
+		statement.externalFunctionSymbol.Parameters = parameters.ToImmutableArray();
+		statement.externalFunctionSymbol.ReturnType = returnType;
 	}
 
 	public void Visit(CollectedConstructorDeclarationStatement statement)

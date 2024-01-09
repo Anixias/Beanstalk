@@ -1,0 +1,6 @@
+﻿module bs.io.console
+
+// 65001u = UTF8
+var fun setConsoleOutputEncoding(codePage:uint) => external(entry = "set_console_output_encoding")
+fun getConsoleOutputEncoding() :> uint => external(entry = "get_console_output_encoding")
+var fun print(text:string) => external(entry = "print")

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Semantics;
 
@@ -8,17 +9,21 @@ public class ExternalFunctionSymbol : ISymbol
 	public bool IsConstant => false;
 	public bool IsStatic => false;
 	public string Name { get; }
-	public ImmutableArray<ParameterSymbol> Parameters { get; }
-	public Type? ReturnType { get; init; }
+	public ImmutableArray<ParameterSymbol> Parameters { get; set; }
+	public IBuffer Source { get; }
+	public TextRange SignatureRange { get; }
+	public Type? ReturnType { get; set; }
+	public List<ExternalFunctionSymbol> Overloads { get; } = [];
 	public Type? EvaluatedType => GetFunctionType();
 	public IReadOnlyDictionary<string, string> Attributes { get; }
 
-	public ExternalFunctionSymbol(string name, IEnumerable<ParameterSymbol> parameters,
-		IReadOnlyDictionary<string, string> attributes)
+	public ExternalFunctionSymbol(string name, IReadOnlyDictionary<string, string> attributes, IBuffer source,
+		TextRange signatureRange)
 	{
 		Name = name;
-		Parameters = parameters.ToImmutableArray();
 		Attributes = attributes;
+		Source = source;
+		SignatureRange = signatureRange;
 	}
 
 	public bool SignatureMatches(ExternalFunctionSymbol externalFunctionSymbol)

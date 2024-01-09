@@ -1,4 +1,5 @@
-﻿using LLVMSharp.Interop;
+﻿using Beanstalk.Analysis.Semantics;
+using LLVMSharp.Interop;
 using Type = Beanstalk.Analysis.Semantics.Type;
 
 // ReSharper disable IdentifierTypo
@@ -67,5 +68,96 @@ public unsafe partial class CodeGenerator
 		}
 
 		return load;
+	}
+
+	private void DeclareStruct(StructSymbol structSymbol)
+	{
+		var structType = LLVM.StructCreateNamed(currentContext,
+			ConvertString(structSymbol.Name));
+
+		OpaqueType opaqueType;
+		if (structSymbol.HasStaticFields)
+		{
+			var boolType = LLVM.Int1TypeInContext(currentContext);
+			var staticInitialized = LLVM.AddGlobal(currentModule, boolType,
+				ConvertString($"{structSymbol.Name}.staticInitialized"));
+
+			LLVM.SetInitializer(staticInitialized, LLVM.ConstInt(boolType, 0u, LLVMBool.False));
+			opaqueType = new OpaqueType(structType, staticInitialized, 0u);
+		}
+		else
+		{
+			opaqueType = new OpaqueType(structType, 0u);
+		}
+				
+		typeSymbols.Add(structSymbol, opaqueType);
+	}
+
+	private void DeclareExternalFunction(ExternalFunctionSymbol externalFunctionSymbol)
+	{
+		if (valueSymbols.ContainsKey(externalFunctionSymbol))
+			return;
+		
+		var parameterList = externalFunctionSymbol.Parameters;
+		var parameterTypes = new LLVMOpaqueType*[parameterList.Length];
+		var isVariadic = LLVMBool.False;
+
+		for (var i = 0; i < parameterTypes.Length; i++)
+		{
+			var parameter = parameterList[i];
+			parameterTypes[i] = GetType(parameter.EvaluatedType!);
+
+			if (parameter.IsVariadic)
+				isVariadic = LLVMBool.True;
+		}
+
+		var paramTypes = ConvertArrayToPointer(parameterTypes);
+		var returnType = GetType(externalFunctionSymbol.ReturnType);
+	
+		var functionType = LLVM.FunctionType(returnType, paramTypes, (uint)parameterTypes.Length, isVariadic);
+		var name = externalFunctionSymbol.Attributes.GetValueOrDefault("entry", externalFunctionSymbol.Name);
+		
+		var externalFunction = LLVM.AddFunction(currentModule, ConvertString(name),
+			functionType);
+		
+		valueSymbols.Add(externalFunctionSymbol, new OpaqueValue(externalFunction));
+	
+		// Verification
+		if (LLVM.VerifyFunction(externalFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(externalFunction);
+	}
+
+	private void ImportSymbols(SymbolTable symbols)
+	{
+		foreach (var importedSymbol in symbols.Values)
+		{
+			switch (importedSymbol)
+			{
+				default:
+					throw new InvalidOperationException($"Unsupported imported symbol '{importedSymbol.Name}': " +
+					                                    $"{importedSymbol.SymbolTypeName}");
+				
+				case ImportGroupingSymbol importGroupingSymbol:
+					ImportSymbols(importGroupingSymbol.Symbols);
+					break;
+				
+				case StructSymbol structSymbol:
+					DeclareStruct(structSymbol);
+					break;
+				
+				case FunctionSymbol functionSymbol:
+					throw new NotImplementedException();
+				
+				case ExternalFunctionSymbol functionSymbol:
+					DeclareExternalFunction(functionSymbol);
+					break;
+			}
+		}
+	}
+
+	private LLVMOpaqueValue* BuildStructGEP(LLVMOpaqueType* structType, LLVMOpaqueValue* structRef, uint fieldIndex,
+		string fieldName)
+	{
+		return LLVM.BuildStructGEP2(currentBuilder, structType, structRef, fieldIndex, ConvertString(fieldName));
 	}
 }

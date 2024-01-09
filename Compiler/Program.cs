@@ -377,6 +377,8 @@ internal static class Program
 			file.Print();
 		}
 
+		resolver.Verify();
+
 		if (hadError || resolver.exceptions.Count > 0)
 		{
 			return false;

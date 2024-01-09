@@ -201,7 +201,7 @@ public static class Parser
 				identifierTokens.Add(identifier);
 				range = range.Join(identifier.Range);
 			}
-			else if (Match(tokens, ref position, TokenType.OpLeftParen))
+			else if (Match(tokens, ref position, TokenType.OpLeftBrace))
 			{
 				do
 				{
@@ -215,7 +215,7 @@ public static class Parser
 					importTokens.Add(new ImportToken(identifierToken, tokenAlias));
 				} while (Match(tokens, ref position, TokenType.OpComma));
 				
-				var endToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
+				var endToken = Consume(tokens, ref position, null, TokenType.OpRightBrace);
 				range = range.Join(endToken.Range);
 				isAggregate = true;
 				break;
@@ -425,6 +425,7 @@ public static class Parser
 
 		var funKeyword = Consume(tokens, ref position, null, TokenType.KeywordFun);
 		startToken ??= funKeyword;
+		var signatureRange = startToken.Range;
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 
 		var typeParameters = new List<Token>();
@@ -448,11 +449,15 @@ public static class Parser
 			} while (Match(tokens, ref position, TokenType.OpComma));
 		}
 		
-		Consume(tokens, ref position, null, TokenType.OpRightParen);
+		var rightParenToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
+		signatureRange = signatureRange.Join(rightParenToken.Range);
 
 		SyntaxType? returnType = null;
 		if (Match(tokens, ref position, TokenType.OpReturnType))
+		{
 			returnType = ParseType(tokens, ref position);
+			signatureRange = signatureRange.Join(returnType.range);
+		}
 
 		StatementNode body;
 		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
@@ -466,7 +471,7 @@ public static class Parser
 		}
 
 		return new FunctionDeclarationStatement(identifier, isStatic, isPure, typeParameters, parameters, returnType,
-			body, startToken.Range.Join(body.range));
+			body, startToken.Range.Join(body.range), signatureRange);
 	}
 
 	private static bool TryParseExternalFunctionStatement(IReadOnlyList<Token> tokens, ref int position,
@@ -519,6 +524,7 @@ public static class Parser
 
 		var funKeyword = Consume(tokens, ref position, null, TokenType.KeywordFun);
 		startToken ??= funKeyword;
+		var signatureRange = startToken.Range;
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -532,12 +538,14 @@ public static class Parser
 			} while (Match(tokens, ref position, TokenType.OpComma));
 		}
 		
-		Consume(tokens, ref position, null, TokenType.OpRightParen);
+		var rightParenToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
+		signatureRange = signatureRange.Join(rightParenToken.Range);
 
 		SyntaxType? returnType = null;
 		if (Match(tokens, ref position, TokenType.OpReturnType))
 		{
 			returnType = ParseType(tokens, ref position);
+			signatureRange = signatureRange.Join(returnType.range);
 		}
 
 		var attributes = new Dictionary<string, string>();
@@ -563,7 +571,7 @@ public static class Parser
 
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
 		return new ExternalFunctionStatement(identifier, parameters, returnType, attributes,
-			startToken.Range.Join(endToken.Range));
+			startToken.Range.Join(endToken.Range), signatureRange);
 	}
 
 	private static bool TryParseConstructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
