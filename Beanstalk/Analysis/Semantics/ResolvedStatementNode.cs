@@ -16,6 +16,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		T Visit(ResolvedFunctionDeclarationStatement statement);
 		T Visit(ResolvedConstructorDeclarationStatement statement);
 		T Visit(ResolvedDestructorDeclarationStatement statement);
+		T Visit(ResolvedStringDeclarationStatement statement);
 		T Visit(ResolvedOperatorDeclarationStatement statement);
 		T Visit(ResolvedExpressionStatement statement);
 		T Visit(ResolvedReturnStatement statement);
@@ -36,6 +37,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedFunctionDeclarationStatement statement);
 		void Visit(ResolvedConstructorDeclarationStatement statement);
 		void Visit(ResolvedDestructorDeclarationStatement statement);
+		void Visit(ResolvedStringDeclarationStatement statement);
 		void Visit(ResolvedOperatorDeclarationStatement statement);
 		void Visit(ResolvedExpressionStatement statement);
 		void Visit(ResolvedReturnStatement statement);
@@ -257,6 +259,28 @@ public sealed class ResolvedDestructorDeclarationStatement : ResolvedStatementNo
 	public ResolvedDestructorDeclarationStatement(DestructorSymbol destructorSymbol, ResolvedStatementNode body)
 	{
 		this.destructorSymbol = destructorSymbol;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedStringDeclarationStatement : ResolvedStatementNode
+{
+	public readonly StringFunctionSymbol stringFunctionSymbol;
+	public readonly ResolvedStatementNode body;
+	
+	public ResolvedStringDeclarationStatement(StringFunctionSymbol stringFunctionSymbol, ResolvedStatementNode body)
+	{
+		this.stringFunctionSymbol = stringFunctionSymbol;
 		this.body = body;
 	}
 

@@ -55,9 +55,22 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		if (statement.identifier.Type == TokenType.OpStar)
 		{
 			// Import all functions and types from the module
+			
+			SymbolTable symbolTableToUpdate;
+			if (statement.alias is { } groupingAlias)
+			{
+				var importGroupingSymbol = new ImportGroupingSymbol(groupingAlias.Text);
+				symbolTableToUpdate = importGroupingSymbol.Symbols;
+				importedSymbols.Add(importGroupingSymbol);
+			}
+			else
+			{
+				symbolTableToUpdate = importedSymbols;
+			}
+			
 			foreach (var symbol in CurrentScope.SymbolTable.Values)
 			{
-				importedSymbols.Add(symbol);
+				symbolTableToUpdate.Add(symbol);
 			}
 		}
 		else
@@ -74,6 +87,51 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			else
 			{
 				importedSymbols.Add(importedSymbol);
+			}
+		}
+
+		while (scopeCount-- > 0)
+			scopeStack.Pop();
+	}
+
+	private void HandleAggregateImport(AggregateImportStatement statement)
+	{
+		var scopeCount = 0;
+		foreach (var module in statement.scope.identifiers)
+		{
+			if (!CurrentScope.LookupSymbol(module.Text, out ModuleSymbol? moduleSymbol, out _) || moduleSymbol is null)
+				throw NewCollectionException($"Could not find a module named {module.Text}");
+
+			scopeStack.Push(moduleSymbol.Scope);
+			scopeCount++;
+		}
+
+		SymbolTable symbolTableToUpdate;
+		if (statement.alias is { } groupingAlias)
+		{
+			var importGroupingSymbol = new ImportGroupingSymbol(groupingAlias.Text);
+			symbolTableToUpdate = importGroupingSymbol.Symbols;
+			importedSymbols.Add(importGroupingSymbol);
+		}
+		else
+		{
+			symbolTableToUpdate = importedSymbols;
+		}
+
+		foreach (var importToken in statement.tokens)
+		{
+			if (CurrentScope.LookupSymbol(importToken.token.Text) is not { } importedSymbol)
+				throw NewCollectionException(
+					$"Could not find a symbol named {importToken.token.Text} in module {statement.scope.text}");
+
+			if (importToken.alias is { } alias)
+			{
+				var aliasSymbol = new AliasedSymbol(alias.Text, importedSymbol);
+				symbolTableToUpdate.Add(aliasSymbol);
+			}
+			else
+			{
+				symbolTableToUpdate.Add(importedSymbol);
 			}
 		}
 
@@ -102,7 +160,19 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	{
 		foreach (var importStatement in statement.importStatements)
 		{
-			HandleImport(importStatement);
+			switch (importStatement)
+			{
+				case ImportStatement import:
+					HandleImport(import);
+					break;
+				
+				case AggregateImportStatement import:
+					HandleAggregateImport(import);
+					break;
+				
+				default:
+					throw NewCollectionException("Invalid import statement", importStatement.range);
+			}
 		}
 
 		var inModule = false;
@@ -576,6 +646,34 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		}
 		
 		CurrentScope.AddSymbol(destructorSymbol);
+	}
+
+	public void Visit(CollectedStringDeclarationStatement statement)
+	{
+		var stringDeclarationStatement = statement.stringDeclarationStatement;
+		scopeStack.Push(statement.scope);
+		
+		// Intrinsic 'this'
+		var thisSymbol = new ParameterSymbol(new VarSymbol("this", false)
+		{
+			EvaluatedType = new ReferenceType(new BaseType(CurrentType), false)
+		}, null, false, 0u);
+		statement.scope.AddSymbol(thisSymbol);
+
+		var stringFunctionSymbol = new StringFunctionSymbol(CurrentType, thisSymbol, statement.scope);
+
+		statement.stringFunctionSymbol = stringFunctionSymbol;
+		scopeStack.Pop();
+
+		if (CurrentScope.LookupSymbol(stringFunctionSymbol.Name) is StringFunctionSymbol)
+		{
+			exceptions.Add(NewCollectionException("A string function is already declared in this scope",
+				stringDeclarationStatement.stringKeyword));
+
+			return;
+		}
+		
+		CurrentScope.AddSymbol(stringFunctionSymbol);
 	}
 
 	public void Visit(CollectedCastDeclarationStatement statement)

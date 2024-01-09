@@ -7,25 +7,29 @@ namespace Beanstalk.Analysis.Semantics;
 public abstract class ResolvedExpressionNode : IResolvedAstNode
 {
 	public Type? Type { get; }
+	public bool IsConstant { get; }
 
-	protected ResolvedExpressionNode(Type? type)
+	protected ResolvedExpressionNode(Type? type, bool isConstant)
 	{
 		Type = type;
+		IsConstant = isConstant;
 	}
 	public interface IVisitor<out T>
 	{
-		T Visit(ResolvedFunctionExpression expression);
-		T Visit(ResolvedConstructorExpression expression);
-		T Visit(ResolvedExternalFunctionExpression expression);
+		T Visit(ResolvedFunctionSymbolExpression symbolExpression);
+		T Visit(ResolvedConstructorSymbolExpression symbolExpression);
+		T Visit(ResolvedStringFunctionSymbolExpression symbolExpression);
+		T Visit(ResolvedExternalFunctionSymbolExpression symbolExpression);
 		T Visit(ResolvedFunctionCallExpression expression);
 		T Visit(ResolvedConstructorCallExpression expression);
+		T Visit(ResolvedStringCallExpression expression);
 		T Visit(ResolvedExternalFunctionCallExpression expression);
 		T Visit(ResolvedThisExpression expression);
 		T Visit(ResolvedVarExpression expression);
 		T Visit(ResolvedParameterExpression expression);
 		T Visit(ResolvedFieldExpression expression);
 		T Visit(ResolvedConstExpression expression);
-		T Visit(ResolvedTypeExpression expression);
+		T Visit(ResolvedTypeSymbolExpression symbolExpression);
 		T Visit(ResolvedLiteralExpression expression);
 		T Visit(ResolvedBinaryExpression expression);
 		T Visit(ResolvedSymbolExpression expression);
@@ -36,18 +40,20 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 	
 	public interface IVisitor
 	{
-		void Visit(ResolvedFunctionExpression expression);
-		void Visit(ResolvedConstructorExpression expression);
-		void Visit(ResolvedExternalFunctionExpression expression);
+		void Visit(ResolvedFunctionSymbolExpression symbolExpression);
+		void Visit(ResolvedConstructorSymbolExpression symbolExpression);
+		void Visit(ResolvedStringFunctionSymbolExpression symbolExpression);
+		void Visit(ResolvedExternalFunctionSymbolExpression symbolExpression);
 		void Visit(ResolvedFunctionCallExpression expression);
 		void Visit(ResolvedConstructorCallExpression expression);
+		void Visit(ResolvedStringCallExpression expression);
 		void Visit(ResolvedExternalFunctionCallExpression expression);
 		void Visit(ResolvedThisExpression expression);
 		void Visit(ResolvedVarExpression expression);
 		void Visit(ResolvedParameterExpression expression);
 		void Visit(ResolvedFieldExpression expression);
 		void Visit(ResolvedConstExpression expression);
-		void Visit(ResolvedTypeExpression expression);
+		void Visit(ResolvedTypeSymbolExpression symbolExpression);
 		void Visit(ResolvedLiteralExpression expression);
 		void Visit(ResolvedBinaryExpression expression);
 		void Visit(ResolvedSymbolExpression expression);
@@ -60,11 +66,12 @@ public abstract class ResolvedExpressionNode : IResolvedAstNode
 	public abstract T Accept<T>(IVisitor<T> visitor);
 }
 
-public sealed class ResolvedFunctionExpression : ResolvedExpressionNode
+public sealed class ResolvedFunctionSymbolExpression : ResolvedExpressionNode
 {
 	public readonly FunctionSymbol functionSymbol;
 	
-	public ResolvedFunctionExpression(FunctionSymbol functionSymbol) : base(functionSymbol.EvaluatedType)
+	// Todo: Pure functions vs side-effect functions
+	public ResolvedFunctionSymbolExpression(FunctionSymbol functionSymbol) : base(functionSymbol.EvaluatedType, false)
 	{
 		this.functionSymbol = functionSymbol;
 	}
@@ -80,11 +87,12 @@ public sealed class ResolvedFunctionExpression : ResolvedExpressionNode
 	}
 }
 
-public sealed class ResolvedConstructorExpression : ResolvedExpressionNode
+public sealed class ResolvedConstructorSymbolExpression : ResolvedExpressionNode
 {
 	public readonly ConstructorSymbol constructorSymbol;
 	
-	public ResolvedConstructorExpression(ConstructorSymbol constructorSymbol) : base(constructorSymbol.EvaluatedType)
+	public ResolvedConstructorSymbolExpression(ConstructorSymbol constructorSymbol)
+		: base(constructorSymbol.EvaluatedType, false)
 	{
 		this.constructorSymbol = constructorSymbol;
 	}
@@ -100,12 +108,33 @@ public sealed class ResolvedConstructorExpression : ResolvedExpressionNode
 	}
 }
 
-public sealed class ResolvedExternalFunctionExpression : ResolvedExpressionNode
+public sealed class ResolvedStringFunctionSymbolExpression : ResolvedExpressionNode
+{
+	public readonly StringFunctionSymbol stringFunctionSymbol;
+	
+	public ResolvedStringFunctionSymbolExpression(StringFunctionSymbol stringFunctionSymbol)
+		: base(TypeSymbol.String.EvaluatedType, false)
+	{
+		this.stringFunctionSymbol = stringFunctionSymbol;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedExternalFunctionSymbolExpression : ResolvedExpressionNode
 {
 	public readonly ExternalFunctionSymbol functionSymbol;
 
-	public ResolvedExternalFunctionExpression(ExternalFunctionSymbol functionSymbol) : base(
-		functionSymbol.EvaluatedType)
+	public ResolvedExternalFunctionSymbolExpression(ExternalFunctionSymbol functionSymbol) : base(
+		functionSymbol.EvaluatedType, false)
 	{
 		this.functionSymbol = functionSymbol;
 	}
@@ -127,7 +156,7 @@ public sealed class ResolvedFunctionCallExpression : ResolvedExpressionNode
 	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
 
 	public ResolvedFunctionCallExpression(FunctionSymbol functionSymbol, IEnumerable<ResolvedExpressionNode> arguments)
-		: base(functionSymbol.EvaluatedType)
+		: base(functionSymbol.EvaluatedType, false)
 	{
 		this.functionSymbol = functionSymbol;
 		this.arguments = arguments.ToImmutableArray();
@@ -150,10 +179,33 @@ public sealed class ResolvedConstructorCallExpression : ResolvedExpressionNode
 	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
 
 	public ResolvedConstructorCallExpression(ConstructorSymbol constructorSymbol,
-		IEnumerable<ResolvedExpressionNode> arguments) : base(constructorSymbol.EvaluatedType)
+		IEnumerable<ResolvedExpressionNode> arguments) : base(constructorSymbol.EvaluatedType, false)
 	{
 		this.constructorSymbol = constructorSymbol;
 		this.arguments = arguments.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedStringCallExpression : ResolvedExpressionNode
+{
+	public readonly StringFunctionSymbol stringFunctionSymbol;
+	public readonly ResolvedExpressionNode source;
+
+	public ResolvedStringCallExpression(StringFunctionSymbol stringFunctionSymbol, ResolvedExpressionNode source)
+		: base(TypeSymbol.String.EvaluatedType, false)
+	{
+		this.stringFunctionSymbol = stringFunctionSymbol;
+		this.source = source;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -173,7 +225,7 @@ public sealed class ResolvedExternalFunctionCallExpression : ResolvedExpressionN
 	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
 
 	public ResolvedExternalFunctionCallExpression(ExternalFunctionSymbol functionSymbol,
-		IEnumerable<ResolvedExpressionNode> arguments) : base(functionSymbol.EvaluatedType)
+		IEnumerable<ResolvedExpressionNode> arguments) : base(functionSymbol.EvaluatedType, false)
 	{
 		this.functionSymbol = functionSymbol;
 		this.arguments = arguments.ToImmutableArray();
@@ -194,7 +246,7 @@ public sealed class ResolvedVarExpression : ResolvedExpressionNode
 {
 	public readonly VarSymbol varSymbol;
 	
-	public ResolvedVarExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType)
+	public ResolvedVarExpression(VarSymbol varSymbol) : base(varSymbol.EvaluatedType, false)
 	{
 		this.varSymbol = varSymbol;
 	}
@@ -214,7 +266,7 @@ public sealed class ResolvedParameterExpression : ResolvedExpressionNode
 {
 	public readonly ParameterSymbol parameterSymbol;
 	
-	public ResolvedParameterExpression(ParameterSymbol parameterSymbol) : base(parameterSymbol.EvaluatedType)
+	public ResolvedParameterExpression(ParameterSymbol parameterSymbol) : base(parameterSymbol.EvaluatedType, false)
 	{
 		this.parameterSymbol = parameterSymbol;
 	}
@@ -232,7 +284,7 @@ public sealed class ResolvedParameterExpression : ResolvedExpressionNode
 
 public sealed class ResolvedThisExpression : ResolvedExpressionNode
 {
-	public ResolvedThisExpression(Type type) : base(type)
+	public ResolvedThisExpression(Type type) : base(type, false)
 	{
 	}
 
@@ -251,7 +303,7 @@ public sealed class ResolvedFieldExpression : ResolvedExpressionNode
 {
 	public readonly FieldSymbol fieldSymbol;
 	
-	public ResolvedFieldExpression(FieldSymbol fieldSymbol) : base(fieldSymbol.EvaluatedType)
+	public ResolvedFieldExpression(FieldSymbol fieldSymbol) : base(fieldSymbol.EvaluatedType, false)
 	{
 		this.fieldSymbol = fieldSymbol;
 	}
@@ -271,7 +323,7 @@ public sealed class ResolvedConstExpression : ResolvedExpressionNode
 {
 	public readonly ConstSymbol constSymbol;
 	
-	public ResolvedConstExpression(ConstSymbol constSymbol) : base(constSymbol.EvaluatedType)
+	public ResolvedConstExpression(ConstSymbol constSymbol) : base(constSymbol.EvaluatedType, true)
 	{
 		this.constSymbol = constSymbol;
 	}
@@ -287,11 +339,12 @@ public sealed class ResolvedConstExpression : ResolvedExpressionNode
 	}
 }
 
-public sealed class ResolvedTypeExpression : ResolvedExpressionNode
+public sealed class ResolvedTypeSymbolExpression : ResolvedExpressionNode
 {
 	public readonly TypeSymbol typeSymbol;
 	
-	public ResolvedTypeExpression(TypeSymbol typeSymbol) : base(typeSymbol.EvaluatedType)
+	// Todo: Are type symbols considered to be compile-time constants?
+	public ResolvedTypeSymbolExpression(TypeSymbol typeSymbol) : base(typeSymbol.EvaluatedType, false)
 	{
 		this.typeSymbol = typeSymbol;
 	}
@@ -311,7 +364,7 @@ public sealed class ResolvedLiteralExpression : ResolvedExpressionNode
 {
 	public readonly Token token;
 	
-	public ResolvedLiteralExpression(Token token, Type? type) : base(type)
+	public ResolvedLiteralExpression(Token token, Type? type) : base(type, true)
 	{
 		this.token = token;
 	}
@@ -336,7 +389,7 @@ public sealed class ResolvedBinaryExpression : ResolvedExpressionNode
 
 	public ResolvedBinaryExpression(ResolvedExpressionNode left, ResolvedExpressionNode right,
 		OperatorOverloadSymbol operatorSymbol, BinaryExpression.Operation operation) : base(
-		operatorSymbol.ReturnType)
+		operatorSymbol.ReturnType, left.IsConstant && right.IsConstant)
 	{
 		this.left = left;
 		this.right = right;
@@ -359,12 +412,13 @@ public sealed class ResolvedSymbolExpression : ResolvedExpressionNode
 {
 	public readonly ISymbol symbol;
 	
-	public ResolvedSymbolExpression(ISymbol symbol) : base(symbol.EvaluatedType)
+	// Todo: Are symbols compile-time constants?
+	public ResolvedSymbolExpression(ISymbol symbol) : base(symbol.EvaluatedType, false)
 	{
 		this.symbol = symbol;
 	}
 	
-	public ResolvedSymbolExpression(ISymbol symbol, Type? type) : base(type)
+	public ResolvedSymbolExpression(ISymbol symbol, Type? type) : base(type, false)
 	{
 		this.symbol = symbol;
 	}
@@ -385,7 +439,7 @@ public sealed class ResolvedTypeAccessExpression : ResolvedExpressionNode
 	public readonly Type source;
 	public readonly ISymbol target;
 	
-	public ResolvedTypeAccessExpression(Type source, ISymbol target) : base(target.EvaluatedType)
+	public ResolvedTypeAccessExpression(Type source, ISymbol target) : base(target.EvaluatedType, target.IsConstant)
 	{
 		this.source = source;
 		this.target = target;
@@ -407,7 +461,8 @@ public sealed class ResolvedValueAccessExpression : ResolvedExpressionNode
 	public readonly ResolvedExpressionNode source;
 	public readonly ISymbol target;
 	
-	public ResolvedValueAccessExpression(ResolvedExpressionNode source, ISymbol target) : base(target.EvaluatedType)
+	public ResolvedValueAccessExpression(ResolvedExpressionNode source, ISymbol target)
+		: base(target.EvaluatedType, target.IsConstant)
 	{
 		this.source = source;
 		this.target = target;
@@ -429,8 +484,8 @@ public sealed class ResolvedAssignmentExpression : ResolvedExpressionNode
 	public readonly ResolvedExpressionNode left;
 	public readonly ResolvedExpressionNode right;
 
-	public ResolvedAssignmentExpression(ResolvedExpressionNode left, ResolvedExpressionNode right) : base(
-		left.Type)
+	public ResolvedAssignmentExpression(ResolvedExpressionNode left, ResolvedExpressionNode right)
+		: base(left.Type, left.IsConstant)
 	{
 		this.left = left;
 		this.right = right;

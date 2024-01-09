@@ -8,6 +8,7 @@ namespace Beanstalk.Analysis.Semantics;
 public abstract class OperatorOverloadSymbol : IFunctionSymbol
 {
 	public bool IsNative { get; }
+	public bool IsConstant => false;
 	public bool IsStatic => true;
 	public string SymbolTypeName => "an operator overload";
 	public Type EvaluatedType => ReturnType;

@@ -7,6 +7,7 @@ public sealed class FunctionSymbol : IFunctionSymbol
 	// Todo: Support instance methods
 	public bool IsStatic => true;
 	public string SymbolTypeName => "a function";
+	public bool IsConstant => false;
 	public string Name { get; }
 	public ImmutableArray<TypeParameterSymbol> TypeParameters { get; }
 	public ImmutableArray<ParameterSymbol> Parameters { get; }

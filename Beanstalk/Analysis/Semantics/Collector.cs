@@ -14,12 +14,25 @@ public class CollectionException : Exception
 		FilePath = filePath;
 	}
 
+	public CollectionException(string message, IBuffer source, TextRange range, string workingDirectory,
+		string filePath) : base(FormatMessage(message, source, range))
+	{
+		WorkingDirectory = workingDirectory;
+		FilePath = filePath;
+	}
+
 	private static string FormatMessage(string message, Token? token)
 	{
 		if (token is null)
 			return message;
 
 		return $"[line {token.Line}, column {token.Column} at '{token.Text}'] {message}";
+	}
+
+	private static string FormatMessage(string message, IBuffer source, TextRange range)
+	{
+		var (line, column) = source.GetLineColumn(range.Start);
+		return $"[line {line}, column {column} at '{source.GetText(range)}'] {message}";
 	}
 }
 
@@ -39,6 +52,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	public readonly List<CollectionException> exceptions = [];
 	private string currentWorkingDirectory = "";
 	private string currentFilePath = "";
+	private IBuffer? currentSource;
 
 	public Collector(bool is64Bit)
 	{
@@ -85,12 +99,18 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		return new CollectionException(message, token, currentWorkingDirectory, currentFilePath);
 	}
 
+	private CollectionException NewCollectionException(string message, TextRange range)
+	{
+		return new CollectionException(message, currentSource!, range, currentWorkingDirectory, currentFilePath);
+	}
+
 	public CollectedAst? Collect(Ast ast, string workingDirectory, string filePath)
 	{
 		try
 		{
 			currentWorkingDirectory = workingDirectory;
 			currentFilePath = filePath;
+			currentSource = ast.Source;
 
 			var root = ast.Root switch
 			{
@@ -118,6 +138,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		{
 			currentWorkingDirectory = "";
 			currentFilePath = "";
+			currentSource = null;
 		}
 	}
 	
@@ -168,6 +189,12 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	}
 
 	public CollectedStatementNode Visit(ImportStatement statement)
+	{
+		// Todo
+		return new CollectedSimpleStatement(statement);
+	}
+
+	public CollectedStatementNode Visit(AggregateImportStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
@@ -380,6 +407,18 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		return new CollectedCastDeclarationStatement(statement, scope, body);
 	}
 
+	public CollectedStatementNode Visit(StringDeclarationStatement statement)
+	{
+		var scope = new Scope(CurrentScope);
+		scopeStack.Push(scope);
+
+		var body = statement.body.Accept(this);
+
+		scopeStack.Pop();
+		
+		return new CollectedStringDeclarationStatement(statement, scope, body);
+	}
+
 	public CollectedStatementNode Visit(OperatorDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
@@ -425,7 +464,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				if (statement.initializer is null)
 					throw NewCollectionException("Constant fields require an initializer", statement.identifier);
 				
-				var constantSymbol = new ConstSymbol(name, statement.isStatic);
+				var constantSymbol = new ConstSymbol(name);
 				CurrentScope.AddSymbol(constantSymbol);
 				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType, statement.initializer,
 					statement.range);

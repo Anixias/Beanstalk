@@ -5,9 +5,11 @@ namespace Beanstalk.Analysis.Semantics;
 public class ExternalFunctionSymbol : ISymbol
 {
 	public string SymbolTypeName => "an external function";
+	public bool IsConstant => false;
+	public bool IsStatic => false;
 	public string Name { get; }
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
-	public Type? ReturnType { get; set; }
+	public Type? ReturnType { get; init; }
 	public Type? EvaluatedType => GetFunctionType();
 	public IReadOnlyDictionary<string, string> Attributes { get; }
 

@@ -5,6 +5,7 @@ public sealed class CastOverloadSymbol : IFunctionSymbol
 	public bool IsStatic => true;
 	public string SymbolTypeName => "a cast overload";
 	public Type EvaluatedType => ReturnType;
+	public bool IsConstant => false;
 	public string Name { get; }
 	public bool IsImplicit { get; }
 	public ParameterSymbol Parameter { get; }

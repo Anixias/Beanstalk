@@ -3,6 +3,7 @@
 public sealed class FieldSymbol : ISymbol
 {
 	public string SymbolTypeName => "a field";
+	public bool IsConstant => false;
 	public string Name { get; }
 	public bool IsMutable { get; }
 	public bool IsStatic { get; }

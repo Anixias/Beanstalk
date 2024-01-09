@@ -172,9 +172,9 @@ public static class Parser
 		}
 	}
 
-	private static List<ImportStatement> ParseImportStatements(IReadOnlyList<Token> tokens, ref int position)
+	private static List<StatementNode> ParseImportStatements(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var imports = new List<ImportStatement>();
+		var imports = new List<StatementNode>();
 		while (TryParseImportStatement(tokens, ref position, out var import))
 			imports.Add(import);
 
@@ -182,7 +182,7 @@ public static class Parser
 	}
 
 	private static bool TryParseImportStatement(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out ImportStatement? import)
+		[NotNullWhen(true)] out StatementNode? import)
 	{
 		import = null;
 		
@@ -190,18 +190,42 @@ public static class Parser
 			return false;
 
 		var identifierTokens = new List<Token>();
+		var importTokens = new List<ImportToken>();
+		var isAggregate = false;
+		var range = startToken.Range;
 		
 		do
 		{
-			var identifier = Consume(tokens, ref position, null, TokenType.Identifier, TokenType.OpStar);
-			identifierTokens.Add(identifier);
+			if (Match(tokens, ref position, out var identifier, TokenType.Identifier, TokenType.OpStar))
+			{
+				identifierTokens.Add(identifier);
+				range = range.Join(identifier.Range);
+			}
+			else if (Match(tokens, ref position, TokenType.OpLeftParen))
+			{
+				do
+				{
+					var identifierToken = Consume(tokens, ref position, null, TokenType.Identifier);
+					Token? tokenAlias = null;
+					if (Match(tokens, ref position, TokenType.KeywordAs))
+					{
+						tokenAlias = Consume(tokens, ref position, null, TokenType.Identifier);
+					}
+					
+					importTokens.Add(new ImportToken(identifierToken, tokenAlias));
+				} while (Match(tokens, ref position, TokenType.OpComma));
+				
+				var endToken = Consume(tokens, ref position, null, TokenType.OpRightParen);
+				range = range.Join(endToken.Range);
+				isAggregate = true;
+				break;
+			}
 		} while (Match(tokens, ref position, TokenType.OpDot));
 
-		if (identifierTokens.Count < 2)
+		if (identifierTokens.Count < (isAggregate ? 1 : 2))
 			throw new ParseException("Invalid import statement", identifierTokens.LastOrDefault());
 
 		var scope = identifierTokens.Take(identifierTokens.Count - 1).ToImmutableArray();
-		var importToken = identifierTokens.Last();
 
 		foreach (var token in scope)
 		{
@@ -209,19 +233,23 @@ public static class Parser
 				throw new ParseException("Invalid import statement: Expected 'identifier'", token);
 		}
 
-		var range = startToken.Range.Join(importToken.Range);
-
 		Token? alias = null;
-		if (importToken.Type == TokenType.Identifier)
+		if (Match(tokens, ref position, TokenType.KeywordAs))
 		{
-			if (Match(tokens, ref position, TokenType.KeywordAs))
-			{
-				alias = Consume(tokens, ref position, null, TokenType.Identifier);
-				range = range.Join(alias.Range);
-			}
+			alias = Consume(tokens, ref position, null, TokenType.Identifier);
+			range = range.Join(alias.Range);
 		}
 
-		import = new ImportStatement(new ModuleName(scope), importToken, alias, range);
+		var moduleName = new ModuleName(scope);
+		if (!isAggregate)
+		{
+			import = new ImportStatement(moduleName, identifierTokens.Last(), alias, range);
+		}
+		else
+		{
+			import = new AggregateImportStatement(moduleName, importTokens, alias, range);
+		}
+
 		return true;
 	}
 
@@ -541,6 +569,7 @@ public static class Parser
 		var modifierTokens = new[]
 		{
 			TokenType.KeywordStatic,
+			TokenType.KeywordConst,
 			TokenType.KeywordVar
 		};
 		
@@ -680,6 +709,46 @@ public static class Parser
 			returnType, body, castTypeToken.Range.Join(body.range));
 	}
 
+	private static bool TryParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out StringDeclarationStatement? stringDeclaration)
+	{
+		var validEntryTokens = new[] { TokenType.KeywordString };
+		
+		stringDeclaration = null;
+		if (!validEntryTokens.Contains(Peek(tokens, position)))
+			return false;
+
+		stringDeclaration = ParseStringDeclaration(tokens, ref position);
+		return true;
+	}
+
+	private static StringDeclarationStatement ParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	{
+		var stringKeyword = Consume(tokens, ref position, null, TokenType.KeywordString);
+		Consume(tokens, ref position, null, TokenType.OpLeftParen);
+		Consume(tokens, ref position, null, TokenType.OpRightParen);
+		if (Match(tokens, ref position, TokenType.OpReturnType))
+		{
+			var returnType = ParseType(tokens, ref position);
+			if (returnType is not BaseSyntaxType baseType || baseType.token.Type != TokenType.KeywordString)
+				throw new ParseException("Return type of the string function must be 'string'", null, returnType.range);
+		}
+
+		StatementNode body;
+
+		if (Match(tokens, ref position, TokenType.OpDoubleArrow))
+		{
+			var expression = ParseExpression(tokens, ref position);
+			body = new ReturnStatement(expression, expression.range);
+		}
+		else
+		{
+			body = ParseBlockStatement(tokens, ref position);
+		}
+
+		return new StringDeclarationStatement(stringKeyword, body, stringKeyword.Range.Join(body.range));
+	}
+
 	private static bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		List<ParseException> diagnostics, [NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
 	{
@@ -721,7 +790,8 @@ public static class Parser
 			TokenType.EndOfFile,
 			TokenType.KeywordFun,
 			TokenType.KeywordVar,
-			TokenType.KeywordStatic
+			TokenType.KeywordStatic,
+			TokenType.OpRightBrace
 		};
 		
 		var statements = new List<StatementNode>();
@@ -759,6 +829,9 @@ public static class Parser
 		
 		if (TryParseCastDeclaration(tokens, ref position, out var castDeclaration))
 			return castDeclaration;
+		
+		if (TryParseStringDeclaration(tokens, ref position, out var stringDeclaration))
+			return stringDeclaration;
 		
 		if (TryParseOperatorDeclaration(tokens, ref position, out var operationDeclaration))
 			return operationDeclaration;
@@ -876,6 +949,7 @@ public static class Parser
 			TokenType.KeywordInterface,
 			TokenType.KeywordCast,
 			TokenType.KeywordOperator,
+			TokenType.OpRightBrace
 		};
 		
 		var statements = new List<StatementNode>();
@@ -1817,7 +1891,8 @@ public static class Parser
 	{
 		var accessOperator = Consume(tokens, ref position, null, TokenType.OpQuestionDot, TokenType.OpDot);
 		var nullCheck = accessOperator.Type == TokenType.OpQuestionDot;
-		var target = Consume(tokens, ref position, null, TokenType.Identifier, TokenType.KeywordNew);
+		var target = Consume(tokens, ref position, null, TokenType.Identifier, TokenType.KeywordNew,
+			TokenType.KeywordString);
 
 		return new AccessExpression(source, target, nullCheck, source.range.Join(target.Range));
 	}

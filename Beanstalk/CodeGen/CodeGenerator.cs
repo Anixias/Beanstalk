@@ -42,7 +42,7 @@ public readonly unsafe struct OpaqueValue
 	}
 }
 
-public readonly unsafe struct OpaqueType
+internal readonly unsafe struct OpaqueType
 {
 	public readonly LLVMOpaqueType* value;
 	public readonly List<FieldSymbol> fields = [];
@@ -67,7 +67,7 @@ public readonly unsafe struct OpaqueType
 	}
 }
 
-public unsafe class FunctionContext
+internal unsafe class FunctionContext
 {
 	public readonly IFunctionSymbol functionSymbol;
 	public readonly LLVMOpaqueType* functionType;
@@ -82,6 +82,16 @@ public unsafe class FunctionContext
 		this.functionType = functionType;
 		this.functionValue = functionValue;
 		this.hasThisRef = hasThisRef;
+	}
+}
+
+internal unsafe class CallContext
+{
+	public readonly LLVMOpaqueValue* thisPtr;
+
+	public CallContext(LLVMOpaqueValue* thisPtr)
+	{
+		this.thisPtr = thisPtr;
 	}
 }
 
@@ -109,8 +119,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	private readonly Dictionary<IFunctionSymbol, FunctionContext> functionContexts = new();
 	private readonly Stack<FunctionContext> functionStack = new();
 	private FunctionContext CurrentFunctionContext => functionStack.Peek();
+	private readonly Stack<CallContext> callStack = new();
+	private CallContext CurrentCallContext => callStack.Peek();
 	private readonly Stack<bool> lvalueStack = new();
 	private bool CurrentIsLValue => lvalueStack.TryPeek(out var isLValue) && isLValue;
+	private readonly Stack<OpaqueValue> thisStack = new();
+	private OpaqueValue CurrentThisValue => thisStack.Peek();
 
 	private static readonly sbyte* EmptyString = ConvertString("");
 
@@ -645,7 +659,6 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 				{
 					switch (statement)
 					{
-
 						case ResolvedConstructorDeclarationStatement constructorDeclarationStatement:
 						{
 							var constructorSymbol = constructorDeclarationStatement.constructorSymbol;
@@ -695,6 +708,50 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 							valueSymbols.Add(constructorSymbol, new OpaqueValue(constructor));
 							var context = new FunctionContext(constructorSymbol, constructorType, constructor, true);
 							functionContexts.Add(constructorSymbol, context);
+							break;
+						}
+						
+						case ResolvedStringDeclarationStatement stringDeclarationStatement:
+						{
+							var stringFunctionSymbol = stringDeclarationStatement.stringFunctionSymbol;
+							
+							var parameterNameList = new List<string>
+							{
+								new(stringFunctionSymbol.This.Name)
+							};
+							
+							var parameterTypeList = new List<OpaqueType>
+							{
+								new(GetType(stringFunctionSymbol.This.EvaluatedType),
+									GetSize(stringFunctionSymbol.This.EvaluatedType!))
+							};
+
+							var parameterTypes = new LLVMOpaqueType*[parameterTypeList.Count];
+							for (var i = 0; i < parameterTypes.Length; i++)
+							{
+								parameterTypes[i] = parameterTypeList[i].value;
+							}
+
+							var functionType = LLVM.FunctionType(GetNativeType(TypeSymbol.String),
+								ConvertArrayToPointer(parameterTypes), (uint)parameterTypes.LongLength, LLVMBool.False);
+
+							var constructor = LLVM.AddFunction(currentModule,
+								ConvertString($"{structSymbol.Name}.string"), functionType);
+
+							if (Debug)
+							{
+								for (var i = 0; i < parameterTypes.Length; i++)
+								{
+									var param = LLVM.GetParam(constructor, (uint)i);
+									var name = parameterNameList[i];
+									var nameLength = (nuint)name.Length;
+									LLVM.SetValueName2(param, ConvertString(name), nameLength);
+								}
+							}
+
+							valueSymbols.Add(stringFunctionSymbol, new OpaqueValue(constructor));
+							var context = new FunctionContext(stringFunctionSymbol, functionType, constructor, true);
+							functionContexts.Add(stringFunctionSymbol, context);
 							break;
 						}
 						
@@ -981,6 +1038,39 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		throw new NotImplementedException();
 	}
 
+	public void Visit(ResolvedStringDeclarationStatement statement)
+	{
+		if (currentPass != CodeGenerationPass.Definitions)
+			return;
+		
+		var stringFunctionSymbol = statement.stringFunctionSymbol;
+
+		if (!valueSymbols.ContainsKey(stringFunctionSymbol))
+			throw new InvalidOperationException("String function not forward declared");
+		
+		var stringFunction = valueSymbols[stringFunctionSymbol].value;
+		
+		if (stringFunction == OpaqueValue.NullPtr || LLVM.IsUndef(stringFunction) == LLVMBool.True)
+			throw new InvalidOperationException("Unable to resolve string function");
+		
+		// Body
+		if (!functionContexts.TryGetValue(stringFunctionSymbol, out var context))
+			throw new InvalidOperationException("String function missing function context");
+		
+		// Positioning
+		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, stringFunction, EmptyString);
+		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		
+		// Instructions
+		functionStack.Push(context);
+		statement.body.Accept(this);
+		functionStack.Pop();
+	
+		// Verification
+		if (LLVM.VerifyFunction(stringFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(stringFunction);
+	}
+
 	public void Visit(ResolvedOperatorDeclarationStatement statement)
 	{
 		if (currentPass != CodeGenerationPass.Definitions)
@@ -1089,22 +1179,27 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	public void Visit(ResolvedSimpleStatement statement)
 	{
-		throw new NotImplementedException();
+		throw new InvalidOperationException();
 	}
 
-	public OpaqueValue Visit(ResolvedFunctionExpression expression)
+	public OpaqueValue Visit(ResolvedFunctionSymbolExpression symbolExpression)
 	{
-		throw new NotImplementedException();
+		throw new InvalidOperationException();
 	}
 
-	public OpaqueValue Visit(ResolvedConstructorExpression expression)
+	public OpaqueValue Visit(ResolvedConstructorSymbolExpression symbolExpression)
 	{
-		throw new NotImplementedException();
+		throw new InvalidOperationException();
 	}
 
-	public OpaqueValue Visit(ResolvedExternalFunctionExpression expression)
+	public OpaqueValue Visit(ResolvedStringFunctionSymbolExpression symbolExpression)
 	{
-		throw new NotImplementedException();
+		throw new InvalidOperationException();
+	}
+
+	public OpaqueValue Visit(ResolvedExternalFunctionSymbolExpression symbolExpression)
+	{
+		throw new InvalidOperationException();
 	}
 
 	public OpaqueValue Visit(ResolvedFunctionCallExpression expression)
@@ -1114,8 +1209,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	public OpaqueValue Visit(ResolvedConstructorCallExpression expression)
 	{
-		var ownerSymbol = expression.constructorSymbol.Owner;
 		var constructorSymbol = expression.constructorSymbol;
+		var ownerSymbol = constructorSymbol.Owner;
 
 		if (!valueSymbols.ContainsKey(constructorSymbol))
 			throw new Exception($"Constructor for type '{constructorSymbol.Owner.Name}' not forward declared");
@@ -1153,13 +1248,44 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		return new OpaqueValue(thisAllocation);
 	}
 
+	public OpaqueValue Visit(ResolvedStringCallExpression expression)
+	{
+		var functionSymbol = expression.stringFunctionSymbol;
+		var ownerSymbol = functionSymbol.Owner;
+
+		if (!valueSymbols.ContainsKey(functionSymbol))
+			throw new Exception($"String function for type '{functionSymbol.Owner.Name}' not forward declared");
+
+		if (!typeSymbols.ContainsKey(ownerSymbol))
+			throw new Exception($"Type '{ownerSymbol.Name}' not forward declared");
+		
+		var ownerValue = typeSymbols[ownerSymbol];
+		var owner = ownerValue.value;
+
+		if (!valueSymbols.ContainsKey(functionSymbol))
+			throw new InvalidOperationException("String function not forward declared");
+		
+		var function = valueSymbols[functionSymbol].value;
+		
+		if (function == OpaqueValue.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
+			throw new InvalidOperationException("Unable to resolve string function");
+		
+		lvalueStack.Push(true);
+		var source = expression.source.Accept(this).value;
+		lvalueStack.Pop();
+		
+		var arguments = new LLVMOpaqueValue*[] { source };
+
+		return new OpaqueValue(BuildCall(function, arguments, ""));
+	}
+
 	public OpaqueValue Visit(ResolvedExternalFunctionCallExpression expression)
 	{
 		var functionSymbol = expression.functionSymbol;
 		var functionName = functionSymbol.Attributes.GetValueOrDefault("entry", functionSymbol.Name);
 
 		if (!valueSymbols.ContainsKey(functionSymbol))
-			throw new Exception($"External function '{functionName}' not forward declared");
+			throw new InvalidOperationException($"External function '{functionName}' not forward declared");
 		
 		var function = valueSymbols[functionSymbol].value;
 		
@@ -1224,7 +1350,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		throw new NotImplementedException();
 	}
 
-	public OpaqueValue Visit(ResolvedTypeExpression expression)
+	public OpaqueValue Visit(ResolvedTypeSymbolExpression symbolExpression)
 	{
 		throw new NotImplementedException();
 	}
@@ -1309,12 +1435,15 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 		if (operatorSymbol.IsNative)
 		{
-			var stringType = TypeSymbol.String.EvaluatedType;
-			if (expression.left.Type == stringType || expression.right.Type == stringType)
+			if (expression.operation == BinaryExpression.Operation.Add)
 			{
-				return BuildStringConcatenation(expression.left.Type, left, expression.right.Type, right);
+				var stringType = TypeSymbol.String.EvaluatedType;
+				if (Type.Matches(expression.left.Type, stringType) && Type.Matches(expression.right.Type, stringType))
+				{
+					return BuildStringConcatenation(left, right);
+				}
 			}
-			
+
 			var isFloatingPoint = false;
 
 			switch (expression.left.Type)
@@ -1356,7 +1485,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 					? LLVM.BuildFMul(currentBuilder, left, right, EmptyString)
 					: LLVM.BuildMul(currentBuilder, left, right, EmptyString),
 				
-				_ => throw new InvalidOperationException("Unsupported binary operator for native types")
+				_ => throw new InvalidOperationException("Unsupported operation for native types")
 			};
 
 			if (!CurrentIsLValue)
@@ -1392,8 +1521,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		return new OpaqueValue(allocation);
 	}
 
-	private OpaqueValue BuildStringConcatenation(Type? leftType, LLVMOpaqueValue* left, Type? rightType,
-		LLVMOpaqueValue* right)
+	private OpaqueValue BuildStringConcatenation(LLVMOpaqueValue* left, LLVMOpaqueValue* right)
 	{
 		throw new NotImplementedException();
 	}

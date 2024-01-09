@@ -1,17 +1,16 @@
 ﻿namespace Beanstalk.Analysis.Semantics;
 
-public sealed class ModuleSymbol : ISymbol
+public sealed class ImportGroupingSymbol : ISymbol
 {
-	public string SymbolTypeName => "a module";
+	public string SymbolTypeName => "an import grouping";
 	public Type? EvaluatedType => null;
 	public bool IsConstant => false;
 	public bool IsStatic => false;
 	public string Name { get; }
-	public Scope Scope { get; }
+	public SymbolTable Symbols { get; } = new();
 	
-	public ModuleSymbol(string name, Scope scope)
+	public ImportGroupingSymbol(string name)
 	{
 		Name = name;
-		Scope = scope;
 	}
 }

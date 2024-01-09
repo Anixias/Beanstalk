@@ -7,6 +7,7 @@ public sealed class EntrySymbol : IFunctionSymbol
 	public bool IsStatic => true;
 	public string SymbolTypeName => "an entry point";
 	public string Name => "$entry";
+	public bool IsConstant => false;
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Scope Body { get; }
 	public Type? EvaluatedType => null;

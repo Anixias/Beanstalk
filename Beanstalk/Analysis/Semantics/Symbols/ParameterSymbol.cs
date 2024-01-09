@@ -6,6 +6,8 @@ public sealed class ParameterSymbol : ISymbol
 {
 	public string SymbolTypeName => "a parameter";
 	public string Name => VarSymbol.Name;
+	public bool IsConstant => false;
+	public bool IsStatic => false;
 	public Type? EvaluatedType => VarSymbol.EvaluatedType;
 	public VarSymbol VarSymbol { get; }
 	public ExpressionNode? Expression { get; }

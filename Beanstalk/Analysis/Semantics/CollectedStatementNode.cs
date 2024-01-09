@@ -19,6 +19,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedExternalFunctionStatement externalFunctionStatement);
 		T Visit(CollectedConstructorDeclarationStatement statement);
 		T Visit(CollectedDestructorDeclarationStatement statement);
+		T Visit(CollectedStringDeclarationStatement statement);
 		T Visit(CollectedCastDeclarationStatement statement);
 		T Visit(CollectedOperatorDeclarationStatement statement);
 		T Visit(CollectedExpressionStatement statement);
@@ -40,6 +41,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedExternalFunctionStatement statement);
 		void Visit(CollectedConstructorDeclarationStatement statement);
 		void Visit(CollectedDestructorDeclarationStatement statement);
+		void Visit(CollectedStringDeclarationStatement statement);
 		void Visit(CollectedCastDeclarationStatement statement);
 		void Visit(CollectedOperatorDeclarationStatement statement);
 		void Visit(CollectedExpressionStatement statement);
@@ -55,11 +57,11 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 public sealed class CollectedProgramStatement : CollectedStatementNode
 {
 	public SymbolTable? importedSymbols;
-	public readonly ImmutableArray<ImportStatement> importStatements;
+	public readonly ImmutableArray<StatementNode> importStatements;
 	public readonly ModuleSymbol? moduleSymbol;
 	public readonly ImmutableArray<CollectedStatementNode> topLevelStatements;
 
-	public CollectedProgramStatement(IEnumerable<ImportStatement> importStatements, ModuleSymbol? moduleSymbol,
+	public CollectedProgramStatement(IEnumerable<StatementNode> importStatements, ModuleSymbol? moduleSymbol,
 		IEnumerable<CollectedStatementNode> topLevelStatements)
 	{
 		this.importStatements = importStatements.ToImmutableArray();
@@ -334,6 +336,32 @@ public sealed class CollectedCastDeclarationStatement : CollectedStatementNode
 		CollectedStatementNode body)
 	{
 		this.castDeclarationStatement = castDeclarationStatement;
+		this.scope = scope;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedStringDeclarationStatement : CollectedStatementNode
+{
+	public StringFunctionSymbol? stringFunctionSymbol;
+	public readonly StringDeclarationStatement stringDeclarationStatement;
+	public readonly Scope scope;
+	public readonly CollectedStatementNode body;
+
+	public CollectedStringDeclarationStatement(StringDeclarationStatement stringDeclarationStatement, Scope scope,
+		CollectedStatementNode body)
+	{
+		this.stringDeclarationStatement = stringDeclarationStatement;
 		this.scope = scope;
 		this.body = body;
 	}

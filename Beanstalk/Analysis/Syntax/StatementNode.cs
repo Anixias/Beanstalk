@@ -9,6 +9,7 @@ public abstract class StatementNode : IAstNode
 	{
 		T Visit(ProgramStatement statement);
 		T Visit(ImportStatement statement);
+		T Visit(AggregateImportStatement statement);
 		T Visit(DllImportStatement statement);
 		T Visit(ExternalFunctionStatement statement);
 		T Visit(ModuleStatement statement);
@@ -26,6 +27,7 @@ public abstract class StatementNode : IAstNode
 		T Visit(StructDeclarationStatement statement);
 		T Visit(InterfaceDeclarationStatement statement);
 		T Visit(CastDeclarationStatement statement);
+		T Visit(StringDeclarationStatement statement);
 		T Visit(OperatorDeclarationStatement statement);
 		T Visit(FieldDeclarationStatement statement);
 		T Visit(DefineStatement statement);
@@ -35,6 +37,7 @@ public abstract class StatementNode : IAstNode
 	{
 		void Visit(ProgramStatement programStatement);
 		void Visit(ImportStatement statement);
+		void Visit(AggregateImportStatement statement);
 		void Visit(DllImportStatement statement);
 		void Visit(ExternalFunctionStatement statement);
 		void Visit(ModuleStatement statement);
@@ -52,6 +55,7 @@ public abstract class StatementNode : IAstNode
 		void Visit(StructDeclarationStatement structDeclarationStatement);
 		void Visit(InterfaceDeclarationStatement statement);
 		void Visit(CastDeclarationStatement statement);
+		void Visit(StringDeclarationStatement statement);
 		void Visit(OperatorDeclarationStatement statement);
 		void Visit(FieldDeclarationStatement statement);
 		void Visit(DefineStatement statement);
@@ -70,16 +74,53 @@ public abstract class StatementNode : IAstNode
 
 public sealed class ProgramStatement : StatementNode
 {
-	public readonly ImmutableArray<ImportStatement> importStatements;
+	public readonly ImmutableArray<StatementNode> importStatements;
 	public readonly ModuleStatement? moduleStatement;
 	public readonly ImmutableArray<StatementNode> topLevelStatements;
 
-	public ProgramStatement(IEnumerable<ImportStatement> importStatements, ModuleStatement? moduleStatement,
+	public ProgramStatement(IEnumerable<StatementNode> importStatements, ModuleStatement? moduleStatement,
 		IEnumerable<StatementNode> topLevelStatements, TextRange range) : base(range)
 	{
 		this.importStatements = importStatements.ToImmutableArray();
 		this.moduleStatement = moduleStatement;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public readonly struct ImportToken
+{
+	public readonly Token token;
+	public readonly Token? alias;
+
+	public ImportToken(Token token, Token? alias)
+	{
+		this.token = token;
+		this.alias = alias;
+	}
+}
+
+public sealed class AggregateImportStatement : StatementNode
+{
+	public readonly ModuleName scope;
+	public readonly ImmutableArray<ImportToken> tokens;
+	public readonly Token? alias;
+
+	public AggregateImportStatement(ModuleName scope, IEnumerable<ImportToken> tokens, Token? alias, TextRange range)
+		: base(range)
+	{
+		this.scope = scope;
+		this.tokens = tokens.ToImmutableArray();
+		this.alias = alias;
 	}
 
 	public override void Accept(IVisitor visitor)
@@ -99,7 +140,8 @@ public sealed class ImportStatement : StatementNode
 	public readonly Token identifier;
 	public readonly Token? alias;
 
-	public ImportStatement(ModuleName scope, Token identifier, Token? alias, TextRange range) : base(range)
+	public ImportStatement(ModuleName scope, Token identifier, Token? alias, TextRange range)
+		: base(range)
 	{
 		this.scope = scope;
 		this.identifier = identifier;
@@ -519,6 +561,28 @@ public sealed class CastDeclarationStatement : StatementNode
 		this.isImplicit = isImplicit;
 		this.parameter = parameter;
 		this.returnSyntaxType = returnSyntaxType;
+		this.body = body;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class StringDeclarationStatement : StatementNode
+{
+	public readonly Token stringKeyword;
+	public readonly StatementNode body;
+
+	public StringDeclarationStatement(Token stringKeyword, StatementNode body, TextRange range) : base(range)
+	{
+		this.stringKeyword = stringKeyword;
 		this.body = body;
 	}
 

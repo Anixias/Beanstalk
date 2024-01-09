@@ -46,6 +46,11 @@ public sealed class ReturnStatementFinder : StatementNode.IVisitor
 		throw new NotImplementedException();
 	}
 
+	public void Visit(AggregateImportStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
 	public void Visit(DllImportStatement statement)
 	{
 		throw new NotImplementedException();
@@ -130,6 +135,11 @@ public sealed class ReturnStatementFinder : StatementNode.IVisitor
 	}
 
 	public void Visit(CastDeclarationStatement statement)
+	{
+		throw new NotImplementedException();
+	}
+
+	public void Visit(StringDeclarationStatement statement)
 	{
 		throw new NotImplementedException();
 	}

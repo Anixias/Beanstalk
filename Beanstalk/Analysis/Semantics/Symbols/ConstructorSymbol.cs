@@ -7,6 +7,7 @@ public sealed class ConstructorSymbol : IFunctionSymbol
 	public bool IsStatic => false;
 	public const string InternalName = "$constructor";
 	public string SymbolTypeName => "a constructor";
+	public bool IsConstant => false;
 	public Type? EvaluatedType { get; }
 	public TypeSymbol Owner { get; }
 	public string Name => InternalName;

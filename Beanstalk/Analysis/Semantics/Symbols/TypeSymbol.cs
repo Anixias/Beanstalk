@@ -7,7 +7,10 @@ public abstract class TypeSymbol : ISymbol
 {
 	private static uint nextID = 1u;
 	private uint nextFieldIndex;
-	
+
+	// Todo: Are type symbols compile-time constants?
+	public bool IsConstant => false;
+	public bool IsStatic { get; set; } = false;
 	public Type EvaluatedType => new BaseType(this);
 	public abstract string SymbolTypeName { get; }
 	public string Name { get; }
