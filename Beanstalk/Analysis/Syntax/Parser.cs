@@ -367,7 +367,7 @@ public static class Parser
 		}
 		else
 		{
-			var statement = ParseDllImportedStatement(tokens, ref position);
+			var statement = ParseDllImportedStatement(tokens, ref position, diagnostics);
 			range = range.Join(statement.range);
 		}
 		
@@ -375,19 +375,56 @@ public static class Parser
 	}
 
 	private static bool TryParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out FunctionDeclarationStatement? functionDeclaration)
+		[NotNullWhen(true)] out FunctionDeclarationStatement? functionDeclaration,
+		List<ParseException> diagnostics)
 	{
 		functionDeclaration = null;
-		if (Peek(tokens, position) != TokenType.KeywordFun)
-			return false;
 
-		functionDeclaration = ParseFunctionDeclaration(tokens, ref position);
-		return true;
+		var startPosition = position;
+		try
+		{
+			functionDeclaration = ParseFunctionDeclaration(tokens, ref position, diagnostics);
+			return true;
+		}
+		catch (ParseException)
+		{
+			position = startPosition;
+			return false;
+		}
 	}
 
-	private static FunctionDeclarationStatement ParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private static FunctionDeclarationStatement ParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
+		Token? startToken = null;
+
+		// Todo: Access/visibility modifiers
+		var isStatic = false;
+		var isPure = true;
+
+		while (Peek(tokens, position) != TokenType.KeywordFun)
+		{
+			var modifier = Consume(tokens, ref position, null, TokenType.KeywordStatic, TokenType.KeywordVar);
+			startToken ??= modifier;
+
+			if (modifier.Type == TokenType.KeywordStatic)
+			{
+				if (isStatic)
+					diagnostics.Add(new ParseException("Function is already marked as static", modifier));
+
+				isStatic = true;
+			}
+			else if (modifier.Type == TokenType.KeywordVar)
+			{
+				if (!isPure)
+					diagnostics.Add(new ParseException("Function is already marked as impure", modifier));
+
+				isPure = false;
+			}
+		}
+
+		var funKeyword = Consume(tokens, ref position, null, TokenType.KeywordFun);
+		startToken ??= funKeyword;
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 
 		var typeParameters = new List<Token>();
@@ -428,21 +465,19 @@ public static class Parser
 			body = ParseBlockStatement(tokens, ref position);
 		}
 
-		return new FunctionDeclarationStatement(identifier, typeParameters, parameters, returnType, body,
-			startToken.Range.Join(body.range));
+		return new FunctionDeclarationStatement(identifier, isStatic, isPure, typeParameters, parameters, returnType,
+			body, startToken.Range.Join(body.range));
 	}
 
 	private static bool TryParseExternalFunctionStatement(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out ExternalFunctionStatement? externalFunctionStatement)
+		[NotNullWhen(true)] out ExternalFunctionStatement? externalFunctionStatement,
+		List<ParseException> diagnostics)
 	{
 		externalFunctionStatement = null;
-		if (Peek(tokens, position) != TokenType.KeywordFun)
-			return false;
-
 		var startPosition = position;
 		try
 		{
-			externalFunctionStatement = ParseExternalFunctionStatement(tokens, ref position);
+			externalFunctionStatement = ParseExternalFunctionStatement(tokens, ref position, diagnostics);
 			return true;
 		}
 		catch (ParseException)
@@ -453,9 +488,37 @@ public static class Parser
 	}
 
 	private static ExternalFunctionStatement ParseExternalFunctionStatement(IReadOnlyList<Token> tokens,
-		ref int position)
+		ref int position, List<ParseException> diagnostics)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
+		Token? startToken = null;
+
+		// Todo: Access/visibility modifiers
+		var isStatic = false;
+		var isPure = true;
+
+		while (Peek(tokens, position) != TokenType.KeywordFun)
+		{
+			var modifier = Consume(tokens, ref position, null, TokenType.KeywordStatic, TokenType.KeywordVar);
+			startToken ??= modifier;
+
+			if (modifier.Type == TokenType.KeywordStatic)
+			{
+				if (isStatic)
+					diagnostics.Add(new ParseException("Function is already marked as static", modifier));
+
+				isStatic = true;
+			}
+			else if (modifier.Type == TokenType.KeywordVar)
+			{
+				if (!isPure)
+					diagnostics.Add(new ParseException("Function is already marked as impure", modifier));
+
+				isPure = false;
+			}
+		}
+
+		var funKeyword = Consume(tokens, ref position, null, TokenType.KeywordFun);
+		startToken ??= funKeyword;
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -478,6 +541,7 @@ public static class Parser
 		}
 
 		var attributes = new Dictionary<string, string>();
+		Consume(tokens, ref position, null, TokenType.OpDoubleArrow);
 		Consume(tokens, ref position, null, TokenType.KeywordExternal);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 
@@ -755,7 +819,7 @@ public static class Parser
 		var peek = Peek(tokens, position);
 
 		if (peek == TokenType.KeywordStruct ||
-		    (peek == TokenType.KeywordMutable && Peek(tokens, position + 1) == TokenType.KeywordStruct))
+		    (peek == TokenType.KeywordVar && Peek(tokens, position + 1) == TokenType.KeywordStruct))
 		{
 			structDeclaration = ParseStructDeclaration(tokens, ref position, diagnostics);
 			return true;
@@ -768,8 +832,8 @@ public static class Parser
 	private static StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		List<ParseException> diagnostics)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordMutable, TokenType.KeywordStruct);
-		var isMutable = startToken.Type == TokenType.KeywordMutable;
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordVar, TokenType.KeywordStruct);
+		var isMutable = startToken.Type == TokenType.KeywordVar;
 
 		if (isMutable)
 			Consume(tokens, ref position, null, TokenType.KeywordStruct);
@@ -800,7 +864,7 @@ public static class Parser
 		{
 			try
 			{
-				statements.Add(ParseStructMember(tokens, ref position));
+				statements.Add(ParseStructMember(tokens, ref position, diagnostics));
 			}
 			catch (ParseException e)
 			{
@@ -816,9 +880,10 @@ public static class Parser
 		return statements;
 	}
 
-	private static StatementNode ParseStructMember(IReadOnlyList<Token> tokens, ref int position)
+	private static StatementNode ParseStructMember(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
 	{
-		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration, diagnostics))
 			return functionDeclaration;
 		
 		if (TryParseConstructorDeclaration(tokens, ref position, out var constructorDeclaration))
@@ -944,7 +1009,7 @@ public static class Parser
 			TokenType.KeywordDef,
 			TokenType.KeywordImplicit,
 			TokenType.KeywordExplicit,
-			TokenType.KeywordMutable,
+			TokenType.KeywordVar,
 			TokenType.KeywordStruct,
 			TokenType.KeywordInterface,
 			TokenType.KeywordCast,
@@ -993,12 +1058,12 @@ public static class Parser
 			return dllImportStatement;
 		}
 		
-		if (TryParseExternalFunctionStatement(tokens, ref position, out var externalFunctionStatement))
+		if (TryParseExternalFunctionStatement(tokens, ref position, out var externalFunctionStatement, diagnostics))
 		{
 			return externalFunctionStatement;
 		}
 		
-		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration, diagnostics))
 		{
 			return functionDeclaration;
 		}
@@ -1016,22 +1081,24 @@ public static class Parser
 		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
 	}
 
-	private static List<StatementNode> ParseDllImportedStatements(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics, TokenType? endTokenType = null)
+	private static List<ExternalFunctionStatement> ParseDllImportedStatements(IReadOnlyList<Token> tokens,
+		ref int position, List<ParseException> diagnostics, TokenType? endTokenType = null)
 	{
 		var syncTokens = new[]
 		{
 			TokenType.EndOfFile,
-			TokenType.KeywordFun,
+			TokenType.KeywordVar,
+			TokenType.KeywordStatic,
+			TokenType.KeywordFun
 		};
 		
-		var statements = new List<StatementNode>();
+		var statements = new List<ExternalFunctionStatement>();
 
 		while (Peek(tokens, position) != TokenType.EndOfFile && Peek(tokens, position) != endTokenType)
 		{
 			try
 			{
-				statements.Add(ParseDllImportedStatement(tokens, ref position));
+				statements.Add(ParseDllImportedStatement(tokens, ref position, diagnostics));
 			}
 			catch (ParseException e)
 			{
@@ -1047,12 +1114,13 @@ public static class Parser
 		return statements;
 	}
 
-	private static StatementNode ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position)
+	private static ExternalFunctionStatement ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position,
+		List<ParseException> diagnostics)
 	{
 		var peek = Peek(tokens, position);
 		if (peek == TokenType.KeywordFun)
 		{
-			return ParseExternalFunctionStatement(tokens, ref position);
+			return ParseExternalFunctionStatement(tokens, ref position, diagnostics);
 		}
 
 		throw new ParseException($"Expected imported statement; Instead, got '{peek}'", tokens[position]);
@@ -2214,10 +2282,10 @@ public static class Parser
 		if (peek == TokenType.OpLeftParen)
 			return ParseTupleType(tokens, ref position);
 
-		if (peek == TokenType.KeywordLambda)
+		if (peek == TokenType.KeywordFun)
 			return ParseLambdaType(tokens, ref position);
 
-		if (Match(tokens, ref position, out var mutableToken, TokenType.KeywordMutable))
+		if (Match(tokens, ref position, out var mutableToken, TokenType.KeywordVar))
 		{
 			if (Match(tokens, ref position, TokenType.KeywordRef))
 			{
@@ -2288,7 +2356,7 @@ public static class Parser
 
 	private static LambdaSyntaxType ParseLambdaType(IReadOnlyList<Token> tokens, ref int position)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordLambda);
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 
 		var parameterTypes = new List<SyntaxType>();

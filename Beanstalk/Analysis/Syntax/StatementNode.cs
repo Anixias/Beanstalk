@@ -230,16 +230,20 @@ public sealed class EntryStatement : StatementNode
 public sealed class FunctionDeclarationStatement : StatementNode
 {
 	public readonly Token identifier;
+	public readonly bool isStatic;
+	public readonly bool isPure;
 	public readonly ImmutableArray<Token> typeParameters;
 	public readonly ImmutableArray<Parameter> parameters;
 	public readonly SyntaxType? returnType;
 	public readonly StatementNode body;
 
-	public FunctionDeclarationStatement(Token identifier, IEnumerable<Token> typeParameters,
+	public FunctionDeclarationStatement(Token identifier, bool isStatic, bool isPure, IEnumerable<Token> typeParameters,
 		IEnumerable<Parameter> parameters, SyntaxType? returnType, StatementNode body, TextRange range) : base(range)
 
 	{
 		this.identifier = identifier;
+		this.isStatic = isStatic;
+		this.isPure = isPure;
 		this.typeParameters = typeParameters.ToImmutableArray();
 		this.parameters = parameters.ToImmutableArray();
 		this.returnType = returnType;

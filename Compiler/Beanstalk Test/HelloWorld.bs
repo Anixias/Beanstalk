@@ -66,16 +66,16 @@ entry()
 	let vec = Vec2.new(1, 2, "ab")
 	print(vec.string())
 	printInt(strlen("Hello!"))
-	printInt(Vec2.a)
+	//printInt(Vec2.a)
 	
 	return 0
 }
 
 // 65001u = UTF8
-var fun setConsoleOutputEncoding(codePage:uint) external(entry = "set_console_output_encoding")
-var fun getConsoleOutputEncoding() :> uint external(entry = "get_console_output_encoding")
-var fun getCurrentTime() :> int64 external(entry = "get_current_time")
-var fun print(text:string) external(entry = "print")
-var fun strlen(text:string) :> uint external(entry = "strlen")
-var fun printInt(value:int) external(entry = "print_int")
-var fun printInt64(value:int64) external(entry = "print_long_long")
+var fun setConsoleOutputEncoding(codePage:uint) => external(entry = "set_console_output_encoding")
+var fun getConsoleOutputEncoding() :> uint => external(entry = "get_console_output_encoding")
+var fun print(text:string) => external(entry = "print")
+var fun printInt(value:int) => external(entry = "print_int")
+var fun printInt64(value:int64) => external(entry = "print_long_long")
+fun getCurrentTime() :> int64 => external(entry = "get_current_time")
+fun strlen(text:string) :> uint => external(entry = "strlen")

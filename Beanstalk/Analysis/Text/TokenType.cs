@@ -128,8 +128,6 @@ public sealed class TokenType
 	public static readonly TokenType KeywordFalse = CreateKeyword("false");
 	public static readonly TokenType KeywordNull = CreateKeyword("null");
 	public static readonly TokenType KeywordThis = CreateKeyword("this");
-	public static readonly TokenType KeywordMutable = CreateKeyword("mutable");
-	public static readonly TokenType KeywordLambda = CreateKeyword("lambda");
 	public static readonly TokenType KeywordAs = CreateKeyword("as");
 	public static readonly TokenType KeywordIs = CreateKeyword("is");
 	public static readonly TokenType KeywordRef = CreateKeyword("ref");
