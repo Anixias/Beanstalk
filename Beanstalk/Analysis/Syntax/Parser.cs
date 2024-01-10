@@ -1,63 +1,81 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Beanstalk.Analysis.Diagnostics;
 using Beanstalk.Analysis.Text;
 
 namespace Beanstalk.Analysis.Syntax;
 
 public class ParseException : Exception
 {
-	public int Line { get; }
-	public int Column { get; }
+	public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Error;
+	private readonly IBuffer source;
+	private readonly TextRange range;
 
-	public ParseException(string? message, Token? token, TextRange? range = null)
-	: base(FormatMessage(message, token, range))
+	public ParseException(string? message, Token token, TextRange? range = null)
+	: base(message)
 	{
-		Line = token?.Line ?? 1;
-		Column = token?.Column ?? 1;
+		source = token.Source;
+		this.range = range ?? token.Range;
 	}
 
-	private static string? FormatMessage(string? message, Token? token, TextRange? range)
+	public ParseException(string? message, IBuffer source, TextRange range)
+	: base(message)
 	{
-		if (message is null)
-			return null;
-
-		if (token is null)
-			return message;
-
-		var text = token.Text;
-		if (range is not null)
-			text = token.Source.GetText(range.Value);
-		
-		return $"[line {token.Line}, column {token.Column} at '{text}'] {message}";
+		this.source = source;
+		this.range = range;
+	}
+	
+	public static implicit operator Diagnostic(ParseException parseException)
+	{
+		return new Diagnostic(parseException.Severity, parseException.source, parseException.range,
+			parseException.Message);
 	}
 }
 
-public static class Parser
+public sealed class Parser
 {
-	public static Ast? Parse(ILexer lexer, out List<ParseException> diagnostics)
+	private IBuffer source = null!;
+	private DiagnosticList currentDiagnostics = null!;
+	
+	public Ast? Parse(ILexer lexer, out DiagnosticList diagnostics)
 	{
-		var tokens = new List<Token>();
-
-		diagnostics = [];
-		foreach (var token in lexer)
+		source = lexer.Source;
+		try
 		{
-			tokens.Add(token);
+			var tokens = new List<Token>();
 
-			if (!token.Type.IsInvalid)
-				continue;
-			
-			var plural = token.Text.Length > 1 ? "characters" : "character";
-			diagnostics.Add(new ParseException($"Unexpected {plural}", token));
+			currentDiagnostics = new DiagnosticList();
+			foreach (var token in lexer)
+			{
+				tokens.Add(token);
+
+				if (!token.Type.IsInvalid)
+					continue;
+
+				if (token.Type != TokenType.Invalid)
+				{
+					var name = token.Type.ToString();
+					name = name[0].ToString().ToUpper() + name[1..];
+					currentDiagnostics.Add(new ParseException(name, token));
+					continue;
+				}
+
+				var plural = token.Text.Length > 1 ? "characters" : "character";
+				currentDiagnostics.Add(new ParseException($"Unexpected {plural}", token));
+			}
+
+			if (ParseProgram(tokens, 0) is { } root)
+				return new Ast(root, lexer.Source);
+
+			return null;
 		}
-
-		var root = ParseProgram(tokens, 0, diagnostics);
-		diagnostics = diagnostics.OrderBy(d => d.Line).ThenBy(d => d.Column).ToList();
-		
-		if (root is not null)
-			return new Ast(root, lexer.Source);
-
-		return null;
+		finally
+		{
+			diagnostics = currentDiagnostics;
+			source = null!;
+			currentDiagnostics = null!;
+		}
 	}
 
 	private static bool IsEndOfFile(IReadOnlyCollection<Token> tokens, int position) => position >= tokens.Count;
@@ -106,7 +124,7 @@ public static class Parser
 		return IsEndOfFile(tokens, position) ? null : tokens[position];
 	}
 
-	private static Token Consume(IReadOnlyList<Token> tokens, ref int position, string? message,
+	private Token Consume(IReadOnlyList<Token> tokens, ref int position, string? message,
 		params TokenType[] types)
 	{
 		if (message is null)
@@ -123,9 +141,13 @@ public static class Parser
 
 			message = $"Expected {typeString}";
 		}
-		
+
 		if (IsEndOfFile(tokens, position))
-			throw new ParseException($"{message}; Instead, got 'end of file'", tokens.LastOrDefault());
+		{
+			throw tokens.Count > 0
+				? new ParseException($"{message}; Instead, got 'end of file'", tokens.Last())
+				: new ParseException($"{message}; Instead, got 'end of file'", source, TextRange.Empty);
+		}
 
 		var token = tokens[position];
 		if (!types.Contains(token.Type))
@@ -135,8 +157,7 @@ public static class Parser
 		return token;
 	}
 
-	private static ProgramStatement? ParseProgram(IReadOnlyList<Token> tokens, int position,
-		List<ParseException> diagnostics)
+	private ProgramStatement? ParseProgram(IReadOnlyList<Token> tokens, int position)
 	{
 		try
 		{
@@ -145,14 +166,19 @@ public static class Parser
 
 			ModuleStatement? module = null;
 			if (Peek(tokens, position) == TokenType.KeywordModule)
-				module = ParseModuleStatement(tokens, ref position, false, diagnostics);
+				module = ParseModuleStatement(tokens, ref position, false);
 			
-			var statements = ParseTopLevelStatements(tokens, ref position, diagnostics);
+			var statements = ParseTopLevelStatements(tokens, ref position);
 
 			if (Peek(tokens, position) != TokenType.EndOfFile)
-				diagnostics.Add(new ParseException("Expected 'end of file'", TokenAt(tokens, position)));
+			{
+				if (TokenAt(tokens, position) is { } token)
+					currentDiagnostics.Add(new ParseException("Expected 'end of file'", token));
+				else
+					currentDiagnostics.Add(new ParseException("Expected 'end of file'", source, TextRange.Empty));
+			}
 
-			if (diagnostics.Count > 0)
+			if (currentDiagnostics.ErrorCount > 0)
 				return null;
 
 			var range = startToken is null
@@ -163,7 +189,7 @@ public static class Parser
 		}
 		catch (ParseException e)
 		{
-			diagnostics.Add(e);
+			currentDiagnostics.Add(e);
 			return null;
 		}
 		catch
@@ -172,7 +198,7 @@ public static class Parser
 		}
 	}
 
-	private static List<StatementNode> ParseImportStatements(IReadOnlyList<Token> tokens, ref int position)
+	private List<StatementNode> ParseImportStatements(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var imports = new List<StatementNode>();
 		while (TryParseImportStatement(tokens, ref position, out var import))
@@ -181,7 +207,7 @@ public static class Parser
 		return imports;
 	}
 
-	private static bool TryParseImportStatement(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseImportStatement(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out StatementNode? import)
 	{
 		import = null;
@@ -223,7 +249,12 @@ public static class Parser
 		} while (Match(tokens, ref position, TokenType.OpDot));
 
 		if (identifierTokens.Count < (isAggregate ? 1 : 2))
-			throw new ParseException("Invalid import statement", identifierTokens.LastOrDefault());
+		{
+			if (identifierTokens.LastOrDefault() is { } token)
+				throw new ParseException("Invalid import statement", token);
+			
+			throw new ParseException("Invalid import statement", source, TextRange.Empty);
+		}
 
 		var scope = identifierTokens.Take(identifierTokens.Count - 1).ToImmutableArray();
 
@@ -253,8 +284,7 @@ public static class Parser
 		return true;
 	}
 
-	private static ModuleStatement ParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody,
-		List<ParseException> diagnostics)
+	private ModuleStatement ParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordModule);
 		
@@ -270,23 +300,28 @@ public static class Parser
 		foreach (var token in scope)
 		{
 			if (token.Type != TokenType.Identifier)
-				diagnostics.Add(new ParseException("Invalid module statement: Expected 'identifier'", token));
+				currentDiagnostics.Add(new ParseException("Invalid module statement: Expected 'identifier'", token));
 		}
 
 		var statements = new List<StatementNode>();
 		if (Match(tokens, ref position, TokenType.OpLeftBrace))
 		{
-			statements.AddRange(ParseTopLevelStatements(tokens, ref position, diagnostics, TokenType.OpRightBrace));
+			statements.AddRange(ParseTopLevelStatements(tokens, ref position, TokenType.OpRightBrace));
 			var endToken = Consume(tokens, ref position, "Expected statement", TokenType.OpRightBrace);
 			range = range.Join(endToken.Range);
 		}
 		else if (requireBody)
-			diagnostics.Add(new ParseException("Module statement must have a body", TokenAt(tokens, position - 1)));
+		{
+			if (TokenAt(tokens, position - 1) is { } token)
+				currentDiagnostics.Add(new ParseException("Module statement must have a body", token));
+			else
+				currentDiagnostics.Add(new ParseException("Module statement must have a body", source, TextRange.Empty));
+		}
 
 		return new ModuleStatement(new ModuleName(scope), statements, range);
 	}
 
-	private static bool TryParseEntryStatement(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseEntryStatement(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out EntryStatement? entry)
 	{
 		entry = null;
@@ -297,7 +332,7 @@ public static class Parser
 		return true;
 	}
 
-	private static EntryStatement ParseEntryStatement(IReadOnlyList<Token> tokens, ref int position)
+	private EntryStatement ParseEntryStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordEntry);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -317,7 +352,7 @@ public static class Parser
 		return new EntryStatement(parameters, body, startToken.Range.Join(body.range));
 	}
 
-	private static bool TryParseDefineStatement(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseDefineStatement(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out DefineStatement? defineStatement)
 	{
 		defineStatement = null;
@@ -328,7 +363,7 @@ public static class Parser
 		return true;
 	}
 
-	private static DefineStatement ParseDefineStatement(IReadOnlyList<Token> tokens, ref int position)
+	private DefineStatement ParseDefineStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordDef);
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
@@ -338,19 +373,17 @@ public static class Parser
 		return new DefineStatement(identifier, type, startToken.Range.Join(type.range));
 	}
 
-	private static bool TryParseDllImportStatement(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics, [NotNullWhen(true)] out DllImportStatement? dllImportStatement)
+	private bool TryParseDllImportStatement(IReadOnlyList<Token> tokens, ref int position, [NotNullWhen(true)] out DllImportStatement? dllImportStatement)
 	{
 		dllImportStatement = null;
 		if (Peek(tokens, position) != TokenType.KeywordImport)
 			return false;
 
-		dllImportStatement = ParseDllImportStatement(tokens, ref position, diagnostics);
+		dllImportStatement = ParseDllImportStatement(tokens, ref position);
 		return true;
 	}
 
-	private static DllImportStatement ParseDllImportStatement(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private DllImportStatement ParseDllImportStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordImport);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -361,29 +394,33 @@ public static class Parser
 		var range = startToken.Range;
 		if (Match(tokens, ref position, TokenType.OpLeftBrace))
 		{
-			statements.AddRange(ParseDllImportedStatements(tokens, ref position, diagnostics, TokenType.OpRightBrace));
+			statements.AddRange(ParseDllImportedStatements(tokens, ref position, TokenType.OpRightBrace));
 			var endToken = Consume(tokens, ref position, null, TokenType.OpRightBrace);
 			range = range.Join(endToken.Range);
 		}
 		else
 		{
-			var statement = ParseDllImportedStatement(tokens, ref position, diagnostics);
+			var statement = ParseDllImportedStatement(tokens, ref position);
 			range = range.Join(statement.range);
 		}
 		
 		return new DllImportStatement(dllPath, statements, range);
 	}
 
-	private static bool TryParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out FunctionDeclarationStatement? functionDeclaration,
-		List<ParseException> diagnostics)
+	private bool TryParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out FunctionDeclarationStatement? functionDeclaration)
 	{
 		functionDeclaration = null;
 
 		var startPosition = position;
+		var oldDiagnostics = currentDiagnostics;
+		currentDiagnostics = new DiagnosticList();
+		
 		try
 		{
-			functionDeclaration = ParseFunctionDeclaration(tokens, ref position, diagnostics);
+			functionDeclaration = ParseFunctionDeclaration(tokens, ref position);
+			oldDiagnostics.Add(currentDiagnostics);
+			currentDiagnostics = oldDiagnostics;
 			return true;
 		}
 		catch (ParseException)
@@ -391,10 +428,14 @@ public static class Parser
 			position = startPosition;
 			return false;
 		}
+		finally
+		{
+			oldDiagnostics.Add(currentDiagnostics);
+			currentDiagnostics = oldDiagnostics;
+		}
 	}
 
-	private static FunctionDeclarationStatement ParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private FunctionDeclarationStatement ParseFunctionDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		Token? startToken = null;
 
@@ -410,14 +451,14 @@ public static class Parser
 			if (modifier.Type == TokenType.KeywordStatic)
 			{
 				if (isStatic)
-					diagnostics.Add(new ParseException("Function is already marked as static", modifier));
+					currentDiagnostics.Add(new ParseException("Function is already marked as static", modifier));
 
 				isStatic = true;
 			}
 			else if (modifier.Type == TokenType.KeywordVar)
 			{
 				if (!isPure)
-					diagnostics.Add(new ParseException("Function is already marked as impure", modifier));
+					currentDiagnostics.Add(new ParseException("Function is already marked as impure", modifier));
 
 				isPure = false;
 			}
@@ -474,15 +515,17 @@ public static class Parser
 			body, startToken.Range.Join(body.range), signatureRange);
 	}
 
-	private static bool TryParseExternalFunctionStatement(IReadOnlyList<Token> tokens, ref int position,
-		[NotNullWhen(true)] out ExternalFunctionStatement? externalFunctionStatement,
-		List<ParseException> diagnostics)
+	private bool TryParseExternalFunctionStatement(IReadOnlyList<Token> tokens, ref int position,
+		[NotNullWhen(true)] out ExternalFunctionStatement? externalFunctionStatement)
 	{
 		externalFunctionStatement = null;
 		var startPosition = position;
+		var oldDiagnostics = currentDiagnostics;
+		currentDiagnostics = new DiagnosticList();
+
 		try
 		{
-			externalFunctionStatement = ParseExternalFunctionStatement(tokens, ref position, diagnostics);
+			externalFunctionStatement = ParseExternalFunctionStatement(tokens, ref position);
 			return true;
 		}
 		catch (ParseException)
@@ -490,10 +533,15 @@ public static class Parser
 			position = startPosition;
 			return false;
 		}
+		finally
+		{
+			oldDiagnostics.Add(currentDiagnostics);
+			currentDiagnostics = oldDiagnostics;
+		}
 	}
 
-	private static ExternalFunctionStatement ParseExternalFunctionStatement(IReadOnlyList<Token> tokens,
-		ref int position, List<ParseException> diagnostics)
+	private ExternalFunctionStatement ParseExternalFunctionStatement(IReadOnlyList<Token> tokens,
+		ref int position)
 	{
 		Token? startToken = null;
 
@@ -509,14 +557,14 @@ public static class Parser
 			if (modifier.Type == TokenType.KeywordStatic)
 			{
 				if (isStatic)
-					diagnostics.Add(new ParseException("Function is already marked as static", modifier));
+					currentDiagnostics.Add(new ParseException("Function is already marked as static", modifier));
 
 				isStatic = true;
 			}
 			else if (modifier.Type == TokenType.KeywordVar)
 			{
 				if (!isPure)
-					diagnostics.Add(new ParseException("Function is already marked as impure", modifier));
+					currentDiagnostics.Add(new ParseException("Function is already marked as impure", modifier));
 
 				isPure = false;
 			}
@@ -574,7 +622,7 @@ public static class Parser
 			startToken.Range.Join(endToken.Range), signatureRange);
 	}
 
-	private static bool TryParseConstructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseConstructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out ConstructorDeclarationStatement? constructorDeclaration)
 	{
 		constructorDeclaration = null;
@@ -585,7 +633,7 @@ public static class Parser
 		return true;
 	}
 
-	private static ConstructorDeclarationStatement ParseConstructorDeclaration(IReadOnlyList<Token> tokens,
+	private ConstructorDeclarationStatement ParseConstructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
 		var constructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordConstructor);
@@ -609,7 +657,7 @@ public static class Parser
 			constructorKeyword.Range.Join(body.range));
 	}
 
-	private static bool TryParseDestructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseDestructorDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out DestructorDeclarationStatement? destructorDeclaration)
 	{
 		destructorDeclaration = null;
@@ -620,7 +668,7 @@ public static class Parser
 		return true;
 	}
 
-	private static DestructorDeclarationStatement ParseDestructorDeclaration(IReadOnlyList<Token> tokens,
+	private DestructorDeclarationStatement ParseDestructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
 		var destructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordDestructor);
@@ -633,7 +681,7 @@ public static class Parser
 		return new DestructorDeclarationStatement(destructorKeyword, body, destructorKeyword.Range.Join(body.range));
 	}
 
-	private static bool TryParseFieldDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseFieldDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out FieldDeclarationStatement? fieldDeclaration)
 	{
 		fieldDeclaration = null;
@@ -659,7 +707,7 @@ public static class Parser
 		return true;
 	}
 
-	private static FieldDeclarationStatement ParseFieldDeclaration(IReadOnlyList<Token> tokens,
+	private FieldDeclarationStatement ParseFieldDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
 		var startToken = TokenAt(tokens, position)!;
@@ -679,10 +727,14 @@ public static class Parser
 			if (peek == TokenType.KeywordVar)
 			{
 				if (isMutable)
-					throw new ParseException(duplicateErrorMessage, modifierToken);
+					throw modifierToken is not null
+						? new ParseException(duplicateErrorMessage, modifierToken)
+						: new ParseException(duplicateErrorMessage, source, TextRange.Empty);
 				
 				if (isConst)
-					throw new ParseException(mutableConstErrorMessage, modifierToken);
+					throw modifierToken is not null
+						? new ParseException(mutableConstErrorMessage, modifierToken)
+						: new ParseException(mutableConstErrorMessage, source, TextRange.Empty);
 				
 				isMutable = true;
 				peek = Peek(tokens, position);
@@ -692,33 +744,39 @@ public static class Parser
 			if (peek == TokenType.KeywordConst)
 			{
 				if (isConst)
-					throw new ParseException(duplicateErrorMessage, modifierToken);
+					throw modifierToken is not null
+						? new ParseException(duplicateErrorMessage, modifierToken)
+						: new ParseException(duplicateErrorMessage, source, TextRange.Empty);
 				
 				if (isMutable)
-					throw new ParseException(mutableConstErrorMessage, modifierToken);
+					throw modifierToken is not null
+						? new ParseException(mutableConstErrorMessage, modifierToken)
+						: new ParseException(mutableConstErrorMessage, source, TextRange.Empty);
 				
 				isConst = true;
 				peek = Peek(tokens, position);
 				continue;
 			}
+
+			const string invalidFieldModifierErrorMessage = "Invalid field modifier";
+			if (peek != TokenType.KeywordStatic)
+				throw modifierToken is not null
+					? new ParseException(invalidFieldModifierErrorMessage, modifierToken)
+					: new ParseException(invalidFieldModifierErrorMessage, source, TextRange.Empty);
 			
-			if (peek == TokenType.KeywordStatic)
-			{
-				if (isStatic)
-					throw new ParseException(duplicateErrorMessage, modifierToken);
+			if (isStatic)
+				throw modifierToken is not null
+					? new ParseException(duplicateErrorMessage, modifierToken)
+					: new ParseException(duplicateErrorMessage, source, TextRange.Empty);
 				
-				isStatic = true;
-				peek = Peek(tokens, position);
-				continue;
-			}
-			
-			throw new ParseException("Invalid field modifier", modifierToken);
+			isStatic = true;
+			peek = Peek(tokens, position);
 		}
 		
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 
 		// A type is required for fields - this may change in the future, allowing field types to be inferred from
-		// the initializer. The main reason not to do so is if the initializer refers to a static member, it may require
+		// the initializer. The main reason not to do so is if the initializer refers to a member, it may require
 		// several passes to fully infer the type
 		Consume(tokens, ref position, null, TokenType.OpColon);
 		var type = ParseType(tokens, ref position);
@@ -742,7 +800,7 @@ public static class Parser
 		return new FieldDeclarationStatement(identifier, mutability, isStatic, type, initializer, range);
 	}
 
-	private static bool TryParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out CastDeclarationStatement? castDeclaration)
 	{
 		var validEntryTokens = new[] { TokenType.KeywordImplicit, TokenType.KeywordExplicit };
@@ -755,7 +813,7 @@ public static class Parser
 		return true;
 	}
 
-	private static CastDeclarationStatement ParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private CastDeclarationStatement ParseCastDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var castTypeToken = Consume(tokens, ref position, null, TokenType.KeywordImplicit, TokenType.KeywordExplicit);
 		var castKeyword = Consume(tokens, ref position, null, TokenType.KeywordCast);
@@ -781,7 +839,7 @@ public static class Parser
 			returnType, body, castTypeToken.Range.Join(body.range));
 	}
 
-	private static bool TryParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out StringDeclarationStatement? stringDeclaration)
 	{
 		var validEntryTokens = new[] { TokenType.KeywordString };
@@ -794,7 +852,7 @@ public static class Parser
 		return true;
 	}
 
-	private static StringDeclarationStatement ParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private StringDeclarationStatement ParseStringDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var stringKeyword = Consume(tokens, ref position, null, TokenType.KeywordString);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -803,7 +861,8 @@ public static class Parser
 		{
 			var returnType = ParseType(tokens, ref position);
 			if (returnType is not BaseSyntaxType baseType || baseType.token.Type != TokenType.KeywordString)
-				throw new ParseException("Return type of the string function must be 'string'", null, returnType.range);
+				throw new ParseException("Return type of the string function must be 'string'", source,
+					returnType.range);
 		}
 
 		StatementNode body;
@@ -821,15 +880,14 @@ public static class Parser
 		return new StringDeclarationStatement(stringKeyword, body, stringKeyword.Range.Join(body.range));
 	}
 
-	private static bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics, [NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
+	private bool TryParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position, [NotNullWhen(true)] out StructDeclarationStatement? structDeclaration)
 	{
 		var peek = Peek(tokens, position);
 
 		if (peek == TokenType.KeywordStruct ||
 		    (peek == TokenType.KeywordVar && Peek(tokens, position + 1) == TokenType.KeywordStruct))
 		{
-			structDeclaration = ParseStructDeclaration(tokens, ref position, diagnostics);
+			structDeclaration = ParseStructDeclaration(tokens, ref position);
 			return true;
 		}
 
@@ -837,8 +895,7 @@ public static class Parser
 		return false;
 	}
 
-	private static StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private StructDeclarationStatement ParseStructDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordVar, TokenType.KeywordStruct);
 		var isMutable = startToken.Type == TokenType.KeywordVar;
@@ -848,14 +905,13 @@ public static class Parser
 		
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
 		Consume(tokens, ref position, null, TokenType.OpLeftBrace);
-		var statements = ParseStructBody(tokens, ref position, diagnostics, TokenType.OpRightBrace);
+		var statements = ParseStructBody(tokens, ref position, TokenType.OpRightBrace);
 		var endToken = Consume(tokens, ref position, null, TokenType.OpRightBrace);
 
 		return new StructDeclarationStatement(identifier, isMutable, statements, startToken.Range.Join(endToken.Range));
 	}
 
-	private static List<StatementNode> ParseStructBody(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics, TokenType endTokenType)
+	private List<StatementNode> ParseStructBody(IReadOnlyList<Token> tokens, ref int position, TokenType endTokenType)
 	{
 		var syncTokens = new[]
 		{
@@ -872,11 +928,11 @@ public static class Parser
 		{
 			try
 			{
-				statements.Add(ParseStructMember(tokens, ref position, diagnostics));
+				statements.Add(ParseStructMember(tokens, ref position));
 			}
 			catch (ParseException e)
 			{
-				diagnostics.Add(e);
+				currentDiagnostics.Add(e);
 
 				do
 				{
@@ -888,10 +944,9 @@ public static class Parser
 		return statements;
 	}
 
-	private static StatementNode ParseStructMember(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private StatementNode ParseStructMember(IReadOnlyList<Token> tokens, ref int position)
 	{
-		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration, diagnostics))
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 			return functionDeclaration;
 		
 		if (TryParseConstructorDeclaration(tokens, ref position, out var constructorDeclaration))
@@ -912,10 +967,13 @@ public static class Parser
 		if (TryParseFieldDeclaration(tokens, ref position, out var fieldDeclaration))
 			return fieldDeclaration;
 
-		throw new ParseException("Expected struct member", TokenAt(tokens, position));
+		if (TokenAt(tokens, position) is { } token)
+			throw new ParseException("Expected struct member", token);
+		
+		throw new ParseException("Expected struct member", source, TextRange.Empty);
 	}
 
-	private static bool TryParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out OperatorDeclarationStatement? operatorDeclaration)
 	{
 		operatorDeclaration = null;
@@ -926,7 +984,7 @@ public static class Parser
 		return true;
 	}
 
-	private static OperatorDeclarationStatement ParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private OperatorDeclarationStatement ParseOperatorDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var operatorKeyword = Consume(tokens, ref position, null, TokenType.KeywordOperator);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -956,12 +1014,12 @@ public static class Parser
 			operatorKeyword.Range.Join(body.range));
 	}
 
-	private static OperationExpression ParseOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	private OperationExpression ParseOperationExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		return ParseBinaryOperationExpression(tokens, ref position);
 	}
 	
-	private static OperationExpression ParseBinaryOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	private OperationExpression ParseBinaryOperationExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var left = ParsePrefixUnaryOperationExpression(tokens, ref position);
 
@@ -972,7 +1030,7 @@ public static class Parser
 
 		if (left is not PrimaryOperationExpression primaryLeft)
 		{
-			throw new ParseException("Cannot define operator overload with multiple operators", left.op, left.range);
+			throw new ParseException("Cannot define operator overload with multiple operators", left.op!, left.range);
 		}
 
 		var right = new PrimaryOperationExpression(ParseParameter(tokens, ref position, false));
@@ -980,7 +1038,8 @@ public static class Parser
 			left.range.Join(right.range));
 	}
 
-	private static OperationExpression ParsePrefixUnaryOperationExpression(IReadOnlyList<Token> tokens, ref int position)
+	private OperationExpression ParsePrefixUnaryOperationExpression(IReadOnlyList<Token> tokens,
+		ref int position)
 	{
 		if (TokenAt(tokens, position) is not { } op || GetPrefixUnaryOperation(op.Type) is not { } operation)
 			return ParsePostfixUnaryOperationExpression(tokens, ref position);
@@ -993,7 +1052,7 @@ public static class Parser
 		return new UnaryOperationExpression(operation, op, operand, true, op.Range.Join(operand.range));
 	}
 
-	private static OperationExpression ParsePostfixUnaryOperationExpression(IReadOnlyList<Token> tokens,
+	private OperationExpression ParsePostfixUnaryOperationExpression(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
 		var operand = ParseParameter(tokens, ref position, false);
@@ -1005,8 +1064,7 @@ public static class Parser
 		return new UnaryOperationExpression(operation, op, operand, false, operand.range.Join(op.Range));
 	}
 
-	private static List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics, TokenType? endTokenType = null)
+	private List<StatementNode> ParseTopLevelStatements(IReadOnlyList<Token> tokens, ref int position, TokenType? endTokenType = null)
 	{
 		var syncTokens = new[]
 		{
@@ -1031,11 +1089,11 @@ public static class Parser
 		{
 			try
 			{
-				statements.Add(ParseTopLevelStatement(tokens, ref position, diagnostics));
+				statements.Add(ParseTopLevelStatement(tokens, ref position));
 			}
 			catch (ParseException e)
 			{
-				diagnostics.Add(e);
+				currentDiagnostics.Add(e);
 
 				do
 				{
@@ -1047,13 +1105,12 @@ public static class Parser
 		return statements;
 	}
 
-	private static StatementNode ParseTopLevelStatement(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private StatementNode ParseTopLevelStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
 		if (peek == TokenType.KeywordModule)
 		{
-			return ParseModuleStatement(tokens, ref position, true, diagnostics);
+			return ParseModuleStatement(tokens, ref position, true);
 		}
 		
 		if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
@@ -1061,22 +1118,22 @@ public static class Parser
 			return entryStatement;
 		}
 		
-		if (TryParseDllImportStatement(tokens, ref position, diagnostics, out var dllImportStatement))
+		if (TryParseDllImportStatement(tokens, ref position, out var dllImportStatement))
 		{
 			return dllImportStatement;
 		}
 		
-		if (TryParseExternalFunctionStatement(tokens, ref position, out var externalFunctionStatement, diagnostics))
+		if (TryParseExternalFunctionStatement(tokens, ref position, out var externalFunctionStatement))
 		{
 			return externalFunctionStatement;
 		}
 		
-		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration, diagnostics))
+		if (TryParseFunctionDeclaration(tokens, ref position, out var functionDeclaration))
 		{
 			return functionDeclaration;
 		}
 		
-		if (TryParseStructDeclaration(tokens, ref position, diagnostics, out var structDeclaration))
+		if (TryParseStructDeclaration(tokens, ref position, out var structDeclaration))
 		{
 			return structDeclaration;
 		}
@@ -1089,8 +1146,8 @@ public static class Parser
 		throw new ParseException($"Expected top-level statement; Instead, got '{peek}'", tokens[position]);
 	}
 
-	private static List<ExternalFunctionStatement> ParseDllImportedStatements(IReadOnlyList<Token> tokens,
-		ref int position, List<ParseException> diagnostics, TokenType? endTokenType = null)
+	private List<ExternalFunctionStatement> ParseDllImportedStatements(IReadOnlyList<Token> tokens,
+		ref int position, TokenType? endTokenType = null)
 	{
 		var syncTokens = new[]
 		{
@@ -1106,11 +1163,11 @@ public static class Parser
 		{
 			try
 			{
-				statements.Add(ParseDllImportedStatement(tokens, ref position, diagnostics));
+				statements.Add(ParseDllImportedStatement(tokens, ref position));
 			}
 			catch (ParseException e)
 			{
-				diagnostics.Add(e);
+				currentDiagnostics.Add(e);
 
 				do
 				{
@@ -1122,19 +1179,18 @@ public static class Parser
 		return statements;
 	}
 
-	private static ExternalFunctionStatement ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position,
-		List<ParseException> diagnostics)
+	private ExternalFunctionStatement ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
 		if (peek == TokenType.KeywordFun)
 		{
-			return ParseExternalFunctionStatement(tokens, ref position, diagnostics);
+			return ParseExternalFunctionStatement(tokens, ref position);
 		}
 
 		throw new ParseException($"Expected imported statement; Instead, got '{peek}'", tokens[position]);
 	}
 
-	private static BlockStatement ParseBlockStatement(IReadOnlyList<Token> tokens, ref int position)
+	private BlockStatement ParseBlockStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftBrace);
 		var statements = ParseStatements(tokens, ref position, TokenType.OpRightBrace);
@@ -1143,20 +1199,47 @@ public static class Parser
 		return new BlockStatement(statements, startToken.Range.Join(endToken.Range));
 	}
 
-	private static List<StatementNode> ParseStatements(IReadOnlyList<Token> tokens, ref int position,
+	private List<StatementNode> ParseStatements(IReadOnlyList<Token> tokens, ref int position,
 		TokenType endTokenType)
 	{
+		// Todo: Add all statement start tokens (loops, etc.)
+		var syncTokens = new[]
+		{
+			TokenType.EndOfFile,
+			TokenType.KeywordLet,
+			TokenType.KeywordVar,
+			TokenType.KeywordConst,
+			TokenType.KeywordStatic,
+			TokenType.KeywordFun,
+			TokenType.KeywordReturn,
+			TokenType.KeywordIf,
+			TokenType.KeywordSwitch,
+			TokenType.Identifier,
+		};
+		
 		var statements = new List<StatementNode>();
 
-		while (Peek(tokens, position) != endTokenType)
+		while (Peek(tokens, position) != TokenType.EndOfFile && Peek(tokens, position) != endTokenType)
 		{
-			statements.Add(ParseStatement(tokens, ref position));
+			try
+			{
+				statements.Add(ParseStatement(tokens, ref position));
+			}
+			catch (ParseException e)
+			{
+				currentDiagnostics.Add(e);
+
+				do
+				{
+					position++;
+				} while (!syncTokens.Contains(Peek(tokens, position)));
+			}
 		}
 		
 		return statements;
 	}
 
-	private static StatementNode ParseStatement(IReadOnlyList<Token> tokens, ref int position)
+	private StatementNode ParseStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
 		
@@ -1176,15 +1259,16 @@ public static class Parser
 		}
 
 		if (peek == TokenType.EndOfFile)
-			throw new ParseException("Expected statement", tokens.LastOrDefault());
+			throw tokens.LastOrDefault() is { } token
+				? new ParseException("Expected statement", token)
+				: new ParseException("Expected statement", source, TextRange.Empty);
 		
 		var expression = ParseExpression(tokens, ref position);
 		var expressionStatement = new ExpressionStatement(expression, expression.range);
 		return expressionStatement;
-
 	}
 
-	private static VarDeclarationStatement ParseVarDeclaration(IReadOnlyList<Token> tokens, ref int position)
+	private VarDeclarationStatement ParseVarDeclaration(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (Match(tokens, ref position, TokenType.KeywordVar))
 		{
@@ -1245,12 +1329,14 @@ public static class Parser
 		}
 
 		if (IsEndOfFile(tokens, position))
-			throw new ParseException("Expected variable declaration", tokens.LastOrDefault());
+			throw tokens.LastOrDefault() is { } token
+				? new ParseException("Expected variable declaration", token)
+				: new ParseException("Expected variable declaration", source, TextRange.Empty);
 		
 		throw new ParseException("Expected variable declaration", tokens[position]);
 	}
 
-	private static ReturnStatement ParseReturnStatement(IReadOnlyList<Token> tokens, ref int position)
+	private ReturnStatement ParseReturnStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordReturn);
 		var expression = ParseExpression(tokens, ref position);
@@ -1258,7 +1344,7 @@ public static class Parser
 		return new ReturnStatement(expression, startToken.Range.Join(expression.range));
 	}
 
-	private static IfStatement ParseIfStatement(IReadOnlyList<Token> tokens, ref int position)
+	private IfStatement ParseIfStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordIf);
 		var usesParen = Match(tokens, ref position, TokenType.OpLeftParen);
@@ -1276,7 +1362,7 @@ public static class Parser
 		return new IfStatement(condition, thenBranch, elseBranch, startToken.Range.Join(condition.range));
 	}
 
-	private static BinaryExpression.Operation? GetBinaryOperation(TokenType op)
+	private BinaryExpression.Operation? GetBinaryOperation(TokenType op)
 	{
 		if (op == TokenType.OpPlus)
 			return BinaryExpression.Operation.Add;
@@ -1332,7 +1418,7 @@ public static class Parser
 		return null;
 	}
 
-	private static ExpressionNode ParseExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (TryParseLambdaExpression(tokens, ref position, out var lambdaExpression))
 			return lambdaExpression;
@@ -1340,7 +1426,7 @@ public static class Parser
 		return ParseAssignmentExpression(tokens, ref position);
 	}
 
-	private static ExpressionNode ParseAssignmentExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseAssignmentExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseConditionalExpression(tokens, ref position);
 
@@ -1354,7 +1440,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseConditionalExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseConditionalExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseNullCoalescingExpression(tokens, ref position);
 
@@ -1374,7 +1460,7 @@ public static class Parser
 		return new ConditionalExpression(expression, trueExpression, falseExpression, range);
 	}
 	
-	private static ExpressionNode ParseNullCoalescingExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseNullCoalescingExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseEqualityExpression(tokens, ref position);
 
@@ -1388,7 +1474,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseEqualityExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseEqualityExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseOrExpression(tokens, ref position);
 		
@@ -1411,7 +1497,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseOrExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseOrExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseXorExpression(tokens, ref position);
 		
@@ -1425,7 +1511,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseXorExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseXorExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseAndExpression(tokens, ref position);
 		
@@ -1439,7 +1525,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseAndExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseAndExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseRelationalExpression(tokens, ref position);
 		
@@ -1453,7 +1539,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseRelationalExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseRelationalExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseShiftExpression(tokens, ref position);
 
@@ -1496,7 +1582,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseShiftExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseShiftExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseAdditiveExpression(tokens, ref position);
 
@@ -1524,7 +1610,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseAdditiveExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseAdditiveExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseMultiplicativeExpression(tokens, ref position);
 
@@ -1547,7 +1633,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseMultiplicativeExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseMultiplicativeExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseExponentiationExpression(tokens, ref position);
 
@@ -1575,7 +1661,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseExponentiationExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseExponentiationExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParseSwitchWithExpression(tokens, ref position);
 
@@ -1589,7 +1675,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static ExpressionNode ParseSwitchWithExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseSwitchWithExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (Peek(tokens, position) == TokenType.KeywordSwitch)
 		{
@@ -1604,7 +1690,7 @@ public static class Parser
 		return ParseRangeExpression(tokens, ref position);
 	}
 
-	private static SwitchExpression ParseSwitchExpression(IReadOnlyList<Token> tokens, ref int position)
+	private SwitchExpression ParseSwitchExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordSwitch);
 		
@@ -1612,7 +1698,7 @@ public static class Parser
 		return new SwitchExpression(startToken.Range);
 	}
 
-	private static WithExpression ParseWithExpression(IReadOnlyList<Token> tokens, ref int position)
+	private WithExpression ParseWithExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordWith);
 		
@@ -1620,7 +1706,7 @@ public static class Parser
 		return new WithExpression(startToken.Range);
 	}
 
-	private static ExpressionNode ParseRangeExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseRangeExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var expression = ParsePrefixUnaryExpression(tokens, ref position);
 
@@ -1643,7 +1729,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static UnaryExpression.Operation? GetPrefixUnaryOperation(TokenType op)
+	private UnaryExpression.Operation? GetPrefixUnaryOperation(TokenType op)
 	{
 		if (op == TokenType.OpPlusPlus)
 			return UnaryExpression.Operation.PreIncrement;
@@ -1669,7 +1755,7 @@ public static class Parser
 		return null;
 	}
 
-	private static UnaryExpression.Operation? GetPostfixUnaryOperation(TokenType op)
+	private UnaryExpression.Operation? GetPostfixUnaryOperation(TokenType op)
 	{
 		if (op == TokenType.OpPlusPlus)
 			return UnaryExpression.Operation.PostIncrement;
@@ -1680,7 +1766,7 @@ public static class Parser
 		return null;
 	}
 
-	private static ExpressionNode ParsePrefixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParsePrefixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (TokenAt(tokens, position) is not { } op || GetPrefixUnaryOperation(op.Type) is not { } operation)
 			return ParsePostfixUnaryExpression(tokens, ref position);
@@ -1769,7 +1855,7 @@ public static class Parser
 		return new UnaryExpression(right, operation, op, true, range);
 	}
 
-	private static bool TryParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out LambdaExpression? lambdaExpression)
 	{
 		var startPosition = position;
@@ -1787,7 +1873,7 @@ public static class Parser
 		}
 	}
 	
-	private static LambdaExpression ParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position)
+	private LambdaExpression ParseLambdaExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var parameters = new List<Parameter>();
 		var startPosition = position;
@@ -1824,7 +1910,7 @@ public static class Parser
 		return new LambdaExpression(parameters, returnType, body, startToken.Range.Join(body.range));
 	}
 
-	private static Parameter ParseLambdaParameter(IReadOnlyList<Token> tokens, ref int position)
+	private Parameter ParseLambdaParameter(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var isMutable = Match(tokens, ref position, TokenType.KeywordVar);
 		var identifier = Consume(tokens, ref position, null, TokenType.Identifier);
@@ -1834,7 +1920,7 @@ public static class Parser
 		return new Parameter(identifier, type, null, false, isMutable, identifier.Range.Join(type.range));
 	}
 
-	private static Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position, bool defaultValueAllowed)
+	private Parameter ParseParameter(IReadOnlyList<Token> tokens, ref int position, bool defaultValueAllowed)
 	{
 		var isVariadic = Match(tokens, ref position, TokenType.OpEllipsis);
 		var isMutable = Match(tokens, ref position, TokenType.KeywordVar);
@@ -1857,7 +1943,7 @@ public static class Parser
 		return new Parameter(identifier, type, defaultExpression, isVariadic, isMutable, range);
 	}
 
-	private static ExpressionNode ParsePostfixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParsePostfixUnaryExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var start = position;
 		var expression = ParsePrimaryExpression(tokens, ref position);
@@ -1939,7 +2025,7 @@ public static class Parser
 		return expression;
 	}
 
-	private static FunctionCallExpression ParseFunctionCallExpression(IReadOnlyList<Token> tokens, ref int position,
+	private FunctionCallExpression ParseFunctionCallExpression(IReadOnlyList<Token> tokens, ref int position,
 		ExpressionNode caller)
 	{
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -1953,7 +2039,7 @@ public static class Parser
 		return new FunctionCallExpression(caller, args, caller.range.Join(endToken.Range));
 	}
 
-	private static CastExpression ParseCastExpression(IReadOnlyList<Token> tokens, ref int position,
+	private CastExpression ParseCastExpression(IReadOnlyList<Token> tokens, ref int position,
 		ExpressionNode source)
 	{
 		Consume(tokens, ref position, null, TokenType.OpColonColon);
@@ -1962,7 +2048,7 @@ public static class Parser
 		return new CastExpression(source, targetType, source.range.Join(targetType.range));
 	}
 
-	private static AccessExpression ParseAccessExpression(IReadOnlyList<Token> tokens, ref int position,
+	private AccessExpression ParseAccessExpression(IReadOnlyList<Token> tokens, ref int position,
 		ExpressionNode source)
 	{
 		var accessOperator = Consume(tokens, ref position, null, TokenType.OpQuestionDot, TokenType.OpDot);
@@ -1973,7 +2059,7 @@ public static class Parser
 		return new AccessExpression(source, target, nullCheck, source.range.Join(target.Range));
 	}
 
-	private static IndexExpression ParseIndexExpression(IReadOnlyList<Token> tokens, ref int position,
+	private IndexExpression ParseIndexExpression(IReadOnlyList<Token> tokens, ref int position,
 		ExpressionNode source)
 	{
 		var accessOperator = Consume(tokens, ref position, null, TokenType.OpQuestionLeftBracket,
@@ -1985,7 +2071,7 @@ public static class Parser
 		return new IndexExpression(source, index, nullCheck, source.range.Join(endToken.Range));
 	}
 
-	private static List<ExpressionNode> ParseArgumentList(IReadOnlyList<Token> tokens, ref int position)
+	private List<ExpressionNode> ParseArgumentList(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var args = new List<ExpressionNode>();
 		
@@ -1997,7 +2083,7 @@ public static class Parser
 		return args;
 	}
 	
-	private static ExpressionNode ParsePrimaryExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParsePrimaryExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (Match(tokens, ref position, out var literal, TokenType.NumberLiteral, TokenType.StringLiteral,
 			    TokenType.CharLiteral, TokenType.KeywordThis, TokenType.KeywordTrue, TokenType.KeywordFalse,
@@ -2028,7 +2114,10 @@ public static class Parser
 			throw new ParseException($"Expected expression; Instead, got '{peekType}'", peek);
 		}
 
-		throw new ParseException($"Expected expression; Instead, got '{peek?.Type?.ToString() ?? "null"}'", peek);
+		if (peek is not null)
+			throw new ParseException($"Expected expression; Instead, got '{peek.Type?.ToString() ?? "null"}'", peek);
+		
+		throw new ParseException("Expected expression; Instead, got end of file", source, TextRange.Empty);
 	}
 
 	private readonly struct InterpolationPart
@@ -2045,7 +2134,7 @@ public static class Parser
 		}
 	}
 
-	private static InterpolatedStringExpression ParseInterpolatedString(IReadOnlyList<Token> tokens, ref int position)
+	private InterpolatedStringExpression ParseInterpolatedString(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var stringLiteral = Consume(tokens, ref position, null, TokenType.InterpolatedStringLiteral);
 		if (stringLiteral.Value is not string text)
@@ -2131,8 +2220,8 @@ public static class Parser
 			}
 			else
 			{
-				var source = new StringBuffer(part.text);
-				var lexer = new FilteredLexer(source);
+				var partSource = new StringBuffer(part.text);
+				var lexer = new FilteredLexer(partSource);
 				var interpolatedPosition = 0;
 				var interpolatedTokens = new List<Token>();
 
@@ -2155,7 +2244,7 @@ public static class Parser
 		return new InterpolatedStringExpression(parts, stringLiteral.Range);
 	}
 
-	private static ExpressionNode ParseTupleExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseTupleExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftParen);
 
@@ -2176,7 +2265,7 @@ public static class Parser
 		return new TupleExpression(expressions, startToken.Range.Join(endToken.Range));
 	}
 
-	private static ExpressionNode ParseListExpression(IReadOnlyList<Token> tokens, ref int position)
+	private ExpressionNode ParseListExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		if (TryParseMapExpression(tokens, ref position, out var mapExpression))
 			return mapExpression;
@@ -2205,7 +2294,7 @@ public static class Parser
 		return new ListExpression(expressions, type, range);
 	}
 
-	private static bool TryParseMapExpression(IReadOnlyList<Token> tokens, ref int position,
+	private bool TryParseMapExpression(IReadOnlyList<Token> tokens, ref int position,
 		[NotNullWhen(true)] out MapExpression? mapExpression)
 	{
         var startPosition = position;
@@ -2222,7 +2311,7 @@ public static class Parser
 		}
 	}
 
-	private static MapExpression ParseMapExpression(IReadOnlyList<Token> tokens, ref int position)
+	private MapExpression ParseMapExpression(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftBracket);
 
@@ -2257,11 +2346,11 @@ public static class Parser
 		return new MapExpression(expressions, tupleType, range);
 	}
 
-	private static InstantiationExpression ParseInstantiationExpression(IReadOnlyList<Token> tokens, ref int position,
+	private InstantiationExpression ParseInstantiationExpression(IReadOnlyList<Token> tokens, ref int position,
 		ExpressionNode typeExpression)
 	{
 		if (SyntaxType.TryConvert(typeExpression) is not { } type)
-			throw new ParseException("Invalid instantiation type", TokenAt(tokens, position), typeExpression.range);
+			throw new ParseException("Invalid instantiation type", source, typeExpression.range);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftBrace);
 
@@ -2283,7 +2372,7 @@ public static class Parser
 		return new InstantiationExpression(type, values, type.range.Join(endToken.Range));
 	}
 
-	private static SyntaxType ParseType(IReadOnlyList<Token> tokens, ref int position)
+	private SyntaxType ParseType(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
 		
@@ -2356,13 +2445,13 @@ public static class Parser
 		return syntaxType;
 	}
 
-	private static BaseSyntaxType ParseBaseType(IReadOnlyList<Token> tokens, ref int position)
+	private BaseSyntaxType ParseBaseType(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var token = Consume(tokens, ref position, "Invalid token for type", TokenType.ValidDataTypes.ToArray());
 		return new BaseSyntaxType(token);
 	}
 
-	private static LambdaSyntaxType ParseLambdaType(IReadOnlyList<Token> tokens, ref int position)
+	private LambdaSyntaxType ParseLambdaType(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordFun);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
@@ -2386,7 +2475,7 @@ public static class Parser
 		return new LambdaSyntaxType(parameterTypes, returnType, range);
 	}
 
-	private static List<SyntaxType> ParseTypeList(IReadOnlyList<Token> tokens, ref int position)
+	private List<SyntaxType> ParseTypeList(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var types = new List<SyntaxType>();
 		
@@ -2398,7 +2487,7 @@ public static class Parser
 		return types;
 	}
 
-	private static SyntaxType ParseTupleType(IReadOnlyList<Token> tokens, ref int position)
+	private SyntaxType ParseTupleType(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var types = new List<SyntaxType>();
 		var startToken = Consume(tokens, ref position, null, TokenType.OpLeftParen);

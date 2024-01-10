@@ -18,7 +18,7 @@ Todo:
 			- within a type marked with 'local', all 'pub' access is equivalent to 'local'
 		- internal: visible in the top-most module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod' and all children of 'mod'
-			- within a type marked with 'internal', all 'pub' access is equivalent to 'internal'
+			- within a type marked with 'internal',0 all 'pub' access is equivalent to 'internal'
 		- restricted: visible in the module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod.a.b' and all children of 'mod.a.b'
 			- within a type marked with 'restricted', all 'pub' access is equivalent to 'restricted'
@@ -29,6 +29,19 @@ Todo:
 	- move size resolution into resolver
 		- utilize as many passes as needed until count of unresolved sizes reaches 0
 		- keep track of already visited types; skip them
+	- switch statement
+		- if all cases are compile-time constants:
+			- can be compiled directly to llvm ir
+		- if all cases are types:
+			- can be compiled directly to llvm ir because types have a unique numeric identifier that is constant
+		- if some cases are compile-time constants:
+			- create a switch statement with a case for each constant
+			- create a default case that forms an if-else chain for the non-constant cases (final else for default case)
+		- if no cases are compile-time constants:
+			- form an if-else chain (final else for default case)
+	- nullable function calls: doSomething?()
+		- the '?' means the function is only called if it is not null (ex: the variable stores a lambda)
+	- add '!' postfix unary operator that converts T? into T for remaining control flow branch
 */
 import bs.io.console.* as Console
 
@@ -67,13 +80,16 @@ var struct Vec2
 
 entry()
 {
-	Console.print("Hello, World!\n")
-	let vec = Vec2.new(1, 2, "ab")
+	let c = '\u2191'
+	Console.setConsoleOutputEncoding(65001u)
+	Console.print("Hello, World!\u2191\n")
+	/*let vec = Vec2.new(1, 2, "ab")
 	Console.print(vec.string())
 	let owner = Owner.new()
 	printInt(owner.v.x)
 	printInt(owner.v.y)
-	Console.print(owner.v.string())
+	Console.print(owner.v.string())*/
+	
 	return 0
 }
 

@@ -490,7 +490,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			return LLVM.Int1TypeInContext(currentContext);
 		
 		if (nativeSymbol == TypeSymbol.Char)
-			return LLVM.Int8TypeInContext(currentContext);
+			return LLVM.ArrayType(LLVM.Int8TypeInContext(currentContext), 4u);
 		
 		if (nativeSymbol == TypeSymbol.String)
 			return LLVM.PointerType(LLVM.Int8TypeInContext(currentContext), 0u);
@@ -546,13 +546,13 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			return 1u;
 		
 		if (nativeSymbol == TypeSymbol.Char)
-			return 1u;
+			return 4u;
 		
 		// Todo: Verify this works as expected
 		if (nativeSymbol == TypeSymbol.String)
 			return 1u;
 
-		throw new InvalidOperationException("Failed to get alignment: Unsupported native type");
+		throw new InvalidOperationException("Failed to get size of type: Unsupported native type");
 	}
 
 	public void Visit(ResolvedProgramStatement programStatement)
@@ -1354,11 +1354,27 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			double value => 
 				new OpaqueValue(LLVM.ConstReal(LLVM.DoubleTypeInContext(currentContext), value)),
 			
+			byte[] value => value.Length == 4
+				? new OpaqueValue(DefineCharLiteral(value))
+				: throw new InvalidOperationException("Char must be exactly 4 bytes long"),
+			
 			string value =>
 				new OpaqueValue(DefineStringLiteral(value)),
 			
-			_ => OpaqueValue.Null
+			_ => throw new InvalidOperationException("Unsupported literal type")
 		};
+
+		LLVMOpaqueValue* DefineCharLiteral(byte[] value)
+		{
+			var elementType = LLVM.Int8TypeInContext(currentContext);
+			var bytes = new LLVMOpaqueValue*[value.Length];
+			for (var i = 0; i < bytes.Length; i++)
+			{
+				bytes[i] = LLVM.ConstInt(elementType, value[i], LLVMBool.False);
+			}
+
+			return LLVM.ConstArray(elementType, ConvertArrayToPointer(bytes), (uint)value.LongLength);
+		}
 
 		LLVMOpaqueValue* DefineStringLiteral(string value)
 		{
@@ -1366,7 +1382,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 				return existingConstant.value;
 			
 			var charArray = ConvertUnicodeString(value, out var length);
-			var stringType = LLVM.ArrayType(GetNativeType(TypeSymbol.Char), length);
+			var stringType = LLVM.ArrayType(GetNativeType(TypeSymbol.UInt8), length);
 			var stringRef = LLVM.AddGlobal(currentModule, stringType, EmptyString);
 			LLVM.SetInitializer(stringRef,
 				LLVM.ConstStringInContext(currentContext, charArray, length, LLVMBool.True));

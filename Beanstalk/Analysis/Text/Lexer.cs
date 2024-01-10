@@ -201,12 +201,15 @@ public class Lexer(IBuffer source) : ILexer
 						var sequence = text.Substring(i + 1, utf16Length);
 						i += utf16Length;
 
-						var sequenceValue = int.Parse(sequence, NumberStyles.AllowHexSpecifier);
-						result.Append(Encoding.Unicode.GetChars(BitConverter.GetBytes(sequenceValue)));
+						var sequenceValue = uint.Parse(sequence, NumberStyles.AllowHexSpecifier);
+						var chars = ConvertUnicodeCodePointToUTF8(sequenceValue);
+						var str = Encoding.UTF8.GetString(chars);
+						result.Append(str);
 					}
 
 					break;
 				case 'U':
+					// Todo: Test UTF32
 					const int utf32Length = 8;
 					if (i + utf32Length >= text.Length)
 					{
@@ -218,8 +221,8 @@ public class Lexer(IBuffer source) : ILexer
 						var sequence = text.Substring(i + 1, utf32Length);
 						i += utf32Length;
 
-						var sequenceValue = int.Parse(sequence, NumberStyles.AllowHexSpecifier);
-						result.Append(Encoding.UTF32.GetChars(BitConverter.GetBytes(sequenceValue)));
+						var sequenceValue = uint.Parse(sequence, NumberStyles.AllowHexSpecifier);
+						result.Append(Encoding.UTF32.GetString(BitConverter.GetBytes(sequenceValue)));
 					}
 
 					break;
@@ -228,7 +231,38 @@ public class Lexer(IBuffer source) : ILexer
 
 		return (result.ToString(), valid);
 	}
-	
+
+	private static byte[] ConvertUnicodeCodePointToUTF8(uint codePoint)
+	{
+		return codePoint switch
+		{
+			<= 0x7Fu => 
+			[
+				(byte)codePoint
+			],
+			
+			<= 0x7FFu => 
+			[
+				(byte)(0xC0 | (codePoint >> 6)),
+				(byte)(0x80 | (codePoint & 0x3F))
+			],
+			
+			<= 0xFFFFu =>
+			[
+				(byte)(0xE0 | (codePoint >> 12)), (byte)(0x80 | ((codePoint >> 6) & 0x3F)),
+				(byte)(0x80 | (codePoint & 0x3F))
+			],
+			
+			<= 0x10FFFFu =>
+			[
+				(byte)(0xF0 | (codePoint >> 18)), (byte)(0x80 | ((codePoint >> 12) & 0x3F)),
+				(byte)(0x80 | ((codePoint >> 6) & 0x3F)), (byte)(0x80 | (codePoint & 0x3F))
+			],
+			
+			_ => Array.Empty<byte>()
+		};
+	}
+
 	private ScanResult ScanChar(int position)
 	{
 		var end = position + 1;
@@ -269,8 +303,12 @@ public class Lexer(IBuffer source) : ILexer
 			var invalidToken = new Token(TokenType.InvalidCharLiteral, new TextRange(position, end), Source);
 			return new ScanResult(invalidToken, end);
 		}
+
+		var bytes = Encoding.UTF8.GetBytes(value.Item1);
+		var paddedBytes = new byte[4];
+		Array.Copy(bytes, paddedBytes, bytes.Length);
 		
-		var token = new Token(TokenType.CharLiteral, new TextRange(position, end), Source, value.Item1[0]);
+		var token = new Token(TokenType.CharLiteral, new TextRange(position, end), Source, paddedBytes);
 		return new ScanResult(token, end);
 	}
 

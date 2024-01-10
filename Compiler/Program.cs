@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Text;
+using Beanstalk.Analysis.Diagnostics;
 using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
@@ -145,7 +146,7 @@ internal static class Program
 	{
 		public readonly string workingDirectory;
 		public readonly string filePath;
-		public readonly List<ParseException> parseExceptions = [];
+		public readonly DiagnosticList parseExceptions = [];
 		public readonly List<CollectionException> collectionExceptions = [];
 		public readonly List<ResolutionException> resolutionExceptions = [];
 
@@ -157,8 +158,11 @@ internal static class Program
 
 		public void Print()
 		{
-			if (parseExceptions.Count > 0)
-				PrintErrorList("Parsing Error(s)", parseExceptions);
+			if (parseExceptions.ErrorCount > 0)
+				PrintDiagnosticList("Parsing Error(s)", parseExceptions.Errors, DiagnosticSeverity.Error);
+			
+			if (parseExceptions.WarningCount > 0)
+				PrintDiagnosticList("Parsing Warning(s)", parseExceptions.Warnings, DiagnosticSeverity.Warning);
 			
 			if (collectionExceptions.Count > 0)
 				PrintErrorList("Collection Error(s)", collectionExceptions);
@@ -178,6 +182,108 @@ internal static class Program
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
 				Console.WriteLine(output);
+				Console.ResetColor();
+			}
+		}
+
+		private void PrintDiagnosticList(string label, IEnumerable<Diagnostic> diagnostics, DiagnosticSeverity severity)
+		{
+			var relativePath = Path.GetRelativePath(workingDirectory, filePath);
+			var color = severity switch
+			{
+				DiagnosticSeverity.Error => ConsoleColor.Red,
+				DiagnosticSeverity.Warning => ConsoleColor.Yellow,
+				_ => ConsoleColor.White
+			};
+			
+			var darkColor = severity switch
+			{
+				DiagnosticSeverity.Error => ConsoleColor.DarkRed,
+				DiagnosticSeverity.Warning => ConsoleColor.DarkYellow,
+				_ => ConsoleColor.White
+			};
+			
+			lock (ConsoleLock)
+			{
+				Console.ForegroundColor = color;
+				Console.WriteLine($"------------ {relativePath} ------------");
+				Console.WriteLine($"{label}:");
+			}
+
+			foreach (var diagnostic in diagnostics)
+			{
+				const int maxLineNumberLength = 8;
+				const char lineBar = '\u2502';
+				const char upArrow = '\u2191';
+				const char downArrow = '\u2193';
+				
+				// Todo: Support multiline errors
+				
+				var lineHeader = diagnostic.line == 0
+					? $"{"?",maxLineNumberLength}"
+					: $"{diagnostic.line.ToString(),maxLineNumberLength}";
+
+				var messageHeader = $"{new string(' ', lineHeader.Length)} {lineBar} ";
+				var lineRange = diagnostic.source.GetLineRange(diagnostic.line);
+				var lineText = diagnostic.source.GetText(diagnostic.line);
+				lock (ConsoleLock)
+				{
+					Console.ForegroundColor = ConsoleColor.DarkGray;
+					Console.Write($"{lineHeader} {lineBar} ");
+					Console.ForegroundColor = ConsoleColor.Gray;
+					
+					if (diagnostic.range is { } range)
+					{
+						var columnSkips = 0;
+						var preRange = new TextRange(lineRange.Start, range.Start);
+						while (char.IsWhiteSpace(diagnostic.source[preRange.Start]))
+						{
+							preRange = new TextRange(preRange.Start + 1, preRange.End);
+							columnSkips++;
+						}
+						
+						var postRange = new TextRange(range.End, lineRange.End);
+
+						if (diagnostic.line > 0)
+						{
+							Console.Write(diagnostic.source.GetText(preRange));
+							Console.ForegroundColor = darkColor;
+							Console.Write(diagnostic.source.GetText(range));
+							Console.ForegroundColor = ConsoleColor.Gray;
+							Console.WriteLine(diagnostic.source.GetText(postRange));
+						}
+						else
+						{
+							Console.WriteLine();
+						}
+
+						Console.ForegroundColor = ConsoleColor.DarkGray;
+						Console.Write(messageHeader);
+						Console.ForegroundColor = darkColor;
+						var column = diagnostic.source.GetLineColumn(range.Start).Item2 - (columnSkips + 1);
+						Console.Write(new string(' ', column));
+						Console.WriteLine(new string(upArrow, range.Length));
+					}
+					else
+					{
+						if (diagnostic.line > 0)
+							Console.WriteLine(lineText);
+						else
+							Console.WriteLine();
+					}
+
+					Console.ForegroundColor = ConsoleColor.DarkGray;
+					Console.Write(messageHeader);
+					Console.ForegroundColor = color;
+					Console.WriteLine(diagnostic.message);
+					
+					Console.ResetColor();
+					Console.WriteLine();
+				}
+			}
+
+			lock (ConsoleLock)
+			{
 				Console.ResetColor();
 			}
 		}
@@ -320,6 +426,13 @@ internal static class Program
 			}
 			
 			collectionError = true;
+			
+			foreach (var exception in collector.exceptions.Where(e =>
+				         e.WorkingDirectory == file.workingDirectory && e.FilePath == file.filePath))
+			{
+				file.collectionExceptions.Add(exception);
+			}
+			
 			file.Print();
 		}
 
@@ -391,12 +504,13 @@ internal static class Program
 	{
 		var source = await File.ReadAllTextAsync(file.filePath);
 		var lexer = new FilteredLexer(new StringBuffer(source));
-		var ast = Parser.Parse(lexer, out var parseDiagnostics);
+		var parser = new Parser();
+		var ast = parser.Parse(lexer, out var parseDiagnostics);
 		
 		if (parseDiagnostics.Count <= 0)
 			return ast;
 
-		file.parseExceptions.AddRange(parseDiagnostics);
+		file.parseExceptions.Add(parseDiagnostics);
 		file.Print();
 
 		return ast;

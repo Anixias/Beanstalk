@@ -41,7 +41,6 @@ public class CollectionException : Exception
 /// </summary>
 public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 {
-	public readonly bool is64Bit;
 	public readonly Scope globalScope = new();
 	
 	private readonly Stack<Scope> scopeStack = new();
@@ -57,7 +56,6 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	public Collector(bool is64Bit)
 	{
 		scopeStack.Push(globalScope);
-		this.is64Bit = is64Bit;
 		AddNativeTypes(globalScope, is64Bit);
 	}
 
@@ -87,9 +85,14 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		scope.SymbolTable.Add(TypeSymbol.String);
 		scope.SymbolTable.Add(TypeSymbol.Bool);
 
-		var nint = new AliasedSymbol(TokenType.KeywordNInt.ToString(), is64Bit ? TypeSymbol.Int64 : TypeSymbol.Int32);
-		var nuint = new AliasedSymbol(TokenType.KeywordNUInt.ToString(),
-			is64Bit ? TypeSymbol.UInt64 : TypeSymbol.UInt32);
+		var nint = new AliasedSymbol(TokenType.KeywordNInt.ToString(), is64Bit
+			? TypeSymbol.Int64
+			: TypeSymbol.Int32);
+		
+		var nuint = new AliasedSymbol(TokenType.KeywordNUInt.ToString(), is64Bit
+			? TypeSymbol.UInt64
+			: TypeSymbol.UInt32);
+		
 		scope.SymbolTable.Add(nint);
 		scope.SymbolTable.Add(nuint);
 	}
@@ -179,7 +182,19 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		var topLevelStatements = new List<CollectedStatementNode>();
 		foreach (var topLevelStatement in programStatement.topLevelStatements)
 		{
-			topLevelStatements.Add(topLevelStatement.Accept(this));
+			try
+			{
+				topLevelStatements.Add(topLevelStatement.Accept(this));
+			}
+			catch (CollectionException e)
+			{
+				exceptions.Add(e);
+
+				while (scopeStack.Count > moduleScopeCount + 1)
+				{
+					scopeStack.Pop();
+				}
+			}
 		}
 
 		while (moduleScopeCount-- > 0)
@@ -210,6 +225,8 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	{
 		var externalFunctionSymbol = new ExternalFunctionSymbol(statement.identifier.Text, statement.attributes,
 			statement.identifier.Source, statement.signatureRange);
+
+		statement.identifier.Symbol = externalFunctionSymbol;
 
 		if (CurrentScope.LookupSymbol(externalFunctionSymbol.Name) is ExternalFunctionSymbol existingFunctionSymbol)
 			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
@@ -246,6 +263,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				CurrentScope.AddSymbol(moduleSymbol);
 			}
 
+			moduleIdentifier.Symbol = moduleSymbol;
 			scopeStack.Push(scope);
 			moduleScopeCount++;
 		}
@@ -290,10 +308,24 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text, scope,
 			functionDeclarationStatement.identifier.Source, functionDeclarationStatement.signatureRange);
 
+		functionDeclarationStatement.identifier.Symbol = functionSymbol;
+
 		if (CurrentScope.LookupSymbol(functionSymbol.Name) is FunctionSymbol existingFunctionSymbol)
+		{
 			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
+		}
 		else
-			CurrentScope.AddSymbol(functionSymbol);
+		{
+			try
+			{
+				CurrentScope.AddSymbol(functionSymbol);
+			}
+			catch (ArgumentException)
+			{
+				throw NewCollectionException($"A symbol named '{functionSymbol.Name} already exists in this scope",
+					functionDeclarationStatement.identifier);
+			}
+		}
 
 		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement, functionSymbol, body);
 	}
@@ -351,10 +383,21 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(MutableVarDeclarationStatement statement)
 	{
-		var symbol = new VarSymbol(statement.identifier.Text, true);
+		var name = statement.identifier.Text;
+		var symbol = new VarSymbol(name, true);
+		statement.identifier.Symbol = symbol;
 		
 		// Todo: Shadowing
-		CurrentScope.AddSymbol(symbol);
+		if (CurrentScope.LookupSymbol(name) is not { } existingSymbol)
+		{
+			CurrentScope.AddSymbol(symbol);
+		}
+		else
+		{
+			throw NewCollectionException($"Cannot define a local variable named '{name}'; " +
+			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
+			                             "defined in this scope", statement.identifier);
+		}
 
 		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
 			statement.initializer);
@@ -362,10 +405,21 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(ImmutableVarDeclarationStatement statement)
 	{
-		var symbol = new VarSymbol(statement.identifier.Text, false);
+		var name = statement.identifier.Text;
+		var symbol = new VarSymbol(name, false);
+		statement.identifier.Symbol = symbol;
 		
 		// Todo: Shadowing
-		CurrentScope.AddSymbol(symbol);
+		if (CurrentScope.LookupSymbol(name) is not { } existingSymbol)
+		{
+			CurrentScope.AddSymbol(symbol);
+		}
+		else
+		{
+			throw NewCollectionException($"Cannot define a local variable named '{name}'; " +
+			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
+			                             "defined in this scope", statement.identifier);
+		}
 
 		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
 			statement.initializer);
@@ -386,10 +440,20 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	public CollectedStatementNode Visit(StructDeclarationStatement structDeclarationStatement)
 	{
 		var scope = new Scope(CurrentScope);
-		var structSymbol = new StructSymbol(structDeclarationStatement.identifier.Text,
-			structDeclarationStatement.isMutable, scope);
+		var name = structDeclarationStatement.identifier.Text;
+		var structSymbol = new StructSymbol(name, structDeclarationStatement.isMutable, scope);
+		structDeclarationStatement.identifier.Symbol = structSymbol;
 		
-		CurrentScope.AddSymbol(structSymbol);
+		if (CurrentScope.LookupSymbol(name) is not { } existingSymbol)
+		{
+			CurrentScope.AddSymbol(structSymbol);
+		}
+		else
+		{
+			throw NewCollectionException($"Cannot define a struct named '{name}'; " +
+			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
+			                             "defined in this scope", structDeclarationStatement.identifier);
+		}
 		
 		scopeStack.Push(scope);
 		typeStack.Push(structSymbol);
@@ -455,7 +519,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		{
 			throw NewCollectionException($"Cannot define a field named '{name}'; " +
 			                              $"There is already {existingSymbol.SymbolTypeName} with the same name " +
-			                              "defined in this scope");
+			                              "defined in this scope", statement.identifier);
 		}
 
 		switch (statement.mutability)
@@ -464,6 +528,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				var mutableFieldSymbol = new FieldSymbol(name, true, statement.isStatic, CurrentType,
 					statement.isStatic ? 0u : CurrentType.NextFieldIndex());
 				
+				statement.identifier.Symbol = mutableFieldSymbol;
 				CurrentScope.AddSymbol(mutableFieldSymbol);
 				return new CollectedFieldDeclarationStatement(mutableFieldSymbol, syntaxType, statement.initializer,
 					statement.range);
@@ -472,6 +537,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				var immutableFieldSymbol = new FieldSymbol(name, false, statement.isStatic, CurrentType,
 					statement.isStatic ? 0u : CurrentType.NextFieldIndex());
 				
+				statement.identifier.Symbol = immutableFieldSymbol;
 				CurrentScope.AddSymbol(immutableFieldSymbol);
 				return new CollectedFieldDeclarationStatement(immutableFieldSymbol, syntaxType, statement.initializer,
 					statement.range);
@@ -481,6 +547,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 					throw NewCollectionException("Constant fields require an initializer", statement.identifier);
 				
 				var constantSymbol = new ConstSymbol(name);
+				statement.identifier.Symbol = constantSymbol;
 				CurrentScope.AddSymbol(constantSymbol);
 				return new CollectedConstDeclarationStatement(constantSymbol, syntaxType, statement.initializer,
 					statement.range);
@@ -494,6 +561,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	public CollectedStatementNode Visit(DefineStatement statement)
 	{
 		var symbol = new DefSymbol(statement.identifier.Text);
+		statement.identifier.Symbol = symbol;
 		CurrentScope.AddSymbol(symbol);
 		return new CollectedDefStatement(symbol, statement.type);
 	}

@@ -1,17 +1,66 @@
-﻿namespace Beanstalk.Analysis.Text;
+﻿using System.Collections.Immutable;
 
-public sealed class StringBuffer(string text) : IBuffer
+namespace Beanstalk.Analysis.Text;
+
+public sealed class StringBuffer : IBuffer
 {
 	// Todo: Cache line starts
 	// Todo: Add function to get specific line's text
 	
 	public static readonly IBuffer Empty = new StringBuffer("");
+	
+	private readonly string text;
+	private readonly ImmutableArray<TextRange> lines;
+
+	public StringBuffer(string text)
+	{
+		this.text = text;
+		lines = SplitLines(text);
+	}
+
+	private static ImmutableArray<TextRange> SplitLines(string text)
+	{
+		var lines = new List<TextRange>();
+
+		var lineStart = 0;
+		for (var i = 0; i < text.Length; i++)
+		{
+			switch (text[i])
+			{
+				case '\n':
+					lines.Add(new TextRange(lineStart, i));
+					lineStart = i + 1;
+					break;
+				
+				case '\r':
+				{
+					var lineEnd = i;
+					if (i + 1 < text.Length && text[i + 1] == '\n')
+					{
+						i++;
+					}
+
+					lines.Add(new TextRange(lineStart, lineEnd));
+					lineStart = i + 1;
+					break;
+				}
+			}
+		}
+
+		return lines.ToImmutableArray();
+	}
+
 	public char this[int position] => text[position];
 	public int Length => text.Length;
 
 	public string GetText()
 	{
 		return text;
+	}
+
+	public string GetText(int line)
+	{
+		return GetText(GetLineRange(line));
 	}
 
 	public string GetText(TextRange range)
@@ -55,5 +104,10 @@ public sealed class StringBuffer(string text) : IBuffer
 		}
 
 		return (line, column);
+	}
+
+	public TextRange GetLineRange(int line)
+	{
+		return lines[line - 1];
 	}
 }
