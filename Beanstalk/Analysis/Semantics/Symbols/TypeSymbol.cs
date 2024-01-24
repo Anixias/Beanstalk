@@ -82,7 +82,15 @@ public abstract class TypeSymbol : ISymbol
 		BuildNumeric(Float64);
 		BuildNumeric(Float128);
 		
+		BuildString();
+	}
+
+	private static void BuildString()
+	{
 		BuildAdd(String);
+
+		var lengthSymbol = new FieldSymbol("length", false, false, String, 0u);
+		String.SymbolTable.Add(lengthSymbol);
 	}
 
 	private static void BuildNumeric(TypeSymbol type)

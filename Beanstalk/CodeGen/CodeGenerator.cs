@@ -421,11 +421,13 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			default:
 				throw new NotImplementedException();
 			
+			// Todo: Should this be the size of the base type? Should there be a GetAlignment method?
 			case NullableType nullableType:
 			{
 				return ptrSize;
 			}
 			
+			// Todo: Should this be the size of the base type? Should there be a GetAlignment method?
 			case ReferenceType referenceType:
 			{
 				return ptrSize;
@@ -1216,9 +1218,6 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 		if (!typeSymbols.ContainsKey(ownerSymbol))
 			throw new Exception($"Type '{ownerSymbol.Name}' not forward declared");
-		
-		var ownerValue = typeSymbols[ownerSymbol];
-		var owner = ownerValue.value;
 
 		if (!valueSymbols.ContainsKey(functionSymbol))
 			throw new InvalidOperationException("String function not forward declared");
@@ -1232,6 +1231,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		var source = expression.source.Accept(this).value;
 		lvalueStack.Pop();
 		
+		// ReSharper disable once RedundantExplicitArrayCreation
 		var arguments = new LLVMOpaqueValue*[] { source };
 
 		return new OpaqueValue(BuildCall(function, arguments, ""));
@@ -1318,6 +1318,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		throw new NotImplementedException();
 	}
 
+	private OpaqueType CreateStringType(uint length)
+	{
+		var byteType = TypeSymbol.UInt8;
+		return new OpaqueType(LLVM.ArrayType(GetNativeType(byteType), length), length * GetNativeSize(byteType));
+	}
+
 	public OpaqueValue Visit(ResolvedLiteralExpression expression)
 	{
 		//LLVM.ConstInt(LLVM.Int32Type(), statement.value.Accept(this), 1)
@@ -1382,7 +1388,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 				return existingConstant.value;
 			
 			var charArray = ConvertUnicodeString(value, out var length);
-			var stringType = LLVM.ArrayType(GetNativeType(TypeSymbol.UInt8), length);
+			var stringType = CreateStringType(length).value;
 			var stringRef = LLVM.AddGlobal(currentModule, stringType, EmptyString);
 			LLVM.SetInitializer(stringRef,
 				LLVM.ConstStringInContext(currentContext, charArray, length, LLVMBool.True));
@@ -1500,9 +1506,59 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		return new OpaqueValue(allocation);
 	}
 
+	// Todo: Support runtime strings - this only works for concatenating string literals
 	private OpaqueValue BuildStringConcatenation(LLVMOpaqueValue* left, LLVMOpaqueValue* right)
 	{
-		throw new NotImplementedException();
+		var leftType = LLVM.IsGlobalConstant(left) == LLVMBool.True
+			? LLVM.GlobalGetValueType(left)
+			: throw new NotImplementedException();
+
+		var rightType = LLVM.IsGlobalConstant(right) == LLVMBool.True
+			? LLVM.GlobalGetValueType(right)
+			: throw new NotImplementedException();
+		
+		// Subtract 1u from each because they are null-terminated
+		var leftLength = LLVM.GetArrayLength(leftType) - 1u;
+		var rightLength = LLVM.GetArrayLength(rightType) - 1u;
+
+		// Add 1u to the total because the result will be null-terminated
+		var newLength = leftLength + rightLength + 1u;
+		
+		// Todo: Memory management
+		var byteType = LLVM.Int8TypeInContext(currentContext);
+		var allocation = newLength < 1024
+			? BuildArrayAlloca(byteType, LLVM.ConstInt(byteType, newLength, LLVMBool.False), "")
+			: BuildArrayMalloc(byteType, LLVM.ConstInt(byteType, newLength, LLVMBool.False), "");
+
+		var rightIndex = LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), leftLength, LLVMBool.False);
+		var nullIndex = LLVM.ConstInt(LLVM.Int64TypeInContext(currentContext), leftLength + rightLength,
+			LLVMBool.False);
+		
+		// ReSharper disable once RedundantExplicitArrayCreation
+		var rightIndices = new LLVMOpaqueValue*[]
+		{
+			rightIndex
+		};
+		
+		// ReSharper disable once RedundantExplicitArrayCreation
+		var nullIndices = new LLVMOpaqueValue*[]
+		{
+			nullIndex
+		};
+
+		var rightPtr = BuildInBoundsGEP(byteType, allocation, rightIndices, "");
+		var nullPtr = BuildInBoundsGEP(byteType, allocation, nullIndices, "");
+
+		var leftCount = LLVM.ConstInt(byteType, leftLength, LLVMBool.False);
+		var rightCount = LLVM.ConstInt(byteType, rightLength, LLVMBool.False);
+		var nullByte = LLVM.ConstInt(byteType, 0uL, LLVMBool.False);
+		var one = LLVM.ConstInt(byteType, 1uL, LLVMBool.False);
+		
+		BuildMemCpy(allocation, 1u, left, 1u, leftCount);
+		BuildMemCpy(rightPtr, 1u, right, 1u, rightCount);
+		BuildMemSet(nullPtr, 1u, nullByte, one);
+
+		return new OpaqueValue(allocation);
 	}
 
 	public OpaqueValue Visit(ResolvedSymbolExpression expression)

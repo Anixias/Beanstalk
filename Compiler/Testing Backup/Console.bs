@@ -1,0 +1,16 @@
+﻿module bs.io
+
+util Console
+{
+	fun print(text:char[]) external(entry = "print")
+	
+	fun printLine(text:string)
+	{
+	    print("{text}\n"::char[])
+	}
+	
+	fun printMany(...parts:string[])
+	{
+	    print('\n')
+	}
+}

@@ -95,6 +95,9 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		
 		scope.SymbolTable.Add(nint);
 		scope.SymbolTable.Add(nuint);
+
+		if (TypeSymbol.String.SymbolTable.Lookup("length") is FieldSymbol stringLengthField)
+			stringLengthField.EvaluatedType = nuint.EvaluatedType;
 	}
 
 	private CollectionException NewCollectionException(string message, Token? token = null)

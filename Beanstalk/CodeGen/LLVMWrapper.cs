@@ -2,17 +2,14 @@
 using LLVMSharp.Interop;
 using Type = Beanstalk.Analysis.Semantics.Type;
 
+// ReSharper disable UnusedMember.Local
+// ReSharper disable UnusedMethodReturnValue.Local
 // ReSharper disable IdentifierTypo
 
 namespace Beanstalk.CodeGen;
 
 public unsafe partial class CodeGenerator
 {
-	private LLVMOpaqueValue* BuildAlloca(Type type, string name)
-	{
-		return BuildAlloca(GetType(type), name, GetSize(type));
-	}
-	
 	private LLVMOpaqueValue* BuildAlloca(LLVMOpaqueType* type, string name, uint alignment)
 	{
 		var allocation = LLVM.BuildAlloca(currentBuilder, type, ConvertString(name));
@@ -23,6 +20,21 @@ public unsafe partial class CodeGenerator
 		}
 
 		return allocation;
+	}
+	
+	private LLVMOpaqueValue* BuildArrayAlloca(LLVMOpaqueType* type, LLVMOpaqueValue* count, string name)
+	{
+		return LLVM.BuildArrayAlloca(currentBuilder, type, count, ConvertString(name));
+	}
+	
+	private LLVMOpaqueValue* BuildMalloc(LLVMOpaqueType* type, string name)
+	{
+		return LLVM.BuildMalloc(currentBuilder, type, ConvertString(name));
+	}
+	
+	private LLVMOpaqueValue* BuildArrayMalloc(LLVMOpaqueType* type, LLVMOpaqueValue* count, string name)
+	{
+		return LLVM.BuildArrayMalloc(currentBuilder, type, count, ConvertString(name));
 	}
 
 	private LLVMOpaqueValue* BuildStore(LLVMOpaqueValue* value, LLVMOpaqueValue* destPtr, uint alignment)
@@ -127,6 +139,40 @@ public unsafe partial class CodeGenerator
 			LLVM.InstructionEraseFromParent(externalFunction);
 	}
 
+	private void DeclareFunction(FunctionSymbol functionSymbol)
+	{
+		if (valueSymbols.ContainsKey(functionSymbol))
+			return;
+		
+		var parameterList = functionSymbol.Parameters;
+		var parameterTypes = new LLVMOpaqueType*[parameterList.Length];
+		var isVariadic = LLVMBool.False;
+
+		for (var i = 0; i < parameterTypes.Length; i++)
+		{
+			var parameter = parameterList[i];
+			parameterTypes[i] = GetType(parameter.EvaluatedType!);
+
+			if (parameter.IsVariadic)
+				isVariadic = LLVMBool.True;
+		}
+
+		var paramTypes = ConvertArrayToPointer(parameterTypes);
+		var returnType = GetType(functionSymbol.ReturnType);
+	
+		var functionType = LLVM.FunctionType(returnType, paramTypes, (uint)parameterTypes.Length, isVariadic);
+		var name = functionSymbol.Name;
+		
+		var function = LLVM.AddFunction(currentModule, ConvertString(name),
+			functionType);
+		
+		valueSymbols.Add(functionSymbol, new OpaqueValue(function));
+	
+		// Verification
+		if (LLVM.VerifyFunction(function, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(function);
+	}
+
 	private void ImportSymbols(SymbolTable symbols)
 	{
 		foreach (var importedSymbol in symbols.Values)
@@ -146,7 +192,8 @@ public unsafe partial class CodeGenerator
 					break;
 				
 				case FunctionSymbol functionSymbol:
-					throw new NotImplementedException();
+					DeclareFunction(functionSymbol);
+					break;
 				
 				case ExternalFunctionSymbol functionSymbol:
 					DeclareExternalFunction(functionSymbol);
@@ -159,5 +206,25 @@ public unsafe partial class CodeGenerator
 		string fieldName)
 	{
 		return LLVM.BuildStructGEP2(currentBuilder, structType, structRef, fieldIndex, ConvertString(fieldName));
+	}
+
+	private LLVMOpaqueValue* BuildInBoundsGEP(LLVMOpaqueType* type, LLVMOpaqueValue* pointer,
+		LLVMOpaqueValue*[] indices, string name)
+	{
+		var indexArray = ConvertArrayToPointer(indices);
+		var indexCount = (uint)indices.LongLength;
+		return LLVM.BuildInBoundsGEP2(currentBuilder, type, pointer, indexArray, indexCount, ConvertString(name));
+	}
+
+	private LLVMOpaqueValue* BuildMemCpy(LLVMOpaqueValue* dst, uint dstAlign, LLVMOpaqueValue* src, uint srcAlign,
+		LLVMOpaqueValue* count)
+	{
+		return LLVM.BuildMemCpy(currentBuilder, dst, dstAlign, src, srcAlign, count);
+	}
+
+	private LLVMOpaqueValue* BuildMemSet(LLVMOpaqueValue* dst, uint dstAlign, LLVMOpaqueValue* value,
+		LLVMOpaqueValue* count)
+	{
+		return LLVM.BuildMemSet(currentBuilder, dst, value, count, dstAlign);
 	}
 }

@@ -71,18 +71,18 @@ var struct Vec2
 		this.n = n
 	}
 	
-	operator(left:Vec2 + right:Vec2) :> Vec2 => Vec2.new(left.x + right.x, left.y + right.y, "add")
-	operator(left:Vec2 * right:int) :> Vec2 => Vec2.new(left.x * right, left.y * right, "multiply")
-	operator(left:int * right:Vec2) :> Vec2 => Vec2.new(left * right.x, left * right.y, "multiply")
+	//operator(left:Vec2 + right:Vec2) :> Vec2 => Vec2.new(left.x + right.x, left.y + right.y, "add")
+	//operator(left:Vec2 * right:int) :> Vec2 => Vec2.new(left.x * right, left.y * right, "multiply")
+	//operator(left:int * right:Vec2) :> Vec2 => Vec2.new(left * right.x, left * right.y, "multiply")
 	
-	string() => n//"({x}, {y})"
+	string() => "({x}, {y})"
 }
 
 entry()
 {
-	let c = '\u2191'
-	Console.setConsoleOutputEncoding(65001u)
-	Console.print("Hello, World!\u2191\n")
+	Console.SetConsoleOutputEncoding(65001u)
+	let output = "Hello, World!\u2191\n" + "test\n"
+	Console.Print(output.length)
 	/*let vec = Vec2.new(1, 2, "ab")
 	Console.print(vec.string())
 	let owner = Owner.new()
@@ -93,7 +93,7 @@ entry()
 	return 0
 }
 
-var fun printInt(value:int) => external(entry = "print_int")
-var fun printInt64(value:int64) => external(entry = "print_long_long")
-fun getCurrentTime() :> int64 => external(entry = "get_current_time")
-fun strlen(text:string) :> uint => external(entry = "strlen")
+var fun PrintInt(value:int) => external(entry = "print_int")
+var fun PrintInt64(value:int64) => external(entry = "print_long_long")
+fun GetCurrentTime() :> int64 => external(entry = "get_current_time")
+fun StrLen(text:string) :> uint => external(entry = "strlen")

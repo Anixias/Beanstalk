@@ -668,6 +668,93 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				
 				return new ResolvedValueAccessExpression(sourceExpression, targetSymbol);
 			}
+			
+			case NativeSymbol nativeSymbol:
+			{
+				var targetSymbol = nativeSymbol.SymbolTable.Lookup(
+					target.Type == TokenType.KeywordNew
+						? ConstructorSymbol.InternalName
+						: target.Type == TokenType.KeywordString
+							? StringFunctionSymbol.InternalName
+							: target.Text);
+
+				if (targetSymbol is null)
+					throw NewResolutionException($"Symbol '{target.Text}' not found",
+						target);
+				
+				if (staticAccess)
+				{
+					var cannotBeStaticException = NewResolutionException(
+						$"Symbol '{targetSymbol.Name}' cannot be accessed from a static context", target);
+					
+					switch (targetSymbol)
+					{
+						case ConstSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStaticException;
+							
+							break;
+						
+						case FieldSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStaticException;
+							
+							break;
+						
+						case StringFunctionSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStaticException;
+							
+							break;
+						
+						// Todo: Implement once static functions are added
+						/*case FunctionSymbol symbol:
+							if (!symbol.IsStatic)
+								throw cannotBeStatic;
+							
+							break;*/
+					}
+					
+					return new ResolvedTypeAccessExpression(sourceType, targetSymbol);
+				}
+
+				var mustBeStaticException = NewResolutionException(
+					$"Symbol '{targetSymbol.Name}' must be accessed from a static context. " +
+					$"Did you mean '{nativeSymbol.Name}.{target.Text}'?", target);
+				
+				switch (targetSymbol)
+				{
+					case ConstSymbol symbol:
+						if (symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;
+					
+					case FieldSymbol symbol:
+						if (symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;
+					
+					case StringFunctionSymbol symbol:
+						if (symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;
+					
+					// Todo: Implement once static functions are added
+					/*case FunctionSymbol symbol:
+						if (!symbol.IsStatic)
+							throw mustBeStaticException;
+						
+						break;*/
+					
+					default:
+						throw mustBeStaticException;
+				}
+				
+				return new ResolvedValueAccessExpression(sourceExpression, targetSymbol);
+			}
 		}
 		
 		throw NewResolutionException("Invalid access target", sourceRange);
