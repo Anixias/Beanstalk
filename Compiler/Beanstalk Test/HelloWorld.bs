@@ -49,7 +49,7 @@ module hello.World
 
 struct Owner
 {
-	v:Vec2 = Vec2.new(0, 0, "owned")
+	v:Vec2 = Vec2.new(0, 0)
 	i:int = 3
 	
 	constructor()
@@ -62,13 +62,11 @@ var struct Vec2
 	const a:int = 3 + 5
 	var x:int
 	var y:int
-	n:string
 	
-	constructor(x:int, y:int, n:string)
+	constructor(x:int, y:int)
 	{
 		this.x = x
 		this.y = y
-		this.n = n
 	}
 	
 	//operator(left:Vec2 + right:Vec2) :> Vec2 => Vec2.new(left.x + right.x, left.y + right.y, "add")
@@ -96,4 +94,3 @@ entry()
 var fun PrintInt(value:int) => external(entry = "print_int")
 var fun PrintInt64(value:int64) => external(entry = "print_long_long")
 fun GetCurrentTime() :> int64 => external(entry = "get_current_time")
-fun StrLen(text:string) :> uint => external(entry = "strlen")

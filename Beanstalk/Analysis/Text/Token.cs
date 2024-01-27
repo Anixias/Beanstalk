@@ -8,7 +8,7 @@ public sealed class Token(TokenType type, TextRange range, IBuffer source, objec
 	public TokenType Type { get; } = type;
 	public TextRange Range { get; } = range;
 	public object? Value { get; } = value;
-	public ISymbol? Symbol { get; set; } = null;
+	public ISymbol? Symbol { get; set; }
 	public string Text => Source.GetText(Range);
 	private (int, int) LineColumn { get; } = source.GetLineColumn(range.Start);
 	public int Line => LineColumn.Item1;

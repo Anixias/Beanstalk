@@ -150,6 +150,7 @@ public sealed class TokenType
 	public static readonly TokenType KeywordCast = CreateKeyword("cast");
 	public static readonly TokenType KeywordOperator = CreateKeyword("operator");
 	public static readonly TokenType KeywordExternal = CreateKeyword("external");
+	public static readonly TokenType KeywordNameof = CreateKeyword("nameof");
 	
 	// Native data types
 	public static readonly TokenType KeywordInt = CreateKeyword("int");

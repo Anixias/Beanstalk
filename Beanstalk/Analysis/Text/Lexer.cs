@@ -467,7 +467,7 @@ public class Lexer(IBuffer source) : ILexer
 
 	private ScanResult ScanNumber(int position)
 	{
-		// 1_234, 123.456, 123.456f32, 123.456x32, 123u, 8i64, 0xAF80, 0b1011_0011, 2e3, 2e-3, 3.14e+3s
+		// 1_234, 123.456, 123.456f32, 123.456x32, 123u, 8i64, 0xAF80, 0b1011_0011, 2e3, 2e-3, 3.14e+3f
 		var end = position;
 
 		if (position <= Source.Length - 2)
@@ -521,14 +521,18 @@ public class Lexer(IBuffer source) : ILexer
 							valueString = RemoveSeparators(Source.GetText(new TextRange(position, end)));
 							end = ParseFloatSuffix(end, valueString, out value);
 							break;
+						
 						case 'f':
 						case 'F':
 							end = ParseFloatSuffix(end, valueString, out value);
 							break;
+						
 						case 'x':
 						case 'X':
 							end = ParseFixedSuffix(end, valueString, out value);
 							break;
+						
+						// Todo: Invalid suffix
 						default:
 							value = double.TryParse(valueString, out var defaultValue) ? defaultValue : null;
 							break;
@@ -556,22 +560,28 @@ public class Lexer(IBuffer source) : ILexer
 									end++;
 									value = byte.TryParse(valueString, out var byteValue) ? byteValue : null;
 									break;
+								
 								case 16:
 									end += 2;
 									value = ushort.TryParse(valueString, out var ushortValue) ? ushortValue : null;
 									break;
+								
 								case 32:
 									end += 2;
 									value = uint.TryParse(valueString, out var uintValue) ? uintValue : null;
 									break;
+								
 								case 64:
 									end += 2;
 									value = ulong.TryParse(valueString, out var ulongValue) ? ulongValue : null;
 									break;
+								
 								case 128:
 									end += 3;
 									value = UInt128.TryParse(valueString, out var uint128Value) ? uint128Value : null;
 									break;
+								
+								// Todo: Invalid suffix
 								case null:
 									value = uint.TryParse(valueString, out var uDefaultValue) ? uDefaultValue : null;
 									break;
@@ -586,22 +596,28 @@ public class Lexer(IBuffer source) : ILexer
 									end++;
 									value = sbyte.TryParse(valueString, out var sbyteValue) ? sbyteValue : null;
 									break;
+								
 								case 16:
 									end += 2;
 									value = short.TryParse(valueString, out var shortValue) ? shortValue : null;
 									break;
+								
 								case 32:
 									end += 2;
 									value = int.TryParse(valueString, out var sIntValue) ? sIntValue : null;
 									break;
+								
 								case 64:
 									end += 2;
 									value = long.TryParse(valueString, out var longValue) ? longValue : null;
 									break;
+								
 								case 128:
 									end += 3;
 									value = Int128.TryParse(valueString, out var int128Value) ? int128Value : null;
 									break;
+								
+								// Todo: Invalid suffix
 								case null:
 									value = int.TryParse(valueString, out var iDefaultValue) ? iDefaultValue : null;
 									break;
@@ -619,14 +635,18 @@ public class Lexer(IBuffer source) : ILexer
 							valueString = Source.GetText(new TextRange(position, end));
 							end = ParseFloatSuffix(end, valueString, out value);
 							break;
+						
 						case 'f':
 						case 'F':
 							end = ParseFloatSuffix(end, valueString, out value);
 							break;
+						
 						case 'x':
 						case 'X':
 							end = ParseFixedSuffix(end, valueString, out value);
 							break;
+						
+						// Todo: Invalid suffix
 						default:
 							if (int.TryParse(valueString, out var intValue))
 							{
@@ -741,6 +761,7 @@ public class Lexer(IBuffer source) : ILexer
 						? float32Value
 						: null;
 					break;
+				
 				case 64:
 					end += 2;
 
@@ -749,6 +770,7 @@ public class Lexer(IBuffer source) : ILexer
 						? float64Value
 						: null;
 					break;
+				
 				case 128:
 					end += 3;
 
@@ -757,6 +779,8 @@ public class Lexer(IBuffer source) : ILexer
 						? float128Value
 						: null;
 					break;
+				
+				// Todo: Invalid suffix
 				case null:
 					value = float.TryParse(valueString, NumberStyles.Float, null,
 						out var floatValue)
@@ -796,6 +820,7 @@ public class Lexer(IBuffer source) : ILexer
 					? fixed32Value
 					: null;
 				break;
+			
 			case 64:
 				end += 2;
 
@@ -803,6 +828,7 @@ public class Lexer(IBuffer source) : ILexer
 					? fixed64Value
 					: null;
 				break;
+			
 			case 128:
 				end += 3;
 
@@ -810,6 +836,8 @@ public class Lexer(IBuffer source) : ILexer
 					? fixed128Value
 					: null;
 				break;
+			
+			// Todo: Invalid suffix
 			case null:
 				value = Fixed64.TryParse(valueString, out var fixedValue)
 					? fixedValue
@@ -847,27 +875,33 @@ public class Lexer(IBuffer source) : ILexer
 							if (byte.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var byteValue))
 								value = byteValue;
 							break;
+						
 						case 16:
 							end += 2;
 							if (ushort.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var ushortValue))
 								value = ushortValue;
 							break;
+						
 						case 32:
 							end += 2;
 							if (uint.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var uintValue))
 								value = uintValue;
 							break;
+						
 						case 64:
 							end += 2;
 							if (ulong.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var ulongValue))
 								value = ulongValue;
 							break;
+						
 						case 128:
 							end += 3;
 							if (UInt128.TryParse(valueString, NumberStyles.AllowHexSpecifier, null,
 								    out var uint128Value))
 								value = uint128Value;
 							break;
+						
+						// Todo: Invalid suffix
 						case null:
 							if (uint.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var uDefaultValue))
 								value = uDefaultValue;
@@ -886,27 +920,33 @@ public class Lexer(IBuffer source) : ILexer
 							if (sbyte.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var sbyteValue))
 								value = sbyteValue;
 							break;
+						
 						case 16:
 							end += 2;
 							if (short.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var shortValue))
 								value = shortValue;
 							break;
+						
 						case 32:
 							end += 2;
 							if (int.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var sIntValue))
 								value = sIntValue;
 							break;
+						
 						case 64:
 							end += 2;
 							if (long.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var longValue))
 								value = longValue;
 							break;
+						
 						case 128:
 							end += 3;
 							if (Int128.TryParse(valueString, NumberStyles.AllowHexSpecifier, null,
 								    out var int128Value))
 								value = int128Value;
 							break;
+						
+						// Todo: Invalid suffix
 						case null:
 							if (int.TryParse(valueString, NumberStyles.AllowHexSpecifier, null, out var iDefaultValue))
 								value = iDefaultValue;
@@ -999,6 +1039,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 16:
 							end += 2;
 							try
@@ -1012,6 +1053,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 32:
 							end += 2;
 							try
@@ -1025,6 +1067,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 64:
 							end += 2;
 							try
@@ -1038,6 +1081,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 128:
 							end += 3;
 							if (UInt128.TryParse(valueString, NumberStyles.AllowBinarySpecifier, null,
@@ -1052,6 +1096,8 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
+						// Todo: Invalid suffix
 						case null:
 							try
 							{
@@ -1086,6 +1132,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 16:
 							end += 2;
 							try
@@ -1099,6 +1146,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 32:
 							end += 2;
 							try
@@ -1112,6 +1160,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 64:
 							end += 2;
 							try
@@ -1125,6 +1174,7 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
 						case 128:
 							end += 3;
 							if (Int128.TryParse(valueString, NumberStyles.AllowBinarySpecifier, null,
@@ -1139,6 +1189,8 @@ public class Lexer(IBuffer source) : ILexer
 								return new ScanResult(invalidToken, end);
 							}
 							break;
+						
+						// Todo: Invalid suffix
 						case null:
 							try
 							{
