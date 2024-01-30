@@ -130,7 +130,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	private static string ExtractResource(string resource)
 	{
-		var path = Path.Combine(Path.GetTempPath(), resource);
+		var path = Path.Combine(Path.GetTempPath(), "Beanstalk", resource);
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 		var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Beanstalk.Resources.{resource}");
 
 		if (stream is null)
@@ -141,6 +142,20 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			throw new Exception($"Unable to extract resource '{resource}'");
 		
 		File.WriteAllBytes(path, bytes);
+		return path;
+	}
+
+	private static string ExtractAllResourcesExcept(params string[] excludes)
+	{
+		var path = Path.Combine(Path.GetTempPath(), "Beanstalk");
+		foreach (var resource in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+		{
+			if (excludes.Contains(resource))
+				continue;
+			
+			ExtractResource(resource);
+		}
+
 		return path;
 	}
 	
@@ -210,16 +225,74 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		}
 
 		currentTarget = null;
-		
-		var clang = ExtractResource("clang.exe");
-		var llvmAr = ExtractResource("llvm-ar.exe");
-		var beanstalkLib = ExtractResource("beanstalk.lib");
+
+		const string clangPath = "clang.exe";
+		const string llvmArPath = "llvm-ar.exe";
+		var clang = ExtractResource(clangPath);
+		var llvmAr = ExtractResource(llvmArPath);
+		/*var beanstalkLib = ExtractResource("beanstalk.lib");
 
 		var beanstalkLibDirectory = Path.GetDirectoryName(beanstalkLib);
 		var beanstalkLibFileName = Path.GetFileName(beanstalkLib);
-		var beanstalkLibLinkArgs = $"--library-directory={beanstalkLibDirectory} -l{beanstalkLibFileName}";
+		var beanstalkLibLinkArgs = $"--library-directory={beanstalkLibDirectory} -l{beanstalkLibFileName}";*/
 
-		var targetArg = target is null ? "" : $"-target {target.triple}";
+		#region Compile LibC
+
+		ExtractAllResourcesExcept(clangPath, llvmArPath);
+		var defines = new List<string>();
+
+		if (target is not null)
+		{
+			switch (target.triple.Arch)
+			{
+				case Triple.ArchType.x86_64:
+					DefineMacro("Arch_x86_64");
+					break;
+			}
+		}
+
+		var libCPath = Path.Combine(Path.GetTempPath(), "Beanstalk", "libC.a");
+		var defineArg = string.Join(' ', defines);
+		
+		var libCCompileProcessStartInfo = new ProcessStartInfo
+		{
+			FileName = clang,
+			Arguments = $"{defineArg} -c *.c",
+			WindowStyle = ProcessWindowStyle.Hidden,
+			UseShellExecute = false
+		};
+
+		var libCCompile = new Process
+		{
+			StartInfo = libCCompileProcessStartInfo
+		};
+
+		libCCompile.Start();
+		libCCompile.WaitForExit();
+		if (libCCompile.ExitCode != 0)
+			throw new Exception("LibC failed to compile");
+
+		var libCArchiveProcessStartInfo = new ProcessStartInfo
+		{
+			FileName = llvmAr,
+			Arguments = $"rcs {libCPath} *.o",
+			WindowStyle = ProcessWindowStyle.Hidden,
+			UseShellExecute = false
+		};
+
+		var libCArchive = new Process
+		{
+			StartInfo = libCArchiveProcessStartInfo
+		};
+
+		libCArchive.Start();
+		libCArchive.WaitForExit();
+		if (libCArchive.ExitCode != 0)
+			throw new Exception("LibC failed to archive");
+		
+		#endregion
+		
+		/*var targetArg = target is null ? "" : $"-target {target.triple}";
 		
 		var extension = Path.GetExtension(outputPath);
 		try
@@ -342,10 +415,16 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			return outputPath;
 		}
 		finally
-		{
+		{*/
 			File.Delete(clang);
 			File.Delete(llvmAr);
-			File.Delete(beanstalkLib);
+			//File.Delete(beanstalkLib);
+		//}
+		return "";
+
+		void DefineMacro(string macro, string? value = null)
+		{
+			defines.Add(string.IsNullOrWhiteSpace(value) ? $"-D{macro}" : $"-D{macro}={value}");
 		}
 	}
 

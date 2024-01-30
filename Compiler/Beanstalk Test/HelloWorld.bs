@@ -43,7 +43,7 @@ Todo:
 		- the '?' means the function is only called if it is not null (ex: the variable stores a lambda)
 	- add '!' postfix unary operator that converts T? into T for remaining control flow branch
 */
-import bs.io.console.* as Console
+//import bs.io.console.* as Console
 
 module hello.World
 
@@ -73,14 +73,14 @@ var struct Vec2
 	//operator(left:Vec2 * right:int) :> Vec2 => Vec2.new(left.x * right, left.y * right, "multiply")
 	//operator(left:int * right:Vec2) :> Vec2 => Vec2.new(left * right.x, left * right.y, "multiply")
 	
-	string() => "({x}, {y})"
+	string() => "test"//"({x}, {y})"
 }
 
 entry()
 {
-	Console.SetConsoleOutputEncoding(65001u)
+	//Console.SetConsoleOutputEncoding(65001u)
 	let output = "Hello, World!\u2191\n" + "test\n"
-	Console.Print(output.length)
+	//Console.Print(output.length)
 	/*let vec = Vec2.new(1, 2, "ab")
 	Console.print(vec.string())
 	let owner = Owner.new()

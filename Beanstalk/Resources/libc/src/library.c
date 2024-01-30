@@ -1,4 +1,4 @@
-#include <stdio.h>
+/*#include <stdio.h>
 #include <math.h>
 #include <time.h>
 #include <windows.system.h>
@@ -95,4 +95,4 @@ const char* uint32_to_string(unsigned int value)
 time_t get_current_time()
 {
     return time(0);
-}
+}*/

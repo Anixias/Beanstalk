@@ -8,10 +8,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <None Remove="libc\src\beanstalk.a" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="libLLVM" Version="16.0.6" />
       <PackageReference Include="libLLVM.runtime.win-x64" Version="16.0.6" />
       <PackageReference Include="LLVMSharp" Version="16.0.0" />
@@ -21,8 +17,8 @@
     <ItemGroup>
       <EmbeddedResource Include="Resources\clang.exe" />
       <EmbeddedResource Include="Resources\llvm-ar.exe" />
-      <EmbeddedResource Include="Resources\beanstalk.lib" />
-      <None Remove="Resources\library.c" />
+      <EmbeddedResource Include="Resources\libc\src\*.c" />
+      <EmbeddedResource Include="Resources\libc\src\*.h" />
     </ItemGroup>
 
 </Project>

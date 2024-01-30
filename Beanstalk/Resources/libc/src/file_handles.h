@@ -1,0 +1,7 @@
+#ifndef LIBC_FILE_HANDLES_H
+#define LIBC_FILE_HANDLES_H
+
+#define STDOUT 1
+#define EXIT_SUCCESS 0
+
+#endif //LIBC_FILE_HANDLES_H
