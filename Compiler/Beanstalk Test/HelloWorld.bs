@@ -4,7 +4,7 @@ Todo:
 	- built-in operations (in progress)
 	- string interpolation
 	- visibility/access modifiers
-		(tls stands for 'top-level statements' and include types, external functions, and functions
+		(tls stands for 'top-level statements' and include types, external functions, functions, and constants
 		- (none):
 			- on tls: same as 'local'
 			- in types: same as 'pub'
@@ -18,7 +18,7 @@ Todo:
 			- within a type marked with 'local', all 'pub' access is equivalent to 'local'
 		- internal: visible in the top-most module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod' and all children of 'mod'
-			- within a type marked with 'internal',0 all 'pub' access is equivalent to 'internal'
+			- within a type marked with 'internal', all 'pub' access is equivalent to 'internal'
 		- restricted: visible in the module it's declared in and its children modules; may be imported
 			- if defined in 'mod.a.b', visible to 'mod.a.b' and all children of 'mod.a.b'
 			- within a type marked with 'restricted', all 'pub' access is equivalent to 'restricted'
@@ -43,11 +43,11 @@ Todo:
 		- the '?' means the function is only called if it is not null (ex: the variable stores a lambda)
 	- add '!' postfix unary operator that converts T? into T for remaining control flow branch
 */
-//import bs.io.console.* as Console
+import bs.io.Console
 
 module hello.World
 
-struct Owner
+/*struct Owner
 {
 	v:Vec2 = Vec2.new(0, 0)
 	i:int = 3
@@ -63,6 +63,7 @@ var struct Vec2
 	var x:int
 	var y:int
 	
+	
 	constructor(x:int, y:int)
 	{
 		this.x = x
@@ -74,23 +75,34 @@ var struct Vec2
 	//operator(left:int * right:Vec2) :> Vec2 => Vec2.new(left * right.x, left * right.y, "multiply")
 	
 	string() => "test"//"({x}, {y})"
+}*/
+
+const StdIn = -10
+const StdOut = -11
+const StdErr = -12
+
+const CodePageUTF8 = 65001
+
+import("kernel32.dll")
+{
+	var fun WriteConsole(handle:nuint, buffer:string, charCount:uint32, charsWritten:uint32?, reserved:nuint) =>
+		external(entry = "WriteConsoleA")
+		
+	var fun SetConsoleOutputCodePage(codePage:uint32) =>
+		external(entry = "SetConsoleOutputCP")
+		
+	fun GetStdHandle(handle:uint32) :> nuint =>
+		external(entry = "GetStdHandle")
 }
 
 entry()
 {
-	//Console.SetConsoleOutputEncoding(65001u)
-	let output = "Hello, World!\u2191\n" + "test\n"
-	//Console.Print(output.length)
-	/*let vec = Vec2.new(1, 2, "ab")
-	Console.print(vec.string())
-	let owner = Owner.new()
-	printInt(owner.v.x)
-	printInt(owner.v.y)
-	Console.print(owner.v.string())*/
+	SetConsoleOutputCodePage(CodePageUTF8)
+	let stdOut = GetStdHandle(StdOut)
+	WriteConsole(stdOut, "Hello, World!\n", 14u32, null, 0u64)
+	WriteConsole(stdOut, "This is a test", 14u32, null, 0u64)
+	
+	Console.Out.PrintLine("Hello, World!")
 	
 	return 0
 }
-
-var fun PrintInt(value:int) => external(entry = "print_int")
-var fun PrintInt64(value:int64) => external(entry = "print_long_long")
-fun GetCurrentTime() :> int64 => external(entry = "get_current_time")

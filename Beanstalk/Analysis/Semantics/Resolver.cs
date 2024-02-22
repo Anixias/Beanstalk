@@ -45,7 +45,9 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 	ExpressionNode.IVisitor<ResolvedExpressionNode>, SyntaxType.IVisitor<Type>
 {
 	public readonly List<ResolutionException> exceptions = [];
-	public SymbolTable? importedSymbols;
+	public readonly List<string> dlls = [];
+	public readonly List<ExternalFunctionSymbol> dllImportFunctions = [];
+	private SymbolTable? importedSymbols;
 	private readonly Stack<Scope> scopeStack = new();
 	private Scope CurrentScope => scopeStack.Peek();
 	private readonly Stack<TypeSymbol> typeStack = new();
@@ -305,7 +307,15 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 
 	public ResolvedStatementNode Visit(CollectedExternalFunctionStatement externalFunctionStatement)
 	{
-		return new ResolvedExternalFunctionStatement(externalFunctionStatement.externalFunctionSymbol!);
+		if (externalFunctionStatement.externalFunctionSymbol.DllImportSource is { } dllImportSource)
+		{
+			if (!dlls.Contains(dllImportSource))
+				dlls.Add(dllImportSource);
+			
+			dllImportFunctions.Add(externalFunctionStatement.externalFunctionSymbol);
+		}
+		
+		return new ResolvedExternalFunctionStatement(externalFunctionStatement.externalFunctionSymbol);
 	}
 
 	public ResolvedStatementNode Visit(CollectedConstructorDeclarationStatement statement)
@@ -406,6 +416,18 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		// Todo
 		return new ResolvedSimpleStatement(statement);
+	}
+
+	public ResolvedStatementNode Visit(CollectedAggregateStatement collectedAggregateStatement)
+	{
+		var statements = new List<ResolvedStatementNode>();
+
+		foreach (var statement in collectedAggregateStatement.statements)
+		{
+			statements.Add(statement.Accept(this));
+		}
+
+		return new ResolvedAggregateStatement(statements);
 	}
 
 	public ResolvedExpressionNode Visit(TupleExpression expression)

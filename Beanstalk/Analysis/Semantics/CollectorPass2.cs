@@ -894,7 +894,13 @@ public partial class Collector : CollectedStatementNode.IVisitor
 	{
 		// Do nothing
 	}
-	
+
+	public void Visit(CollectedAggregateStatement collectedAggregateStatement)
+	{
+		foreach (var statement in collectedAggregateStatement.statements)
+			statement.Accept(this);
+	}
+
 	private Type? ResolveType(SyntaxType syntaxType, ICollection<Token> invalidTypes)
 	{
 		switch (syntaxType)

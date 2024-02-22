@@ -26,6 +26,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		T Visit(CollectedBlockStatement statement);
 		T Visit(CollectedVarDeclarationStatement statement);
 		T Visit(CollectedSimpleStatement statement);
+		T Visit(CollectedAggregateStatement collectedAggregateStatement);
 	}
 	
 	public interface IVisitor
@@ -48,6 +49,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedBlockStatement statement);
 		void Visit(CollectedVarDeclarationStatement statement);
 		void Visit(CollectedSimpleStatement statement);
+		void Visit(CollectedAggregateStatement collectedAggregateStatement);
 	}
 
 	public abstract void Accept(IVisitor visitor);
@@ -480,6 +482,26 @@ public sealed class CollectedSimpleStatement : CollectedStatementNode
 	public CollectedSimpleStatement(StatementNode statementNode)
 	{
 		this.statementNode = statementNode;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class CollectedAggregateStatement : CollectedStatementNode
+{
+	public readonly ImmutableArray<CollectedStatementNode> statements;
+
+	public CollectedAggregateStatement(IEnumerable<CollectedStatementNode> statements)
+	{
+		this.statements = statements.ToImmutableArray();
 	}
 
 	public override void Accept(IVisitor visitor)

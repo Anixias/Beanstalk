@@ -23,6 +23,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		T Visit(ResolvedBlockStatement statement);
 		T Visit(ResolvedVarDeclarationStatement statement);
 		T Visit(ResolvedSimpleStatement statement);
+		T Visit(ResolvedAggregateStatement statement);
 	}
 	
 	public interface IVisitor
@@ -44,6 +45,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedBlockStatement statement);
 		void Visit(ResolvedVarDeclarationStatement statement);
 		void Visit(ResolvedSimpleStatement statement);
+		void Visit(ResolvedAggregateStatement resolvedAggregateStatement);
 	}
 
 	public abstract void Accept(IVisitor visitor);
@@ -410,6 +412,26 @@ public sealed class ResolvedSimpleStatement : ResolvedStatementNode
 	public ResolvedSimpleStatement(CollectedStatementNode statement)
 	{
 		this.statement = statement;
+	}
+
+	public override void Accept(IVisitor visitor)
+	{
+		visitor.Visit(this);
+	}
+
+	public override T Accept<T>(IVisitor<T> visitor)
+	{
+		return visitor.Visit(this);
+	}
+}
+
+public sealed class ResolvedAggregateStatement : ResolvedStatementNode
+{
+	public readonly ImmutableArray<ResolvedStatementNode> statements;
+	
+	public ResolvedAggregateStatement(IEnumerable<ResolvedStatementNode> statements)
+	{
+		this.statements = statements.ToImmutableArray();
 	}
 
 	public override void Accept(IVisitor visitor)

@@ -349,7 +349,7 @@ internal static class Program
 		}
 
 		if (!Analyze(programArgs.Value.Target?.Is64Bit() ?? Environment.Is64BitOperatingSystem, asts, files,
-			    out var resolvedAsts))
+			    out var resolvedAsts, out var dlls, out var dllImportFunctions))
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
@@ -362,8 +362,9 @@ internal static class Program
 		{
 			Debug = true
 		};
-		
-		outputPath = codeGenerator.Generate(resolvedAsts, programArgs.Value.Target, optimizationLevel, outputPath);
+
+		outputPath = codeGenerator.Generate(resolvedAsts, dlls, dllImportFunctions, programArgs.Value.Target,
+			optimizationLevel, outputPath);
 		
 		var duration = (DateTime.Now - startTime).TotalMilliseconds;
 		Console.ForegroundColor = ConsoleColor.Cyan;
@@ -408,9 +409,11 @@ internal static class Program
 	}
 
 	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files,
-		out List<ResolvedAst> resolvedAsts)
+		out List<ResolvedAst> resolvedAsts, out string[] dlls, out ExternalFunctionSymbol[] dllImportFunctions)
 	{
 		resolvedAsts = [];
+		dlls = [];
+		dllImportFunctions = [];
 		var collector = new Collector(is64Bit);
 		var collectionError = false;
 		var collectedAsts = new List<CollectedAst>();
@@ -497,6 +500,8 @@ internal static class Program
 			return false;
 		}
 
+		dlls = resolver.dlls.ToArray();
+		dllImportFunctions = resolver.dllImportFunctions.ToArray();
 		return true;
 	}
 

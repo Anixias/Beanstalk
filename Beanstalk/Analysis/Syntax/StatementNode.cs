@@ -10,7 +10,7 @@ public abstract class StatementNode : IAstNode
 		T Visit(ProgramStatement statement);
 		T Visit(ImportStatement statement);
 		T Visit(AggregateImportStatement statement);
-		T Visit(DllImportStatement statement);
+		T Visit(DllImportStatement dllImportStatement);
 		T Visit(ExternalFunctionStatement statement);
 		T Visit(ModuleStatement statement);
 		T Visit(EntryStatement entryStatement);

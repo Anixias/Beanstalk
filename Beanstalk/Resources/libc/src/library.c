@@ -1,3 +1,24 @@
+#include "syscalls.h"
+#include "file_handles.h"
+
+unsigned long long strlen(const char* str)
+{
+    unsigned long long len = 0;
+
+    if (!str)
+        return -1;
+
+    while (*str++)
+        len++;
+
+    return len;
+}
+
+void write_to_stdout(const char* str)
+{
+    write(STDOUT, str, (int)strlen(str));
+}
+
 /*#include <stdio.h>
 #include <math.h>
 #include <time.h>

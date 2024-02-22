@@ -47,6 +47,8 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	private Scope CurrentScope => scopeStack.Peek();
 	private readonly Stack<TypeSymbol> typeStack = new();
 	private TypeSymbol CurrentType => typeStack.Peek();
+	private readonly Stack<string> dllImportStack = new();
+	private string? CurrentDllImport => dllImportStack.TryPeek(out var result) ? result : null;
 	
 	public readonly List<CollectionException> exceptions = [];
 	private string currentWorkingDirectory = "";
@@ -218,16 +220,29 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		return new CollectedSimpleStatement(statement);
 	}
 
-	public CollectedStatementNode Visit(DllImportStatement statement)
+	public CollectedStatementNode Visit(DllImportStatement dllImportStatement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		dllImportStack.Push(dllImportStatement.dllPath);
+
+		var statements = new List<CollectedStatementNode>();
+
+		foreach (var statement in dllImportStatement.statements)
+		{
+			statements.Add(statement.Accept(this));
+		}
+		
+		dllImportStack.Pop();
+
+		return new CollectedAggregateStatement(statements);
 	}
 
 	public CollectedStatementNode Visit(ExternalFunctionStatement statement)
 	{
 		var externalFunctionSymbol = new ExternalFunctionSymbol(statement.identifier.Text, statement.attributes,
-			statement.identifier.Source, statement.signatureRange);
+			statement.identifier.Source, statement.signatureRange)
+		{
+			DllImportSource = CurrentDllImport
+		};
 
 		statement.identifier.Symbol = externalFunctionSymbol;
 
@@ -430,8 +445,22 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 
 	public CollectedStatementNode Visit(ConstVarDeclarationStatement statement)
 	{
-		// Todo
-		return new CollectedSimpleStatement(statement);
+		var name = statement.identifier.Text;
+		var symbol = new ConstSymbol(name);
+		statement.identifier.Symbol = symbol;
+		
+		if (CurrentScope.LookupSymbol(name) is not { } existingSymbol)
+		{
+			CurrentScope.AddSymbol(symbol);
+		}
+		else
+		{
+			throw NewCollectionException($"Cannot define a const named '{name}'; " +
+			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
+			                             "defined in this scope", statement.identifier);
+		}
+
+		return new CollectedConstDeclarationStatement(symbol, statement.type, statement.initializer, statement.range);
 	}
 
 	public CollectedStatementNode Visit(ReturnStatement statement)

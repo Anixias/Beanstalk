@@ -1,11 +1,11 @@
 #include "syscalls.h"
 
-static inline void exit(int retval)
+void exit(int retval)
 {
     SYSCALL1_NORET(SYS_exit, retval);
 }
 
-static inline int write(int fd, const void* data, int len)
+int write(int fd, const void* data, int len)
 {
     int retval;
 

@@ -1,5 +1,4 @@
-﻿using System.Collections.Immutable;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -106,7 +105,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		Complete
 	}
 	
-	public bool Debug { get; set; }
+	public bool Debug { get; init; }
 	
 	private LLVMOpaqueModule* currentModule;
 	private LLVMOpaqueContext* currentContext;
@@ -125,14 +124,18 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	private bool CurrentIsLValue => lvalueStack.TryPeek(out var isLValue) && isLValue;
 	private readonly Stack<OpaqueValue> thisStack = new();
 	private OpaqueValue CurrentThisValue => thisStack.Peek();
+	private LLVMOpaqueType* expectedType = OpaqueType.NullPtr;
+	private static readonly string TempDirectory = Path.Combine(Path.GetTempPath(), "Beanstalk");
 
 	private static readonly sbyte* EmptyString = ConvertString("");
 
 	private static string ExtractResource(string resource)
 	{
-		var path = Path.Combine(Path.GetTempPath(), "Beanstalk", resource);
+		var resourcePath = resource.Replace("Beanstalk.Resources.", "");
+		resourcePath = resourcePath.Replace("libc.src.", "libc/src/");
+		var path = Path.Combine(TempDirectory, resourcePath);
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-		var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Beanstalk.Resources.{resource}");
+		var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource);
 
 		if (stream is null)
 			throw new Exception($"Unable to extract resource '{resource}'");
@@ -145,24 +148,191 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		return path;
 	}
 
-	private static string ExtractAllResourcesExcept(params string[] excludes)
+	private static string ExtractAllResources()
 	{
-		var path = Path.Combine(Path.GetTempPath(), "Beanstalk");
 		foreach (var resource in Assembly.GetExecutingAssembly().GetManifestResourceNames())
 		{
-			if (excludes.Contains(resource))
-				continue;
-			
 			ExtractResource(resource);
 		}
 
-		return path;
+		return TempDirectory;
 	}
 	
-	public string Generate(IEnumerable<ResolvedAst> asts, Target? target, int optimizationLevel, string outputPath)
+	private LLVMOpaqueValue* DefineStringLiteral(LLVMOpaqueModule* module, LLVMOpaqueContext* context, 
+		LLVMOpaqueBuilder* builder, string value)
+	{
+		if (constantLiterals.TryGetValue(value, out var existingConstant))
+			return existingConstant.value;
+			
+		var charArray = ConvertUnicodeString(value, out var length);
+		var stringType = LLVM.ArrayType(LLVM.Int8TypeInContext(context), length);
+		var stringRef = LLVM.AddGlobal(module, stringType, EmptyString);
+		LLVM.SetInitializer(stringRef,
+			LLVM.ConstStringInContext(context, charArray, length, LLVMBool.True));
+		LLVM.SetGlobalConstant(stringRef, LLVMBool.True);
+		LLVM.SetLinkage(stringRef, LLVMLinkage.LLVMPrivateLinkage);
+		LLVM.SetUnnamedAddress(stringRef, LLVMUnnamedAddr.LLVMGlobalUnnamedAddr);
+		LLVM.SetAlignment(stringRef, 1u);
+			
+		// Todo: Handle native pointer sizes
+		var zeroIndex = LLVM.ConstInt(LLVM.Int64TypeInContext(context), 0uL, LLVMBool.True);
+			
+		// https://llvm.org/docs/GetElementPtr.html#why-is-the-extra-0-index-required
+		var indices = ConvertArrayToPointer(new LLVMOpaqueValue*[] { zeroIndex, zeroIndex });
+		var gep = LLVM.BuildInBoundsGEP2(builder, stringType, stringRef, indices, 2, EmptyString);
+		constantLiterals.Add(value, new OpaqueValue(gep));
+
+		return gep;
+	}
+
+	// ReSharper disable once InconsistentNaming
+	private static (OpaqueType type, OpaqueValue function) BuildInitDLLs(LLVMOpaqueContext* context,
+		LLVMOpaqueModule* module)
+	{
+		var noParams = ConvertArrayToPointer(new LLVMOpaqueType*[] { });
+		var initDllsType = LLVM.FunctionType(LLVM.VoidTypeInContext(context), noParams, 0u, LLVMBool.False);
+		var initDllsFunction = LLVM.AddFunction(module, ConvertString("initDlls"), initDllsType);
+		return (new OpaqueType(initDllsType, 0u), new OpaqueValue(initDllsFunction));
+	}
+
+	// ReSharper disable once InconsistentNaming
+	private static (OpaqueType type, OpaqueValue function) BuildFreeDLLs(LLVMOpaqueContext* context,
+		LLVMOpaqueModule* module)
+	{
+		var noParams = ConvertArrayToPointer(new LLVMOpaqueType*[] { });
+		var freeDllsType = LLVM.FunctionType(LLVM.VoidTypeInContext(context), noParams, 0u, LLVMBool.False);
+		var freeDllsFunction = LLVM.AddFunction(module, ConvertString("freeDlls"), freeDllsType);
+		return (new OpaqueType(freeDllsType, 0u), new OpaqueValue(freeDllsFunction));
+	}
+
+	private string? GenerateBackend(string[] dllNames, ExternalFunctionSymbol[] dllImportFunctions)
+	{
+		if (currentTarget!.triple.OS is not Triple.OSType.Win32)
+			return null;
+		
+		var module = LLVM.ModuleCreateWithName(ConvertString("$$backend"));
+		var context = LLVM.GetModuleContext(module);
+		var builder = LLVM.CreateBuilderInContext(context);
+		LLVM.SetTarget(module, currentTarget!.triple.CString());
+		LLVM.SetDataLayout(module, ConvertString(Triple.GetDataLayout(currentTarget.triple.ToString())));
+		
+		/*/ kernel32.lib linking
+		const string kernel32LibString = "kernel32.lib";
+		var kernel32Lib = LLVM.MDStringInContext2(context, ConvertStringRaw(kernel32LibString), 
+			(nuint)kernel32LibString.Length);
+
+		var libs = new LLVMOpaqueMetadata*[] { kernel32Lib };
+		var libGroup = LLVM.MDNodeInContext2(context, ConvertArrayToPointer(libs), (nuint)libs.Length);
+		const string dependentLibsString = "llvm.dependent-libraries";
+		LLVM.AddNamedMetadataOperand(module, ConvertStringRaw(dependentLibsString), LLVM.MetadataAsValue(context, 
+            libGroup));*/
+		
+		var stringType = LLVM.PointerType(LLVM.Int8TypeInContext(context), 0u);
+		var stringParam = ConvertArrayToPointer(new LLVMOpaqueType*[] {stringType});
+
+		// LoadLibraryA
+		var hModule = LLVM.PointerTypeInContext(context, 0u);
+		var loadLibraryAType = LLVM.FunctionType(hModule, stringParam, 1u, LLVMBool.False);
+		var loadLibraryAFunction = LLVM.AddFunction(module, ConvertString("LoadLibraryA"), loadLibraryAType);
+		LLVM.SetDLLStorageClass(loadLibraryAFunction, LLVMDLLStorageClass.LLVMDLLImportStorageClass);
+		SetFunctionParameterAttribute(context, loadLibraryAFunction, 0u, AttributeKind.NoUndef);
+
+		// FreeLibrary
+		var hModuleParam = ConvertArrayToPointer(new LLVMOpaqueType*[] {hModule});
+		var freeLibraryType = LLVM.FunctionType(LLVM.VoidTypeInContext(context), hModuleParam, 1u, LLVMBool.False);
+		var freeLibraryFunction = LLVM.AddFunction(module, ConvertString("FreeLibrary"), freeLibraryType);
+		LLVM.SetDLLStorageClass(freeLibraryFunction, LLVMDLLStorageClass.LLVMDLLImportStorageClass);
+		SetFunctionParameterAttribute(context, freeLibraryFunction, 0u, AttributeKind.NoUndef);
+
+		var dllHandleLookup = new Dictionary<string, OpaqueValue>();
+		foreach (var dll in dllNames)
+		{
+			var global = LLVM.AddGlobal(module, hModule, ConvertString(dll));
+			LLVM.SetLinkage(global, LLVMLinkage.LLVMPrivateLinkage);
+			LLVM.SetAlignment(global, currentTarget.PointerSize());
+			LLVM.SetInitializer(global, LLVM.ConstPointerNull(hModule));
+			dllHandleLookup.Add(dll, new OpaqueValue(global));
+		}
+		
+		// GetProcAddress
+		var getProcAddressParams = ConvertArrayToPointer(new LLVMOpaqueType*[] {hModule, stringType});
+		var getProcAddressType = LLVM.FunctionType(LLVM.PointerTypeInContext(context, 0u), getProcAddressParams, 2u,
+			LLVMBool.False);
+		var getProcAddressFunction = LLVM.AddFunction(module, ConvertString("GetProcAddress"), getProcAddressType);
+		LLVM.SetDLLStorageClass(getProcAddressFunction, LLVMDLLStorageClass.LLVMDLLImportStorageClass);
+		SetFunctionParameterAttribute(context, getProcAddressFunction, 0u, AttributeKind.NoUndef);
+		SetFunctionParameterAttribute(context, getProcAddressFunction, 1u, AttributeKind.NoUndef);
+		
+		// initDLL
+		var initDllType = LLVM.FunctionType(hModule, stringParam, 1u, LLVMBool.False);
+		var initDllFunction = LLVM.AddFunction(module, ConvertString("initDll"), initDllType);
+		SetFunctionParameterAttribute(context, initDllFunction, 0u, AttributeKind.NoUndef);
+		var initDllFunctionBody = LLVM.AppendBasicBlockInContext(context, initDllFunction, EmptyString);
+		LLVM.PositionBuilderAtEnd(builder, initDllFunctionBody);
+		var loadArgs = ConvertArrayToPointer(new LLVMOpaqueValue*[] {LLVM.GetParam(initDllFunction, 0u)});
+		var returnModule = LLVM.BuildCall2(builder, loadLibraryAType, loadLibraryAFunction, loadArgs, 1u,
+			ConvertString(""));
+		LLVM.BuildRet(builder, returnModule);
+		if (LLVM.VerifyFunction(initDllFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(initDllFunction);
+		
+		// initDLLs
+		var (initDllsType, initDllsFunction) = BuildInitDLLs(context, module);
+		var initDllsFunctionBody = LLVM.AppendBasicBlockInContext(context, initDllsFunction.value, EmptyString);
+		LLVM.PositionBuilderAtEnd(builder, initDllsFunctionBody);
+
+		foreach (var dll in dllNames)
+		{
+			var args = ConvertArrayToPointer(new LLVMOpaqueValue*[] {DefineStringLiteral(module, context, builder, dll)});
+			var hModuleValue = LLVM.BuildCall2(builder, initDllType, initDllFunction, args, 1u, ConvertString(""));
+			LLVM.BuildStore(builder, hModuleValue, dllHandleLookup[dll].value);
+		}
+
+		LLVM.BuildRetVoid(builder);
+		
+		// freeDLL
+		var freeDllType = LLVM.FunctionType(LLVM.VoidTypeInContext(context), hModuleParam, 1u, LLVMBool.False);
+		var freeDllFunction = LLVM.AddFunction(module, ConvertString("freeDll"), freeDllType);
+		SetFunctionParameterAttribute(context, freeDllFunction, 0u, AttributeKind.NoUndef);
+		var freeDllFunctionBody = LLVM.AppendBasicBlockInContext(context, freeDllFunction, EmptyString);
+		LLVM.PositionBuilderAtEnd(builder, freeDllFunctionBody);
+		var freeArgs = ConvertArrayToPointer(new LLVMOpaqueValue*[] {LLVM.GetParam(freeDllFunction, 0u)});
+		LLVM.BuildCall2(builder, freeLibraryType, freeLibraryFunction, freeArgs, 1u, ConvertString(""));
+		LLVM.BuildRetVoid(builder);
+		if (LLVM.VerifyFunction(freeDllFunction, LLVMVerifierFailureAction.LLVMAbortProcessAction) != 0)
+			LLVM.InstructionEraseFromParent(freeDllFunction);
+		
+		// freeDLLs
+		var (freeDllsType, freeDllsFunction) = BuildFreeDLLs(context, module);
+		var freeDllsFunctionBody = LLVM.AppendBasicBlockInContext(context, freeDllsFunction.value, EmptyString);
+		LLVM.PositionBuilderAtEnd(builder, freeDllsFunctionBody);
+
+		foreach (var dll in dllNames)
+		{
+			var args = ConvertArrayToPointer(new LLVMOpaqueValue*[] {dllHandleLookup[dll].value});
+			LLVM.BuildCall2(builder, freeDllType, freeDllFunction, args, 1u, ConvertString(""));
+			LLVM.BuildStore(builder, LLVM.ConstPointerNull(hModule), dllHandleLookup[dll].value);
+		}
+
+		LLVM.BuildRetVoid(builder);
+		
+		// DLL imported functions
+		foreach (var dllImportFunction in dllImportFunctions)
+		{
+			
+		}
+
+		var outputPath = Path.Combine(Path.GetTempPath(), "__backend.bc");
+		LLVM.DumpModule(module);
+		LLVM.WriteBitcodeToFile(module, ConvertString(outputPath));
+		return outputPath;
+	}
+	
+	public string Generate(IEnumerable<ResolvedAst> asts, string[] dlls, ExternalFunctionSymbol[] dllImportFunctions,
+		Target? target, int optimizationLevel, string outputPath)
 	{
 		//LLVM.InitializeAllTargets();
-		currentTarget = target;
+		currentTarget = target ?? new Target(new string(LLVM.GetDefaultTargetTriple()));
 		var passManager = LLVM.CreatePassManager();
 		
 		// Todo: Handle optimization levels correctly
@@ -181,7 +351,10 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		Directory.CreateDirectory(binDirectory);
 		outputPath = Path.Combine(binDirectory, Path.GetFileName(outputPath));
 		
-		var sourceFiles = new List<string>();
+		var sourceFiles = new List<string> { };
+		if (GenerateBackend(dlls, dllImportFunctions) is { } backend)
+			sourceFiles.Add(backend);
+
 		foreach (var ast in asts)
 		{
 			var relativePath = Path.GetRelativePath(ast.WorkingDirectory, ast.FilePath);
@@ -194,9 +367,10 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			typeSymbols.Clear();
 			functionContexts.Clear();
 			functionStack.Clear();
+			expectedType = null;
 			
-			if (target is not null)
-				LLVM.SetTarget(currentModule, target.triple.CString());
+			LLVM.SetTarget(currentModule, currentTarget.triple.CString());
+			LLVM.SetDataLayout(currentModule, ConvertString(Triple.GetDataLayout(currentTarget.triple.ToString())));
 
 			while (currentPass < CodeGenerationPass.Complete)
 			{
@@ -224,21 +398,51 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			sourceFiles.Add(outputBitCodePath);
 		}
 
-		currentTarget = null;
+		string linkerPath;
+		
+		// Todo: Change CLI arguments based on which exe is selected
+		switch (currentTarget.triple.OS)
+		{
+			case Triple.OSType.Win32:
+				linkerPath = "lld-link.exe";
+				break;
+			
+			case Triple.OSType.MacOSX:
+			case Triple.OSType.IOS:
+				linkerPath = "ld64.lld.exe";
+				break;
+			
+			default:
+				linkerPath = currentTarget.triple.Arch is Triple.ArchType.wasm32 or Triple.ArchType.wasm64
+					? "wasm-ld.exe"
+					: "ld.lld.exe";
+				break;
+		}
 
+		if (currentTarget.triple.Arch is Triple.ArchType.wasm32 or Triple.ArchType.wasm64)
+			linkerPath = "wasm-ld.exe";
+		
 		const string clangPath = "clang.exe";
 		const string llvmArPath = "llvm-ar.exe";
-		var clang = ExtractResource(clangPath);
-		var llvmAr = ExtractResource(llvmArPath);
+		Directory.CreateDirectory(TempDirectory);
+		var resourcePath = ExtractAllResources();
+		var linker = Path.Combine(resourcePath, linkerPath);
+		var clang = Path.Combine(resourcePath, clangPath);
+		var llvmAr = Path.Combine(resourcePath, llvmArPath);
+		for (var i = 0; i < sourceFiles.Count; i++)
+		{
+			sourceFiles[i] = $"\"{sourceFiles[i]}\"";
+		}
 		/*var beanstalkLib = ExtractResource("beanstalk.lib");
 
 		var beanstalkLibDirectory = Path.GetDirectoryName(beanstalkLib);
 		var beanstalkLibFileName = Path.GetFileName(beanstalkLib);
-		var beanstalkLibLinkArgs = $"--library-directory={beanstalkLibDirectory} -l{beanstalkLibFileName}";*/
+		var beanstalkLibLinkArgs = $"-L{beanstalkLibDirectory} -l{beanstalkLibFileName}";*/
+		
+		var libCPath = Path.Combine(TempDirectory, "libc.lib");
 
 		#region Compile LibC
 
-		ExtractAllResourcesExcept(clangPath, llvmArPath);
 		var defines = new List<string>();
 
 		if (target is not null)
@@ -250,35 +454,52 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 					break;
 			}
 		}
+		else
+		{
+			// Todo: Find the host machine's target triple
+			DefineMacro("Arch_x86_64");
+		}
 
-		var libCPath = Path.Combine(Path.GetTempPath(), "Beanstalk", "libC.a");
+		var libCSrcPath = Path.Combine(TempDirectory, "libc", "src");
+		var libCBinPath = Path.Combine(TempDirectory, "libc", "bin");
+		Directory.CreateDirectory(libCBinPath);
 		var defineArg = string.Join(' ', defines);
-		
-		var libCCompileProcessStartInfo = new ProcessStartInfo
-		{
-			FileName = clang,
-			Arguments = $"{defineArg} -c *.c",
-			WindowStyle = ProcessWindowStyle.Hidden,
-			UseShellExecute = false
-		};
 
-		var libCCompile = new Process
+		foreach (var sourceFile in Directory.EnumerateFiles(libCSrcPath, "*.c", SearchOption.AllDirectories))
 		{
-			StartInfo = libCCompileProcessStartInfo
-		};
+			var objPath = Path.ChangeExtension(Path.Combine(libCBinPath, Path.GetFileName(sourceFile)), ".o");
 
-		libCCompile.Start();
-		libCCompile.WaitForExit();
-		if (libCCompile.ExitCode != 0)
-			throw new Exception("LibC failed to compile");
+			var srcPath = Path.GetRelativePath(TempDirectory, sourceFile);
+			
+			var libCCompileProcessStartInfo = new ProcessStartInfo
+			{
+				FileName = clang,
+				Arguments = $"-target {currentTarget!.triple.ToString()} -ffreestanding " +
+				            $"-working-directory={TempDirectory} -fshort-wchar {defineArg} -c {srcPath} -o {objPath}",
+				WindowStyle = ProcessWindowStyle.Hidden,
+				UseShellExecute = false
+			};
+
+			var libCCompile = new Process
+			{
+				StartInfo = libCCompileProcessStartInfo
+			};
+
+			libCCompile.Start();
+			libCCompile.WaitForExit();
+			if (libCCompile.ExitCode != 0)
+				throw new Exception("LibC failed to compile");
+		}
 
 		var libCArchiveProcessStartInfo = new ProcessStartInfo
 		{
 			FileName = llvmAr,
-			Arguments = $"rcs {libCPath} *.o",
+			Arguments = $"rcs {libCPath} {TempDirectory}/libc/bin/*.o",
 			WindowStyle = ProcessWindowStyle.Hidden,
 			UseShellExecute = false
 		};
+		
+		Console.WriteLine($"llvm-ar.exe {libCArchiveProcessStartInfo.Arguments}");
 
 		var libCArchive = new Process
 		{
@@ -292,7 +513,11 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		
 		#endregion
 		
-		/*var targetArg = target is null ? "" : $"-target {target.triple}";
+		var linkArgs = $"\"{libCPath}\" -demangle:no";
+		
+		var targetArg = "";
+		const string entryArg = "-entry:main";
+		const string noStdArg = "-nodefaultlib";
 		
 		var extension = Path.GetExtension(outputPath);
 		try
@@ -306,13 +531,13 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 					var objectFiles = new List<string>();
 					foreach (var file in sourceFiles)
 					{
-						var objectFile = Path.ChangeExtension(file, ".o");
+						var objectFile = $"\"{Path.ChangeExtension(file, ".o")}\"";
 						objectFiles.Add(objectFile);
 
 						var processStartInfo = new ProcessStartInfo
 						{
 							FileName = clang,
-							Arguments = $"{file} {targetArg} --compile --output={objectFile}",
+							Arguments = $"{file} {noStdArg} {targetArg} --compile --output={objectFile}",
 							WindowStyle = ProcessWindowStyle.Hidden
 						};
 
@@ -323,23 +548,27 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 						process.Start();
 						process.WaitForExit();
+						if (process.ExitCode != 0)
+							throw new Exception("Failed to compile");
 					}
 
-					var clangStartInfo = new ProcessStartInfo
+					var lldStartInfo = new ProcessStartInfo
 					{
-						FileName = clang,
-						Arguments = $"{string.Join(' ', objectFiles)} {beanstalkLibLinkArgs}  --shared -fPIC " +
-						            $"--output={outputPath} {targetArg}",
+						FileName = linker,
+						Arguments = $"{string.Join(' ', objectFiles)} {linkArgs} -dll -noentry " +
+						            $"-out:{outputPath} {targetArg}",
 						WindowStyle = ProcessWindowStyle.Hidden
 					};
 
 					process = new Process
 					{
-						StartInfo = clangStartInfo
+						StartInfo = lldStartInfo
 					};
 
 					process.Start();
 					process.WaitForExit();
+					if (process.ExitCode != 0)
+						throw new Exception("Failed to link");
 				}
 					break;
 
@@ -349,7 +578,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 					var objectFiles = new List<string>();
 					foreach (var file in sourceFiles)
 					{
-						var objectFile = Path.ChangeExtension(file, ".o");
+						var objectFile = $"\"{Path.ChangeExtension(file, ".o")}\"";
 						objectFiles.Add(objectFile);
 
 						var processStartInfo = new ProcessStartInfo
@@ -366,6 +595,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 						process.Start();
 						process.WaitForExit();
+						if (process.ExitCode != 0)
+							throw new Exception("Failed to link");
 					}
 
 					var llvmArStartInfo = new ProcessStartInfo
@@ -391,12 +622,14 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 				{
 					var processStartInfo = new ProcessStartInfo
 					{
-						FileName = clang,
-						Arguments = $"{string.Join(' ', sourceFiles)} {targetArg} --output={outputPath} " +
-						            $"{beanstalkLibLinkArgs}",
+						FileName = linker,
+						Arguments = $"{string.Join(' ', sourceFiles)} kernel32.lib {noStdArg} {targetArg} " +
+						            $"-out:{outputPath} {linkArgs} {entryArg} -incremental:no " +
+						            $"",
 						WindowStyle = ProcessWindowStyle.Hidden,
 						UseShellExecute = false
 					};
+					Console.WriteLine($"{linkerPath} {processStartInfo.Arguments}");
 
 					process = new Process
 					{
@@ -405,6 +638,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 					process.Start();
 					process.WaitForExit();
+					if (process.ExitCode != 0)
+						throw new Exception("Failed to link");
 				}
 					break;
 
@@ -415,12 +650,10 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			return outputPath;
 		}
 		finally
-		{*/
-			File.Delete(clang);
-			File.Delete(llvmAr);
-			//File.Delete(beanstalkLib);
-		//}
-		return "";
+		{
+			Directory.Delete(TempDirectory, true);
+			currentTarget = null;
+		}
 
 		void DefineMacro(string macro, string? value = null)
 		{
@@ -430,7 +663,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	internal static sbyte* ConvertString(string text)
 	{
-		var bytes = Encoding.ASCII.GetBytes($"{text}\0");
+		return ConvertStringRaw($"{text}\0");
+	}
+
+	internal static sbyte* ConvertStringRaw(string text)
+	{
+		var bytes = Encoding.ASCII.GetBytes($"{text}");
 		fixed (byte* p = bytes)
 		{
 			return (sbyte*)p;
@@ -458,23 +696,29 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	private LLVMOpaqueType* GetType(Type? type)
 	{
+		return GetTypeInContext(type, currentContext, typeSymbols);
+	}
+	
+	private static LLVMOpaqueType* GetTypeInContext(Type? type, LLVMOpaqueContext* context,
+		Dictionary<ISymbol, OpaqueType> typeSymbols)
+	{
 		switch (type)
 		{
 			default:
 				throw new NotImplementedException();
 			
 			case null:
-				return LLVM.VoidType();
+				return LLVM.VoidTypeInContext(context);
 			
 			case NullableType nullableType:
 			{
-				var baseType = GetType(nullableType.baseType);
+				var baseType = GetTypeInContext(nullableType.baseType, context, typeSymbols);
 				return LLVM.PointerType(baseType, 0u);
 			}
 			
 			case ReferenceType referenceType:
 			{
-				var baseType = GetType(referenceType.baseType);
+				var baseType = GetTypeInContext(referenceType.baseType, context, typeSymbols);
 				if (referenceType.baseType is NullableType)
 					return baseType;
 				
@@ -485,7 +729,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			{
 				return baseType.typeSymbol switch
 				{
-					NativeSymbol nativeSymbol => GetNativeType(nativeSymbol),
+					NativeSymbol nativeSymbol => GetNativeTypeInContext(nativeSymbol, context),
 					_ => typeSymbols[baseType.typeSymbol].value
 				};
 			}
@@ -525,58 +769,63 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	private LLVMOpaqueType* GetNativeType(NativeSymbol nativeSymbol)
 	{
+		return GetNativeTypeInContext(nativeSymbol, currentContext);
+	}
+	
+	private static LLVMOpaqueType* GetNativeTypeInContext(NativeSymbol nativeSymbol, LLVMOpaqueContext* context)
+	{
 		if (nativeSymbol == TypeSymbol.Int8)
-			return LLVM.Int8TypeInContext(currentContext);
+			return LLVM.Int8TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Int16)
-			return LLVM.Int16TypeInContext(currentContext);
+			return LLVM.Int16TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Int32)
-			return LLVM.Int32TypeInContext(currentContext);
+			return LLVM.Int32TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Int64)
-			return LLVM.Int64TypeInContext(currentContext);
+			return LLVM.Int64TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Int128)
-			return LLVM.Int128TypeInContext(currentContext);
+			return LLVM.Int128TypeInContext(context);
 		
 		// LLVM Does not distinguish between signed and unsigned types except for via instructions generated
 		if (nativeSymbol == TypeSymbol.UInt8)
-			return LLVM.Int8TypeInContext(currentContext);
+			return LLVM.Int8TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.UInt16)
-			return LLVM.Int16TypeInContext(currentContext);
+			return LLVM.Int16TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.UInt32)
-			return LLVM.Int32TypeInContext(currentContext);
+			return LLVM.Int32TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.UInt64)
-			return LLVM.Int64TypeInContext(currentContext);
+			return LLVM.Int64TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.UInt128)
-			return LLVM.Int128TypeInContext(currentContext);
+			return LLVM.Int128TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Float32)
-			return LLVM.FloatTypeInContext(currentContext);
+			return LLVM.FloatTypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Float64)
-			return LLVM.DoubleTypeInContext(currentContext);
+			return LLVM.DoubleTypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Float128)
-			return LLVM.FP128TypeInContext(currentContext);
+			return LLVM.FP128TypeInContext(context);
 		
 		// Todo: Handle fixed point types
 		
 		if (nativeSymbol == TypeSymbol.Bool)
-			return LLVM.Int1TypeInContext(currentContext);
+			return LLVM.Int1TypeInContext(context);
 		
 		if (nativeSymbol == TypeSymbol.Char)
-			return LLVM.ArrayType(LLVM.Int8TypeInContext(currentContext), 4u);
+			return LLVM.ArrayType(LLVM.Int8TypeInContext(context), 4u);
 		
 		if (nativeSymbol == TypeSymbol.String)
-			return LLVM.PointerType(LLVM.Int8TypeInContext(currentContext), 0u);
+			return LLVM.PointerType(LLVM.Int8TypeInContext(context), 0u);
 
-		return LLVM.VoidTypeInContext(currentContext);
+		return LLVM.VoidTypeInContext(context);
 	}
 
 	private uint GetNativeSize(NativeSymbol nativeSymbol)
@@ -952,10 +1201,21 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	{
 		// Do nothing
 	}
-
+	
 	public void Visit(ResolvedConstDeclarationStatement statement)
 	{
-		// Do nothing
+		// Todo: struct-level, function-level, or top-level
+		if (currentPass != CodeGenerationPass.TopLevelDeclarations)
+			return;
+
+		var type = GetType(statement.constSymbol.EvaluatedType ?? statement.initializer.Type);
+		var size = GetSize(statement.constSymbol.EvaluatedType ?? statement.initializer.Type!);
+		var global = LLVM.AddGlobal(currentModule, type, ConvertString(statement.constSymbol.Name));
+		
+		LLVM.SetGlobalConstant(global, LLVMBool.True);
+		LLVM.SetInitializer(global, statement.initializer.Accept(this).value);
+		valueSymbols.Add(statement.constSymbol, new OpaqueValue(global));
+		typeSymbols.Add(statement.constSymbol, new OpaqueType(type, size));
 	}
 
 	public void Visit(ResolvedEntryStatement entryStatement)
@@ -963,13 +1223,26 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		if (currentPass != CodeGenerationPass.Definitions)
 			return;
 		
+		// initDLLs declaration
+		var (initDllsType, initDllsFunction) = BuildInitDLLs(currentContext, currentModule);
+		
+		// freeDLLs declaration
+		var (freeDllsType, freeDllsFunction) = BuildFreeDLLs(currentContext, currentModule);
+		
 		// Creation
-		var entryType = LLVM.FunctionType(LLVM.Int32Type(), (LLVMOpaqueType**)nint.Zero, 0u, LLVMBool.False);
+		var entryParams = new LLVMOpaqueType*[2];
+		entryParams[0] = LLVM.Int32Type();
+		entryParams[1] = LLVM.PointerType(LLVM.PointerType(LLVM.Int8Type(), 0u), 0u);
+		var entryType = LLVM.FunctionType(LLVM.Int32Type(), ConvertArrayToPointer(entryParams), 2u, LLVMBool.False);
 		var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"), entryType);
 		
 		// Positioning
 		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, EmptyString);
 		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
+		
+		// DLL Initialize
+		var noArgs = ConvertArrayToPointer(new LLVMOpaqueValue*[] { });
+		LLVM.BuildCall2(currentBuilder, initDllsType.value, initDllsFunction.value, noArgs, 0u, EmptyString);
 		
 		// Instructions
 		var context = new FunctionContext(entryStatement.entrySymbol!, entryType, entryPoint, false);
@@ -977,6 +1250,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		functionStack.Push(context);
 		foreach (var statement in entryStatement.statements)
 		{
+			if (statement is ResolvedReturnStatement)
+			{
+				// DLL Free
+				LLVM.BuildCall2(currentBuilder, freeDllsType.value, freeDllsFunction.value, noArgs, 0u, EmptyString);
+			}
+			
 			statement.Accept(this);
 			//LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
 		}
@@ -1221,6 +1500,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		throw new InvalidOperationException();
 	}
 
+	public void Visit(ResolvedAggregateStatement resolvedAggregateStatement)
+	{
+		foreach (var statement in resolvedAggregateStatement.statements)
+			statement.Accept(this);
+	}
+
 	public OpaqueValue Visit(ResolvedFunctionSymbolExpression symbolExpression)
 	{
 		throw new InvalidOperationException();
@@ -1329,13 +1614,16 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		if (function == OpaqueValue.NullPtr || LLVM.IsUndef(function) == LLVMBool.True)
 			throw new InvalidOperationException($"Unable to resolve external function '{functionSymbol.Name}'");
 
+		var functionType = LLVM.GlobalGetValueType(function);
+		var parameters = new LLVMOpaqueType*[functionSymbol.Parameters.Length];
+		LLVM.GetParamTypes(functionType, ConvertArrayToPointer(parameters));
 		var arguments = new LLVMOpaqueValue*[expression.arguments.Length];
 		for (var i = 0; i < arguments.Length; i++)
 		{
+			expectedType = parameters[i];
 			arguments[i] = expression.arguments[i].Accept(this).value;
 		}
 		
-		var functionType = LLVM.GlobalGetValueType(function);
 		var returnType = LLVM.GetReturnType(functionType);
 		var name = returnType == LLVM.VoidTypeInContext(currentContext)
 			? ""
@@ -1384,7 +1672,9 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 
 	public OpaqueValue Visit(ResolvedConstExpression expression)
 	{
-		throw new NotImplementedException();
+		var global = valueSymbols[expression.constSymbol].value;
+		var type = typeSymbols[expression.constSymbol].value;
+		return new OpaqueValue(LLVM.BuildLoad2(currentBuilder, type, global, ConvertString(expression.constSymbol.Name)));
 	}
 
 	public OpaqueValue Visit(ResolvedTypeSymbolExpression symbolExpression)
@@ -1446,7 +1736,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			string value =>
 				new OpaqueValue(DefineStringLiteral(value)),
 			
-			_ => throw new InvalidOperationException("Unsupported literal type")
+			_ => new OpaqueValue(LLVM.ConstNull(expectedType))
 		};
 
 		LLVMOpaqueValue* DefineCharLiteral(byte[] value)

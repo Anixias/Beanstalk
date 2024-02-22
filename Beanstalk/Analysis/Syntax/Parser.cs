@@ -387,7 +387,7 @@ public sealed class Parser
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordImport);
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
-		var dllPath = Consume(tokens, ref position, null, TokenType.StringLiteral).Text;
+		var dllPath = Consume(tokens, ref position, null, TokenType.StringLiteral).Value as string ?? "";
 		Consume(tokens, ref position, null, TokenType.OpRightParen);
 
 		var statements = new List<StatementNode>();
@@ -1076,6 +1076,8 @@ public sealed class Parser
 			TokenType.KeywordImplicit,
 			TokenType.KeywordExplicit,
 			TokenType.KeywordVar,
+			TokenType.KeywordLet,
+			TokenType.KeywordConst,
 			TokenType.KeywordStruct,
 			TokenType.KeywordInterface,
 			TokenType.KeywordCast,
@@ -1111,6 +1113,11 @@ public sealed class Parser
 		if (peek == TokenType.KeywordModule)
 		{
 			return ParseModuleStatement(tokens, ref position, true);
+		}
+
+		if (peek == TokenType.KeywordConst)
+		{
+			return ParseVarDeclaration(tokens, ref position);
 		}
 		
 		if (TryParseEntryStatement(tokens, ref position, out var entryStatement))
@@ -1182,7 +1189,7 @@ public sealed class Parser
 	private ExternalFunctionStatement ParseDllImportedStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
-		if (peek == TokenType.KeywordFun)
+		if (peek == TokenType.KeywordFun || peek == TokenType.KeywordVar)
 		{
 			return ParseExternalFunctionStatement(tokens, ref position);
 		}

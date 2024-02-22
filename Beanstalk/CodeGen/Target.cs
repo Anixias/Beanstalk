@@ -32,6 +32,6 @@ public sealed class Target
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public uint PointerSize()
 	{
-		return Is64Bit() ? 64u : Is32Bit() ? 32u : 16u;
+		return Is64Bit() ? 8u : Is32Bit() ? 4u : 2u;
 	}
 }

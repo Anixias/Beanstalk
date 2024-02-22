@@ -20,7 +20,7 @@
             : "rcx", "r11" )
 #endif
 
-static inline void exit(int retval);
-static inline int write(int fd, const void* data, int len);
+void exit(int retval);
+int write(int fd, const void* data, int len);
 
 #endif //LIBC_SYSCALLS_H

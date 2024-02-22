@@ -695,8 +695,6 @@ public struct Triple
 				case "i486":
 				case "i586":
 				case "i686":
-					return ArchType.x86;
-
 				case "i786":
 				case "i886":
 				case "i986":
@@ -1526,4 +1524,89 @@ public struct Triple
 	public readonly bool HasDLLImportExport() => OS == OSType.Win32 || IsPS();
 	public readonly unsafe sbyte* CString() => CodeGenerator.ConvertString(data);
 	public override string ToString() => data;
+	
+	public readonly bool IsLittleEndian()
+	{
+		switch (Arch)
+		{
+			case ArchType.aarch64:
+			case ArchType.aarch64_32:
+			case ArchType.amdgcn:
+			case ArchType.amdil64:
+			case ArchType.amdil:
+			case ArchType.arm:
+			case ArchType.avr:
+			case ArchType.bpfel:
+			case ArchType.csky:
+			case ArchType.dxil:
+			case ArchType.hexagon:
+			case ArchType.hsail64:
+			case ArchType.hsail:
+			case ArchType.kalimba:
+			case ArchType.le32:
+			case ArchType.le64:
+			case ArchType.loongarch32:
+			case ArchType.loongarch64:
+			case ArchType.mips64el:
+			case ArchType.mipsel:
+			case ArchType.msp430:
+			case ArchType.nvptx64:
+			case ArchType.nvptx:
+			case ArchType.ppcle:
+			case ArchType.ppc64le:
+			case ArchType.r600:
+			case ArchType.renderscript32:
+			case ArchType.renderscript64:
+			case ArchType.riscv32:
+			case ArchType.riscv64:
+			case ArchType.shave:
+			case ArchType.sparcel:
+			case ArchType.spir64:
+			case ArchType.spir:
+			case ArchType.spirv:
+			case ArchType.spirv32:
+			case ArchType.spirv64:
+			case ArchType.tcele:
+			case ArchType.thumb:
+			case ArchType.ve:
+			case ArchType.wasm32:
+			case ArchType.wasm64:
+			case ArchType.x86:
+			case ArchType.x86_64:
+			case ArchType.xcore:
+			case ArchType.xtensa:
+				return true;
+			
+			default:
+				return false;
+		}
+	}
+
+	public static string GetDataLayout(string triple)
+	{
+		return triple switch
+		{
+			"i386-apple-ios" => "e-m:o-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:128-n8:16:32-S128",
+			"powerpc64-ibm-aix" => "E-m:a-Fi64-i64:64-n32:64-S128-v256:256:256-v512:512:512",
+			"x86_64-unknown-haiku" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"bpfeb-unknown-none" => "E-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
+			"aarch64-kmc-solid-asp3" => "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
+			"aarch64-pc-windows-msvc" => "e-m:w-p:64:64-i32:32-i64:64-i128:128-n32:64-S128",
+			"riscv32-unknown-none" => "e-m:e-p:32:32-i64:64-n32-S128",
+			"armv6-unknown-freebsd-gnueabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
+			"x86_64-unknown-none-elf" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"powerpc-unknown-linux-gnuspe" => "E-m:e-p:32:32-Fn32-i64:64-n32",
+			"x86_64-pc-windows-msvc" => "e-m:w-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"armv7a-none-eabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
+			"powerpc64le-unknown-linux-musl" => "e-m:e-Fn32-i64:64-n32:64-S128-v256:256:256-v512:512:512",
+			"mipsel-unknown-linux-gnu" => "e-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64",
+			"x86_64-unknown-linux-musl" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"armv7-unknown-linux-gnueabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
+			"aarch64-unknown-openbsd" => "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
+			"riscv64-unknown-none" => "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
+			"aarch64-unknown-none" => "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
+			"riscv64-unknown-freebsd" => "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
+			_ => ""
+		};
+	}
 }

@@ -10,14 +10,6 @@
     <ItemGroup>
       <PackageReference Include="libLLVM" Version="16.0.6" />
       <PackageReference Include="libLLVM.runtime.win-x64" Version="16.0.6" />
-      <PackageReference Include="LLVMSharp" Version="16.0.0" />
-      <PackageReference Include="LLVMSharp.Interop" Version="16.0.0" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Include="Resources\*.exe" />
-      <EmbeddedResource Include="Resources\libc\src\*.c" />
-      <EmbeddedResource Include="Resources\libc\src\*.h" />
     </ItemGroup>
 
 </Project>

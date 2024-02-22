@@ -158,7 +158,7 @@ public sealed class ResolvedFunctionCallExpression : ResolvedExpressionNode
 	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
 
 	public ResolvedFunctionCallExpression(FunctionSymbol functionSymbol, IEnumerable<ResolvedExpressionNode> arguments)
-		: base(functionSymbol.EvaluatedType, false)
+		: base(functionSymbol.ReturnType, false)
 	{
 		this.functionSymbol = functionSymbol;
 		this.arguments = arguments.ToImmutableArray();
@@ -227,7 +227,7 @@ public sealed class ResolvedExternalFunctionCallExpression : ResolvedExpressionN
 	public readonly ImmutableArray<ResolvedExpressionNode> arguments;
 
 	public ResolvedExternalFunctionCallExpression(ExternalFunctionSymbol functionSymbol,
-		IEnumerable<ResolvedExpressionNode> arguments) : base(functionSymbol.EvaluatedType, false)
+		IEnumerable<ResolvedExpressionNode> arguments) : base(functionSymbol.ReturnType, false)
 	{
 		this.functionSymbol = functionSymbol;
 		this.arguments = arguments.ToImmutableArray();

@@ -16,6 +16,7 @@ public class ExternalFunctionSymbol : ISymbol
 	public List<ExternalFunctionSymbol> Overloads { get; } = [];
 	public Type? EvaluatedType => GetFunctionType();
 	public IReadOnlyDictionary<string, string> Attributes { get; }
+	public string? DllImportSource { get; init; }
 
 	public ExternalFunctionSymbol(string name, IReadOnlyDictionary<string, string> attributes, IBuffer source,
 		TextRange signatureRange)
