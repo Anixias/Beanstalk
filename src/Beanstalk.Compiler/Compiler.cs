@@ -6,7 +6,7 @@ using Beanstalk.Analysis.Syntax;
 using Beanstalk.Analysis.Text;
 using Beanstalk.CodeGen;
 
-namespace Compiler;
+namespace Beanstalk.Compiler;
 
 internal struct ProgramArgs
 {
@@ -61,7 +61,7 @@ internal struct ProgramArgs
 	}
 }
 
-internal static class Program
+internal static class Compiler
 {
 	private static readonly object ConsoleLock = new();
 	

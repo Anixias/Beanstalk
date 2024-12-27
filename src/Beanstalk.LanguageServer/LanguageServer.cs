@@ -6,9 +6,11 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
 
-namespace BeanstalkLanguageServer;
+using OmniSharpLanguageServer = OmniSharp.Extensions.LanguageServer.Server.LanguageServer;
 
-internal static class Program
+namespace Beanstalk.LanguageServer;
+
+internal static class LanguageServer
 {
 	private static async Task Main(string[] args)
 	{
@@ -20,7 +22,7 @@ internal static class Program
 
 		IObserver<WorkDoneProgressReport> workDone = null!;
 		
-		var server = await LanguageServer.From
+		var server = await OmniSharpLanguageServer.From
 		(
 			options =>
 				options

@@ -7,7 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 
-namespace BeanstalkLanguageServer;
+namespace Beanstalk.LanguageServer;
 
 internal sealed class TextDocumentHandler : TextDocumentSyncHandlerBase
 {
