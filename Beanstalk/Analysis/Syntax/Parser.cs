@@ -1346,6 +1346,8 @@ public sealed class Parser
 	private ReturnStatement ParseReturnStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var startToken = Consume(tokens, ref position, null, TokenType.KeywordReturn);
+		
+		// Todo: Optional expression
 		var expression = ParseExpression(tokens, ref position);
 
 		return new ReturnStatement(expression, startToken.Range.Join(expression.range));
@@ -2259,7 +2261,6 @@ public sealed class Parser
 		do
 		{
 			var expression = ParseExpression(tokens, ref position);
-			expression.range = startToken.Range.Join(expression.range);
 			expressions.Add(expression);
 		} while (Match(tokens, ref position, TokenType.OpComma));
 		
@@ -2345,7 +2346,7 @@ public sealed class Parser
 			tupleType = type as TupleSyntaxType;
 
 			if (tupleType?.types.Length != 2)
-				throw new ParseException("Map type must be a tuple of two types", tokens[position - 1], type.range);
+				throw new ParseException("Map type must be a tuple of two types", source, type.range);
 			
 			range = range.Join(type.range);
 		}
