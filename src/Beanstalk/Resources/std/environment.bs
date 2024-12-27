@@ -1,0 +1,12 @@
+﻿module std
+
+pub var struct Environment
+{
+#if OS_Windows
+	pub const Newline:string = "\r\n"
+#elif OS_MacOSX
+	pub const Newline:string = "\r"
+#else
+	pub const Newline:string = "\n"
+#endif
+}

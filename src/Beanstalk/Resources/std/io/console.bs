@@ -1,0 +1,80 @@
+﻿import std.Environment
+
+module std.io
+
+pub var struct Console
+{
+	const StdIn = -10
+	const StdOut = -11
+	const StdErr = -12
+	
+	const CodePageUTF8 = 65001u
+	
+	#if OS_Windows
+		import("kernel32.dll")
+		{
+			var fun WriteConsole(handle:nuint, buffer:string, charCount:uint32, charsWritten:uint32?, reserved:nuint) =>
+				external(entry = "WriteConsoleA")
+				
+			var fun WriteFile(handle:nuint, buffer:string, byteCount:uint32, bytesWritten:uint32?, overlapped:nuint) =>
+				external(entry = "WriteFile")
+				
+			pub var fun SetConsoleOutputCodePage(codePage:uint32) =>
+				external(entry = "SetConsoleOutputCP")
+				
+			pub fun GetConsoleOutputCodePage() :> uint =>
+				external(entry = "GetConsoleOutputCP")
+				
+			fun GetStdHandle(handle:uint32) :> nuint =>
+				external(entry = "GetStdHandle")
+		}
+	#else
+		var fun WriteToStdOut(text:string) =>
+			external(entry = "write_to_stdout")
+	#endif
+	
+	pub util In
+	{
+		stdIn:nuint = GetStdHandle(StdIn)
+	}
+	
+	pub util Out
+	{
+		stdOut:nuint = GetStdHandle(StdOut)
+		
+		pub var fun Print(text:string)
+		{
+			#if OS_Windows
+				WriteConsole(stdOut, text, text.length, null, 0)
+			#else
+				WriteToStdOut(text)
+			#endif
+		}
+		
+		pub var fun PrintLine(text:string)
+		{
+			Print(text)
+			Print(Environment.Newline)
+		}
+	}
+	
+	pub util Error
+	{
+		stdErr:nuint = GetStdHandle(StdErr)
+		
+		pub var fun Print(text:string)
+		{
+			#if OS_Windows
+				WriteConsole(stdErr, text, text.length, null, 0)
+			#else
+				
+			#endif
+		}
+		
+		pub var fun PrintLine(text:string)
+		{
+			Print(text)
+			Print(Environment.Newline)
+		}
+	}
+}
