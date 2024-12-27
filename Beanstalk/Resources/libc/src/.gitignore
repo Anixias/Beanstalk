@@ -1,5 +1,0 @@
-*.o
-*.a
-*.lib
-/cmake-build-debug/
-/.idea/
