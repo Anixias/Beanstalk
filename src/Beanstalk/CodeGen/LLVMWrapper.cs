@@ -235,7 +235,7 @@ public unsafe partial class CodeGenerator
 	{
 		var nullV = ConvertArrayToPointer(new LLVMOpaqueMetadata*[] { });
 		var node = LLVM.MDNodeInContext2(context, nullV, 0u);
-		LLVM.SetMetadata(value, (uint)attributeKind, LLVM.MetadataAsValue(context, node));
+		LLVM.SetMetadata(value, attributeKind.Convert(), LLVM.MetadataAsValue(context, node));
 	}
 	
 	private static void GlobalSetMetadata(LLVMOpaqueContext* context, LLVMOpaqueValue* value,
@@ -243,20 +243,144 @@ public unsafe partial class CodeGenerator
 	{
 		var nullV = ConvertArrayToPointer(new LLVMOpaqueMetadata*[] { });
 		var node = LLVM.MDNodeInContext2(context, nullV, 0u);
-		LLVM.GlobalSetMetadata(value, (uint)attributeKind, node);
+		LLVM.GlobalSetMetadata(value, attributeKind.Convert(), node);
 	}
 	
 	private static void SetFunctionAttribute(LLVMOpaqueContext* context, LLVMOpaqueValue* function,
 		LLVMAttributeIndex index, AttributeKind attributeKind, ulong attributeValue = 0uL)
 	{
 		LLVM.AddAttributeAtIndex(function, index,
-			LLVM.CreateEnumAttribute(context, (uint)attributeKind, attributeValue));
+			LLVM.CreateEnumAttribute(context, attributeKind.Convert(), attributeValue));
 	}
 	
 	private static void SetFunctionParameterAttribute(LLVMOpaqueContext* context, LLVMOpaqueValue* function,
 		uint parameterIndex, AttributeKind attributeKind, ulong attributeValue = 0uL)
 	{
-		LLVM.AddAttributeAtIndex(function, (LLVMAttributeIndex)(parameterIndex + 1u),
-			LLVM.CreateEnumAttribute(context, (uint)attributeKind, attributeValue));
+		var attr = LLVM.CreateEnumAttribute(context, attributeKind.Convert(), attributeValue);
+		LLVM.AddAttributeAtIndex(function, (LLVMAttributeIndex)(parameterIndex + 1u), attr);
+		var k = LLVM.GetEnumAttributeKind(attr);
+		var v = LLVM.GetEnumAttributeValue(attr);
+		var x = LLVM.GetEnumAttributeKindForName(ConvertString("noundef"), (nuint)"noundef".Length);
+	}
+}
+
+internal static unsafe class LLVMExtensions
+{
+	private static readonly Dictionary<AttributeKind, uint> attributeKindLookup = [];
+	
+	internal static uint Convert(this AttributeKind attributeKind)
+	{
+		if (attributeKindLookup.TryGetValue(attributeKind, out var cached))
+			return cached;
+		
+		return attributeKindLookup[attributeKind] = LookupValue(attributeKind);
+	}
+	
+	private static uint LookupValue(AttributeKind attributeKind)
+	{
+		var name = attributeKind switch
+		{
+			AttributeKind.AlwaysInline => "alwaysinline",
+			AttributeKind.Builtin => "builtin",
+			AttributeKind.Cold => "cold",
+			AttributeKind.Convergent => "convergent",
+			AttributeKind.DisableSanitizerInstrumentation => "disable_sanitizer_instrumentation",
+			AttributeKind.FnRetThunkExtern => "fn_ret_thunk_extern",
+			AttributeKind.Hot => "hot",
+			AttributeKind.InlineHint => "inlinehint",
+			AttributeKind.JumpTable => "jumptable",
+			AttributeKind.Memory => "memory",
+			AttributeKind.MinSize => "minsize",
+			AttributeKind.Naked => "naked",
+			AttributeKind.NoBuiltin => "nobuiltin",
+			AttributeKind.NoCallback => "nocallback",
+			// nodivergencesource
+			AttributeKind.NoDuplicate => "noduplicate",
+			AttributeKind.NoFree => "nofree",
+			AttributeKind.NoImplicitFloat => "noimplicitfloat",
+			AttributeKind.NoInline => "noinline",
+			AttributeKind.NoMerge => "nomerge",
+			AttributeKind.NonLazyBind => "nonlazybind",
+			AttributeKind.NoProfile => "noprofile",
+			AttributeKind.SkipProfile => "skipprofile",
+			AttributeKind.NoRedZone => "noredzone",
+			// indirect-tls-seg-refs
+			AttributeKind.NoReturn => "noreturn",
+			AttributeKind.NoRecurse => "norecurse",
+			AttributeKind.WillReturn => "willreturn",
+			AttributeKind.NoSync => "nosync",
+			AttributeKind.NoUnwind => "nounwind",
+			AttributeKind.NoSanitizeBounds => "nosanitize_bounds",
+			AttributeKind.NoSanitizeCoverage => "nosanitize_coverage",
+			AttributeKind.NullPointerIsValid => "null_pointer_is_valid",
+			// optdebug
+			AttributeKind.OptForFuzzing => "optforfuzzing",
+			AttributeKind.OptimizeNone => "optnone",
+			AttributeKind.OptimizeForSize => "optsize",
+			AttributeKind.ReturnsTwice => "returns_twice",
+			AttributeKind.SafeStack => "safestack",
+			AttributeKind.SanitizeAddress => "sanitize_address",
+			AttributeKind.SanitizeMemory => "sanitize_memory",
+			AttributeKind.SanitizeThread => "sanitize_thread",
+			AttributeKind.SanitizeHWAddress => "sanitize_hwaddress",
+			AttributeKind.SanitizeMemTag => "sanitize_memtag",
+			// sanitize_realtime
+			// sanitize_realtime_blocking
+			AttributeKind.SpeculativeLoadHardening => "speculative_load_hardening",
+			AttributeKind.Speculatable => "speculatable",
+			AttributeKind.StackProtect => "ssp",
+			AttributeKind.StackProtectStrong => "sspstrong",
+			AttributeKind.StackProtectReq => "sspreq",
+			AttributeKind.StrictFP => "strictfp",
+			AttributeKind.UWTable => "uwtable",
+			AttributeKind.NoCfCheck => "nocf_check",
+			AttributeKind.ShadowCallStack => "shadowcallstack",
+			AttributeKind.MustProgress => "mustprogress",
+			AttributeKind.VScaleRange => "vscale_range",
+			// vector-function-abi-variant
+			// no_sanitize_address
+			// no_sanitize_hwaddress
+			// sanitize_address_dyninit
+			AttributeKind.ZExt => "zeroext",
+			AttributeKind.SExt => "signext",
+			// noext
+			AttributeKind.InReg => "inreg",
+			AttributeKind.ByVal => "byval",
+			AttributeKind.ByRef => "byref",
+			AttributeKind.Preallocated => "preallocated",
+			AttributeKind.InAlloca => "inalloca",
+			AttributeKind.StructRet => "sret",
+			AttributeKind.ElementType => "elementtype",
+			AttributeKind.Alignment => "align",
+			AttributeKind.NoAlias => "noalias",
+			AttributeKind.NoCapture => "nocapture",
+			AttributeKind.Nest => "nest",
+			AttributeKind.Returned => "returned",
+			AttributeKind.NonNull => "nonnull",
+			AttributeKind.Dereferenceable => "dereferenceable",
+			AttributeKind.DereferenceableOrNull => "dereferenceable_or_null",
+			AttributeKind.SwiftSelf => "swiftself",
+			AttributeKind.SwiftAsync => "swiftasync",
+			AttributeKind.SwiftError => "swifterror",
+			AttributeKind.ImmArg => "immarg",
+			AttributeKind.NoUndef => "noundef",
+			// nofpclass
+			AttributeKind.StackAlignment => "alignstack",
+			AttributeKind.AllocAlign => "allocalign",
+			AttributeKind.AllocatedPointer => "allocptr",
+			AttributeKind.ReadNone => "readnone",
+			AttributeKind.ReadOnly => "readonly",
+			AttributeKind.WriteOnly => "writeonly",
+			// writable
+			// initializes
+			// dead_on_unwind
+			// range
+			_ => null
+		};
+		
+		if (name is null)
+			return default;
+		
+		return LLVM.GetEnumAttributeKindForName(CodeGenerator.ConvertString(name), (nuint)name.Length);
 	}
 }
