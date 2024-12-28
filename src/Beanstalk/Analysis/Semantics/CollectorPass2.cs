@@ -22,7 +22,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					statementNode.Accept(this);
 					break;
 			}
-
+			
 			if (scopeStack.Count != 1)
 				throw NewCollectionException("Invalid operation: Scope stack unbalanced");
 		}
@@ -30,7 +30,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			while (scopeStack.Count > 1)
 				scopeStack.Pop();
-
+			
 			exceptions.Add(e);
 		}
 		finally
@@ -40,7 +40,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			importedSymbols.Clear();
 		}
 	}
-
+	
 	private void HandleImport(ImportStatement statement)
 	{
 		var scopeCount = 0;
@@ -48,11 +48,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			if (!CurrentScope.LookupSymbol(module.Text, out ModuleSymbol? moduleSymbol, out _) || moduleSymbol is null)
 				throw NewCollectionException($"Could not find a module named {module.Text}");
-
+			
 			scopeStack.Push(moduleSymbol.Scope);
 			scopeCount++;
 		}
-
+		
 		if (statement.identifier.Type == TokenType.OpStar)
 		{
 			// Import all functions and types from the module
@@ -78,7 +78,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			if (CurrentScope.LookupSymbol(statement.identifier.Text) is not { } importedSymbol)
 				throw NewCollectionException(
 					$"Could not find a symbol named {statement.identifier.Text} in module {statement.scope.text}");
-
+			
 			if (statement.alias is { } alias)
 			{
 				var aliasSymbol = new AliasedSymbol(alias.Text, importedSymbol);
@@ -89,11 +89,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				importedSymbols.Add(importedSymbol);
 			}
 		}
-
+		
 		while (scopeCount-- > 0)
 			scopeStack.Pop();
 	}
-
+	
 	private void HandleAggregateImport(AggregateImportStatement statement)
 	{
 		var scopeCount = 0;
@@ -101,11 +101,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			if (!CurrentScope.LookupSymbol(module.Text, out ModuleSymbol? moduleSymbol, out _) || moduleSymbol is null)
 				throw NewCollectionException($"Could not find a module named {module.Text}");
-
+			
 			scopeStack.Push(moduleSymbol.Scope);
 			scopeCount++;
 		}
-
+		
 		SymbolTable symbolTableToUpdate;
 		if (statement.alias is { } groupingAlias)
 		{
@@ -117,13 +117,13 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			symbolTableToUpdate = importedSymbols;
 		}
-
+		
 		foreach (var importToken in statement.tokens)
 		{
 			if (CurrentScope.LookupSymbol(importToken.token.Text) is not { } importedSymbol)
 				throw NewCollectionException(
 					$"Could not find a symbol named {importToken.token.Text} in module {statement.scope.text}");
-
+			
 			if (importToken.alias is { } alias)
 			{
 				var aliasSymbol = new AliasedSymbol(alias.Text, importedSymbol);
@@ -134,11 +134,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				symbolTableToUpdate.Add(importedSymbol);
 			}
 		}
-
+		
 		while (scopeCount-- > 0)
 			scopeStack.Pop();
 	}
-
+	
 	private ISymbol? LookupSymbolWithImports(string name)
 	{
 		if (CurrentScope.LookupSymbol(name) is { } symbol)
@@ -148,11 +148,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			
 			return symbol;
 		}
-
+		
 		var importedSymbol = importedSymbols.Lookup(name);
 		if (importedSymbol is AliasedSymbol aliasedImport)
 			return aliasedImport.LinkedSymbol;
-
+		
 		return importedSymbol;
 	}
 	
@@ -174,111 +174,111 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					throw NewCollectionException("Invalid import statement", importStatement.range);
 			}
 		}
-
+		
 		var inModule = false;
 		if (statement.moduleSymbol is not null)
 		{
 			scopeStack.Push(statement.moduleSymbol.Scope);
 			inModule = true;
 		}
-
+		
 		foreach (var topLevelStatement in statement.topLevelStatements)
 		{
 			topLevelStatement.Accept(this);
 		}
-
+		
 		if (inModule)
 			scopeStack.Pop();
-
+		
 		statement.importedSymbols = importedSymbols.Duplicate();
 	}
-
+	
 	public void Visit(CollectedModuleStatement statement)
 	{
 		scopeStack.Push(statement.moduleSymbol.Scope);
-
+		
 		foreach (var topLevelStatement in statement.topLevelStatements)
 		{
 			topLevelStatement.Accept(this);
 		}
-
+		
 		scopeStack.Pop();
 	}
-
+	
 	public void Visit(CollectedStructDeclarationStatement structDeclarationStatement)
 	{
 		scopeStack.Push(structDeclarationStatement.structSymbol.Scope);
 		typeStack.Push(structDeclarationStatement.structSymbol);
-
+		
 		foreach (var statement in structDeclarationStatement.statements)
 		{
 			statement.Accept(this);
 		}
-
+		
 		typeStack.Pop();
 		scopeStack.Pop();
 	}
-
+	
 	public void Visit(CollectedFieldDeclarationStatement statement)
 	{
 		if (statement.syntaxType is not { } syntaxType)
 			return;
-
+		
 		var invalidTypes = new List<Token>();
 		statement.fieldSymbol.EvaluatedType = ResolveType(syntaxType, invalidTypes);
-
+		
 		if (invalidTypes.Count == 0)
 			return;
-
+		
 		foreach (var invalidType in invalidTypes)
 		{
 			exceptions.Add(NewCollectionException($"Could not find a type named '{invalidType.Text}'", invalidType));
 		}
 	}
-
+	
 	public void Visit(CollectedConstDeclarationStatement statement)
 	{
 		if (statement.syntaxType is not { } syntaxType)
 			return;
-
+		
 		var invalidTypes = new List<Token>();
 		statement.constSymbol.EvaluatedType = ResolveType(syntaxType, invalidTypes);
-
+		
 		if (invalidTypes.Count == 0)
 			return;
-
+		
 		foreach (var invalidType in invalidTypes)
 		{
 			exceptions.Add(NewCollectionException($"Could not find a type named '{invalidType.Text}'", invalidType));
 		}
 	}
-
+	
 	public void Visit(CollectedDefStatement statement)
 	{
 		var invalidTypes = new List<Token>();
 		statement.defSymbol.EvaluatedType = ResolveType(statement.syntaxType, invalidTypes);
-
+		
 		if (invalidTypes.Count == 0)
 			return;
-
+		
 		foreach (var invalidType in invalidTypes)
 		{
 			exceptions.Add(NewCollectionException($"Could not find a type named '{invalidType.Text}'", invalidType));
 		}
 	}
-
+	
 	public void Visit(CollectedEntryStatement statement)
 	{
 		var entryStatement = statement.entryStatement;
 		scopeStack.Push(statement.scope);
-
+		
 		var parameters = new List<ParameterSymbol>();
 		foreach (var parameter in entryStatement.parameters)
 		{
 			if (parameter.isVariadic)
 				exceptions.Add(NewCollectionException("Entry point cannot have variadic parameters",
 					parameter.identifier));
-
+			
 			if (parameter.isMutable)
 				exceptions.Add(NewCollectionException("Entry point cannot have mutable parameters",
 					parameter.identifier));
@@ -288,7 +288,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			{
 				var invalidTypes = new List<Token>();
 				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
-
+				
 				if (invalidTypes.Count > 0)
 				{
 					foreach (var invalidType in invalidTypes)
@@ -298,7 +298,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					}
 				}
 			}
-
+			
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				exceptions.Add(NewCollectionException("Entry point parameters cannot have a default value",
@@ -307,27 +307,27 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				parameters.Add(new ParameterSymbol(varSymbol, defaultExpression, false, (uint)parameters.Count));
 				continue;
 			}
-
+			
 			parameters.Add(new ParameterSymbol(varSymbol, null, false, (uint)parameters.Count));
 		}
-
+		
 		foreach (var parameter in parameters)
 		{
 			statement.scope.AddSymbol(parameter);
 		}
-
+		
 		var entrySymbol = new EntrySymbol(parameters, statement.scope);
-
+		
 		statement.entrySymbol = entrySymbol;
 		scopeStack.Pop();
 		CurrentScope.AddSymbol(entrySymbol);
 	}
-
+	
 	public void Visit(CollectedFunctionDeclarationStatement statement)
 	{
 		var functionDeclarationStatement = statement.functionDeclarationStatement;
 		scopeStack.Push(statement.functionSymbol.Body);
-
+		
 		var typeParameterSymbols = new List<TypeParameterSymbol>();
 		foreach (var typeParameter in functionDeclarationStatement.typeParameters)
 		{
@@ -335,7 +335,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			typeParameterSymbols.Add(typeParameterSymbol);
 			statement.functionSymbol.Body.AddSymbol(typeParameterSymbol);
 		}
-
+		
 		var parameters = new List<ParameterSymbol>();
 		var requireDefault = false;
 		var additionalParametersAllowed = true;
@@ -346,12 +346,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				                                      "variadic parameter", parameter.identifier));
 			
 			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
-
+			
 			if (parameter.type is not null)
 			{
 				var invalidTypes = new List<Token>();
 				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
-
+				
 				if (invalidTypes.Count > 0)
 				{
 					foreach (var invalidType in invalidTypes)
@@ -360,7 +360,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							$"Could not find a type named '{invalidType.Text}'", invalidType));
 					}
 				}
-
+				
 				if (parameter.isVariadic)
 				{
 					additionalParametersAllowed = false;
@@ -370,7 +370,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							parameter.identifier));
 				}
 			}
-
+			
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
@@ -384,10 +384,10 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				exceptions.Add(NewCollectionException(
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
-
+			
 			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
-
+		
 		Type? returnType = null;
 		if (functionDeclarationStatement.returnType is not null)
 		{
@@ -403,23 +403,23 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				}
 			}
 		}
-
+		
 		foreach (var parameter in parameters)
 		{
 			statement.functionSymbol.Body.AddSymbol(parameter);
 		}
-
+		
 		statement.functionSymbol.Parameters = parameters.ToImmutableArray();
 		statement.functionSymbol.TypeParameters = typeParameterSymbols.ToImmutableArray();
 		statement.functionSymbol.ReturnType = returnType;
-
+		
 		scopeStack.Pop();
 	}
-
+	
 	public void Visit(CollectedExternalFunctionStatement statement)
 	{
 		var externalFunctionStatement = statement.externalFunctionStatement;
-
+		
 		var parameters = new List<ParameterSymbol>();
 		var requireDefault = false;
 		var additionalParametersAllowed = true;
@@ -430,12 +430,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				                                      "variadic parameter", parameter.identifier));
 			
 			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
-
+			
 			if (parameter.type is not null)
 			{
 				var invalidTypes = new List<Token>();
 				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
-
+				
 				if (invalidTypes.Count > 0)
 				{
 					foreach (var invalidType in invalidTypes)
@@ -444,7 +444,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							$"Could not find a type named '{invalidType.Text}'", invalidType));
 					}
 				}
-
+				
 				if (parameter.isVariadic)
 				{
 					additionalParametersAllowed = false;
@@ -454,7 +454,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							parameter.identifier));
 				}
 			}
-
+			
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
@@ -468,10 +468,10 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				exceptions.Add(NewCollectionException(
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
-
+			
 			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
-
+		
 		Type? returnType = null;
 		if (externalFunctionStatement.returnType is not null)
 		{
@@ -487,16 +487,16 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				}
 			}
 		}
-
+		
 		statement.externalFunctionSymbol.Parameters = parameters.ToImmutableArray();
 		statement.externalFunctionSymbol.ReturnType = returnType;
 	}
-
+	
 	public void Visit(CollectedConstructorDeclarationStatement statement)
 	{
 		var constructorDeclarationStatement = statement.constructorDeclarationStatement;
 		scopeStack.Push(statement.scope);
-
+		
 		var parameters = new List<ParameterSymbol>();
 		var requireDefault = false;
 		var additionalParametersAllowed = true;
@@ -507,12 +507,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				                                      "variadic parameter", parameter.identifier));
 			
 			var varSymbol = new VarSymbol(parameter.identifier.Text, parameter.isMutable);
-
+			
 			if (parameter.type is not null)
 			{
 				var invalidTypes = new List<Token>();
 				varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
-
+				
 				if (invalidTypes.Count > 0)
 				{
 					foreach (var invalidType in invalidTypes)
@@ -521,7 +521,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							$"Could not find a type named '{invalidType.Text}'", invalidType));
 					}
 				}
-
+				
 				if (parameter.isVariadic)
 				{
 					additionalParametersAllowed = false;
@@ -531,7 +531,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							parameter.identifier));
 				}
 			}
-
+			
 			if (parameter.defaultExpression is { } defaultExpression)
 			{
 				requireDefault = true;
@@ -545,10 +545,10 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				exceptions.Add(NewCollectionException(
 					$"Parameter '{parameter.identifier.Text}' requires a default value because a " +
 					"previous parameter specified a default value", parameter.identifier));
-
+			
 			parameters.Add(new ParameterSymbol(varSymbol, null, parameter.isVariadic, (uint)parameters.Count));
 		}
-
+		
 		foreach (var parameter in parameters)
 		{
 			statement.scope.AddSymbol(parameter);
@@ -559,19 +559,20 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			EvaluatedType = new ReferenceType(new BaseType(CurrentType), false)
 		}, null, false, 0u);
+		
 		statement.scope.AddSymbol(thisSymbol);
-
+		
 		var constructorSymbol = new ConstructorSymbol(CurrentType, thisSymbol, parameters, statement.scope);
-
+		
 		statement.constructorSymbol = constructorSymbol;
 		scopeStack.Pop();
-
+		
 		if (CurrentScope.LookupSymbol(constructorSymbol.Name) is ConstructorSymbol existingConstructorSymbol)
 		{
 			if (constructorSymbol.SignatureMatches(existingConstructorSymbol))
 				throw NewCollectionException("Constructor signature matches existing constructor signature",
 					constructorDeclarationStatement.constructorKeyword);
-
+			
 			foreach (var existingOverload in existingConstructorSymbol.Overloads)
 			{
 				if (constructorSymbol.SignatureMatches(existingOverload))
@@ -586,28 +587,28 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			CurrentScope.AddSymbol(constructorSymbol);
 		}
 	}
-
+	
 	public void Visit(CollectedDestructorDeclarationStatement statement)
 	{
 		var destructorDeclarationStatement = statement.destructorDeclarationStatement;
 		scopeStack.Push(statement.scope);
-
+		
 		var destructorSymbol = new DestructorSymbol(statement.scope);
-
+		
 		statement.destructorSymbol = destructorSymbol;
 		scopeStack.Pop();
-
+		
 		if (CurrentScope.LookupSymbol(destructorSymbol.Name) is DestructorSymbol)
 		{
 			exceptions.Add(NewCollectionException("A destructor is already declared in this scope",
 				destructorDeclarationStatement.destructorKeyword));
-
+			
 			return;
 		}
 		
 		CurrentScope.AddSymbol(destructorSymbol);
 	}
-
+	
 	public void Visit(CollectedStringDeclarationStatement statement)
 	{
 		var stringDeclarationStatement = statement.stringDeclarationStatement;
@@ -618,44 +619,45 @@ public partial class Collector : CollectedStatementNode.IVisitor
 		{
 			EvaluatedType = new ReferenceType(new BaseType(CurrentType), false)
 		}, null, false, 0u);
+		
 		statement.scope.AddSymbol(thisSymbol);
-
+		
 		var stringFunctionSymbol = new StringFunctionSymbol(CurrentType, thisSymbol, statement.scope);
-
+		
 		statement.stringFunctionSymbol = stringFunctionSymbol;
 		scopeStack.Pop();
-
+		
 		if (CurrentScope.LookupSymbol(stringFunctionSymbol.Name) is StringFunctionSymbol)
 		{
 			exceptions.Add(NewCollectionException("A string function is already declared in this scope",
 				stringDeclarationStatement.stringKeyword));
-
+			
 			return;
 		}
 		
 		CurrentScope.AddSymbol(stringFunctionSymbol);
 	}
-
+	
 	public void Visit(CollectedCastDeclarationStatement statement)
 	{
 		var castDeclarationStatement = statement.castDeclarationStatement;
-
+		
 		var parameter = castDeclarationStatement.parameter;
-				
+		
 		if (parameter.isMutable)
 			exceptions.Add(NewCollectionException(
 				"Cannot mark cast parameter as mutable", parameter.identifier));
-				
+		
 		if (parameter.isVariadic)
 			exceptions.Add(NewCollectionException(
 				"Cannot mark cast parameter as variadic", parameter.identifier));
-				
+		
 		var varSymbol = new VarSymbol(parameter.identifier.Text, false);
 		if (parameter.type is not null)
 		{
 			var invalidTypes = new List<Token>();
 			varSymbol.EvaluatedType = ResolveType(parameter.type, invalidTypes);
-
+			
 			if (invalidTypes.Count > 0)
 			{
 				foreach (var invalidType in invalidTypes)
@@ -670,10 +672,10 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			exceptions.Add(NewCollectionException(
 				"Parameter type is required in cast overload declarations", parameter.identifier));
 		}
-
+		
 		var invalidReturnTypes = new List<Token>();
 		var returnType = ResolveType(castDeclarationStatement.returnSyntaxType, invalidReturnTypes);
-				
+		
 		if (invalidReturnTypes.Count > 0)
 		{
 			foreach (var invalidType in invalidReturnTypes)
@@ -682,16 +684,16 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					$"Could not find a type named '{invalidType.Text}'", invalidType));
 			}
 		}
-
+		
 		if (returnType is null)
 			return;
-				
+		
 		var parameterSymbol = new ParameterSymbol(varSymbol, null, false, 0u);
 		statement.scope.AddSymbol(parameterSymbol);
-
+		
 		var castSymbol = new CastOverloadSymbol(castDeclarationStatement.isImplicit, parameterSymbol,
 			returnType, statement.scope);
-
+		
 		if (CurrentScope.LookupSymbol(castSymbol.Name) is not null)
 		{
 			exceptions.Add(NewCollectionException("Cast overload matches existing cast overload",
@@ -699,11 +701,11 @@ public partial class Collector : CollectedStatementNode.IVisitor
 			
 			return;
 		}
-
+		
 		CurrentScope.AddSymbol(castSymbol);
 		statement.castOverloadSymbol = castSymbol;
 	}
-
+	
 	public void Visit(CollectedOperatorDeclarationStatement statement)
 	{
 		var operatorDeclarationStatement = statement.operatorDeclarationStatement;
@@ -727,7 +729,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				{
 					var invalidTypes = new List<Token>();
 					leftSymbol.EvaluatedType = ResolveType(left.type, invalidTypes);
-
+					
 					if (invalidTypes.Count > 0)
 					{
 						foreach (var invalidType in invalidTypes)
@@ -748,7 +750,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				{
 					var invalidTypes = new List<Token>();
 					rightSymbol.EvaluatedType = ResolveType(right.type, invalidTypes);
-
+					
 					if (invalidTypes.Count > 0)
 					{
 						foreach (var invalidType in invalidTypes)
@@ -775,7 +777,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							$"Could not find a type named '{invalidType.Text}'", invalidType));
 					}
 				}
-
+				
 				if (returnType is null)
 					return;
 				
@@ -783,10 +785,10 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				var rightParameterSymbol = new ParameterSymbol(rightSymbol, null, false, 1u);
 				statement.scope.AddSymbol(leftParameterSymbol);
 				statement.scope.AddSymbol(rightParameterSymbol);
-
+				
 				var operatorSymbol = new BinaryOperatorOverloadSymbol(leftParameterSymbol,
 					binaryOperationExpression.operation, rightParameterSymbol, returnType, statement.scope, false);
-
+				
 				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
 				{
 					exceptions.Add(NewCollectionException("Operator overload matches existing operator overload",
@@ -794,13 +796,14 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					
 					break;
 				}
-
+				
 				CurrentScope.AddSymbol(operatorSymbol);
 				CurrentType.Operators.Add(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
+				
 				break;
-
+			
 			case UnaryOperationExpression unaryOperationExpression:
 			{
 				var operand = unaryOperationExpression.operand;
@@ -814,7 +817,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				{
 					var invalidTypes = new List<Token>();
 					varSymbol.EvaluatedType = ResolveType(operand.type, invalidTypes);
-
+					
 					if (invalidTypes.Count > 0)
 					{
 						foreach (var invalidType in invalidTypes)
@@ -841,17 +844,17 @@ public partial class Collector : CollectedStatementNode.IVisitor
 							$"Could not find a type named '{invalidType.Text}'", invalidType));
 					}
 				}
-
+				
 				if (returnType is null)
 					return;
 				
 				var parameterSymbol = new ParameterSymbol(varSymbol, null, false, 0u);
 				statement.scope.AddSymbol(parameterSymbol);
 				CurrentScope.AddSymbol(parameterSymbol);
-
+				
 				var operatorSymbol = new UnaryOperatorOverloadSymbol(parameterSymbol,
 					unaryOperationExpression.operation, returnType, statement.scope, false);
-
+				
 				if (CurrentScope.LookupSymbol(operatorSymbol.Name) is not null)
 				{
 					exceptions.Add(NewCollectionException("Operator overload matches existing operator overload",
@@ -859,11 +862,12 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					
 					break;
 				}
-
+				
 				CurrentScope.AddSymbol(operatorSymbol);
 				CurrentType.Operators.Add(operatorSymbol);
 				statement.operatorOverloadSymbol = operatorSymbol;
 			}
+				
 				break;
 			
 			default:
@@ -874,33 +878,33 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				break;
 		}
 	}
-
+	
 	public void Visit(CollectedExpressionStatement statement)
 	{
 		// Do nothing
 	}
-
+	
 	public void Visit(CollectedBlockStatement statement)
 	{
 		// Do nothing
 	}
-
+	
 	public void Visit(CollectedVarDeclarationStatement statement)
 	{
 		// Do nothing
 	}
-
+	
 	public void Visit(CollectedSimpleStatement statement)
 	{
 		// Do nothing
 	}
-
+	
 	public void Visit(CollectedAggregateStatement collectedAggregateStatement)
 	{
 		foreach (var statement in collectedAggregateStatement.statements)
 			statement.Accept(this);
 	}
-
+	
 	private Type? ResolveType(SyntaxType syntaxType, ICollection<Token> invalidTypes)
 	{
 		switch (syntaxType)
@@ -911,40 +915,40 @@ public partial class Collector : CollectedStatementNode.IVisitor
 				
 				if (invalidTypes.Count > 0)
 					return null;
-
+				
 				return new ArrayType(arrayBaseType);
-
+			
 			case NullableSyntaxType nullableSyntaxType:
 				if (ResolveType(nullableSyntaxType.baseSyntaxType, invalidTypes) is not { } nullableBaseType)
 					return null;
-
+				
 				if (invalidTypes.Count > 0)
 					return null;
 				
 				return new NullableType(nullableBaseType);
-
+			
 			case MutableSyntaxType mutableSyntaxType:
 				if (ResolveType(mutableSyntaxType.baseSyntaxType, invalidTypes) is not { } mutableBaseType)
 					return null;
-
+				
 				if (invalidTypes.Count > 0)
 					return null;
 				
 				return new MutableType(mutableBaseType);
-
+			
 			case ReferenceSyntaxType referenceSyntaxType:
 				if (ResolveType(referenceSyntaxType.baseSyntaxType, invalidTypes) is not { } referenceBaseType)
 					return null;
-
+				
 				if (invalidTypes.Count > 0)
 					return null;
 				
 				return new ReferenceType(referenceBaseType, referenceSyntaxType.immutable);
-
+			
 			case GenericSyntaxType genericSyntaxType:
 				if (ResolveType(genericSyntaxType.baseSyntaxType, invalidTypes) is not { } genericBaseType)
 					return null;
-
+				
 				var typeParameters = new List<Type>();
 				foreach (var typeParameterSyntax in genericSyntaxType.typeParameters)
 				{
@@ -958,7 +962,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					return null;
 				
 				return new GenericType(genericBaseType, typeParameters);
-
+			
 			case LambdaSyntaxType lambdaSyntaxType:
 				var lambdaParameterTypes = new List<Type>();
 				foreach (var lambdaParameterSyntax in lambdaSyntaxType.parameterTypes)
@@ -968,7 +972,7 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					
 					lambdaParameterTypes.Add(lambdaParameterType);
 				}
-
+				
 				Type? returnType = null;
 				if (lambdaSyntaxType.returnType is { } returnSyntaxType)
 				{
@@ -980,20 +984,20 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					return null;
 				
 				return new FunctionType(lambdaParameterTypes, returnType);
-
+			
 			case TupleSyntaxType tupleSyntaxType:
 				var types = new List<Type>();
 				foreach (var type in tupleSyntaxType.types)
 				{
 					if (ResolveType(type, invalidTypes) is not { } tupleType)
 						continue;
-
+					
 					types.Add(tupleType);
 				}
-
+				
 				if (invalidTypes.Count > 0)
 					return null;
-
+				
 				return new TupleType(types);
 			
 			case BaseSyntaxType baseSyntaxType:
@@ -1002,13 +1006,13 @@ public partial class Collector : CollectedStatementNode.IVisitor
 					invalidTypes.Add(baseSyntaxType.token);
 					return null;
 				}
-
+				
 				if (symbol is not TypeSymbol typeSymbol)
 				{
 					invalidTypes.Add(baseSyntaxType.token);
 					return null;
 				}
-
+				
 				return new BaseType(typeSymbol);
 			
 			default:

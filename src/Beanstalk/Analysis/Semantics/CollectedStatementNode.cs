@@ -51,7 +51,7 @@ public abstract class CollectedStatementNode : ICollectedAstNode
 		void Visit(CollectedSimpleStatement statement);
 		void Visit(CollectedAggregateStatement collectedAggregateStatement);
 	}
-
+	
 	public abstract void Accept(IVisitor visitor);
 	public abstract T Accept<T>(IVisitor<T> visitor);
 }
@@ -62,7 +62,7 @@ public sealed class CollectedProgramStatement : CollectedStatementNode
 	public readonly ImmutableArray<StatementNode> importStatements;
 	public readonly ModuleSymbol? moduleSymbol;
 	public readonly ImmutableArray<CollectedStatementNode> topLevelStatements;
-
+	
 	public CollectedProgramStatement(IEnumerable<StatementNode> importStatements, ModuleSymbol? moduleSymbol,
 		IEnumerable<CollectedStatementNode> topLevelStatements)
 	{
@@ -70,12 +70,12 @@ public sealed class CollectedProgramStatement : CollectedStatementNode
 		this.moduleSymbol = moduleSymbol;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -92,12 +92,12 @@ public sealed class CollectedModuleStatement : CollectedStatementNode
 		this.moduleSymbol = moduleSymbol;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -109,17 +109,18 @@ public sealed class CollectedStructDeclarationStatement : CollectedStatementNode
 	public readonly StructSymbol structSymbol;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
 	
-	public CollectedStructDeclarationStatement(StructSymbol structSymbol, IEnumerable<CollectedStatementNode> statements)
+	public CollectedStructDeclarationStatement(StructSymbol structSymbol,
+		IEnumerable<CollectedStatementNode> statements)
 	{
 		this.structSymbol = structSymbol;
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -132,7 +133,7 @@ public sealed class CollectedFieldDeclarationStatement : CollectedStatementNode
 	public readonly SyntaxType? syntaxType;
 	public readonly ExpressionNode? initializer;
 	public readonly TextRange range;
-
+	
 	public CollectedFieldDeclarationStatement(FieldSymbol fieldSymbol, SyntaxType? syntaxType,
 		ExpressionNode? initializer, TextRange range)
 	{
@@ -141,12 +142,12 @@ public sealed class CollectedFieldDeclarationStatement : CollectedStatementNode
 		this.initializer = initializer;
 		this.range = range;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -159,7 +160,7 @@ public sealed class CollectedConstDeclarationStatement : CollectedStatementNode
 	public readonly SyntaxType? syntaxType;
 	public readonly ExpressionNode initializer;
 	public readonly TextRange range;
-
+	
 	public CollectedConstDeclarationStatement(ConstSymbol constSymbol, SyntaxType? syntaxType,
 		ExpressionNode initializer, TextRange range)
 	{
@@ -168,12 +169,12 @@ public sealed class CollectedConstDeclarationStatement : CollectedStatementNode
 		this.initializer = initializer;
 		this.range = range;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -190,12 +191,12 @@ public sealed class CollectedDefStatement : CollectedStatementNode
 		this.defSymbol = defSymbol;
 		this.syntaxType = syntaxType;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -208,7 +209,7 @@ public sealed class CollectedEntryStatement : CollectedStatementNode
 	public readonly Scope scope;
 	public readonly EntryStatement entryStatement;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
-
+	
 	public CollectedEntryStatement(EntryStatement entryStatement, Scope scope,
 		IEnumerable<CollectedStatementNode> statements)
 	{
@@ -216,12 +217,12 @@ public sealed class CollectedEntryStatement : CollectedStatementNode
 		this.scope = scope;
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -233,7 +234,7 @@ public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNo
 	public readonly FunctionSymbol functionSymbol;
 	public readonly FunctionDeclarationStatement functionDeclarationStatement;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedFunctionDeclarationStatement(FunctionDeclarationStatement functionDeclarationStatement,
 		FunctionSymbol functionSymbol, CollectedStatementNode body)
 	{
@@ -241,12 +242,12 @@ public sealed class CollectedFunctionDeclarationStatement : CollectedStatementNo
 		this.functionSymbol = functionSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -257,19 +258,19 @@ public sealed class CollectedExternalFunctionStatement : CollectedStatementNode
 {
 	public readonly ExternalFunctionSymbol externalFunctionSymbol;
 	public readonly ExternalFunctionStatement externalFunctionStatement;
-
+	
 	public CollectedExternalFunctionStatement(ExternalFunctionSymbol externalFunctionSymbol,
 		ExternalFunctionStatement externalFunctionStatement)
 	{
 		this.externalFunctionSymbol = externalFunctionSymbol;
 		this.externalFunctionStatement = externalFunctionStatement;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -282,7 +283,7 @@ public sealed class CollectedConstructorDeclarationStatement : CollectedStatemen
 	public readonly ConstructorDeclarationStatement constructorDeclarationStatement;
 	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedConstructorDeclarationStatement(ConstructorDeclarationStatement constructorDeclarationStatement,
 		Scope scope, CollectedStatementNode body)
 	{
@@ -290,12 +291,12 @@ public sealed class CollectedConstructorDeclarationStatement : CollectedStatemen
 		this.scope = scope;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -308,7 +309,7 @@ public sealed class CollectedDestructorDeclarationStatement : CollectedStatement
 	public readonly DestructorDeclarationStatement destructorDeclarationStatement;
 	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedDestructorDeclarationStatement(DestructorDeclarationStatement destructorDeclarationStatement,
 		Scope scope, CollectedStatementNode body)
 	{
@@ -316,12 +317,12 @@ public sealed class CollectedDestructorDeclarationStatement : CollectedStatement
 		this.scope = scope;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -334,7 +335,7 @@ public sealed class CollectedCastDeclarationStatement : CollectedStatementNode
 	public readonly CastDeclarationStatement castDeclarationStatement;
 	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedCastDeclarationStatement(CastDeclarationStatement castDeclarationStatement, Scope scope,
 		CollectedStatementNode body)
 	{
@@ -342,12 +343,12 @@ public sealed class CollectedCastDeclarationStatement : CollectedStatementNode
 		this.scope = scope;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -360,7 +361,7 @@ public sealed class CollectedStringDeclarationStatement : CollectedStatementNode
 	public readonly StringDeclarationStatement stringDeclarationStatement;
 	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedStringDeclarationStatement(StringDeclarationStatement stringDeclarationStatement, Scope scope,
 		CollectedStatementNode body)
 	{
@@ -368,12 +369,12 @@ public sealed class CollectedStringDeclarationStatement : CollectedStatementNode
 		this.scope = scope;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -386,7 +387,7 @@ public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNo
 	public readonly OperatorDeclarationStatement operatorDeclarationStatement;
 	public readonly Scope scope;
 	public readonly CollectedStatementNode body;
-
+	
 	public CollectedOperatorDeclarationStatement(OperatorDeclarationStatement operatorDeclarationStatement, Scope scope,
 		CollectedStatementNode body)
 	{
@@ -394,12 +395,12 @@ public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNo
 		this.scope = scope;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -409,17 +410,17 @@ public sealed class CollectedOperatorDeclarationStatement : CollectedStatementNo
 public sealed class CollectedExpressionStatement : CollectedStatementNode
 {
 	public readonly ExpressionStatement statement;
-
+	
 	public CollectedExpressionStatement(ExpressionStatement statement)
 	{
 		this.statement = statement;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -430,18 +431,18 @@ public sealed class CollectedBlockStatement : CollectedStatementNode
 {
 	public readonly Scope scope;
 	public readonly ImmutableArray<CollectedStatementNode> statements;
-
+	
 	public CollectedBlockStatement(Scope scope, IEnumerable<CollectedStatementNode> statements)
 	{
 		this.scope = scope;
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -454,7 +455,7 @@ public sealed class CollectedVarDeclarationStatement : CollectedStatementNode
 	public readonly Token varToken;
 	public readonly SyntaxType? syntaxType;
 	public readonly ExpressionNode? initializer;
-
+	
 	public CollectedVarDeclarationStatement(VarSymbol varSymbol, Token varToken, SyntaxType? syntaxType,
 		ExpressionNode? initializer)
 	{
@@ -463,12 +464,12 @@ public sealed class CollectedVarDeclarationStatement : CollectedStatementNode
 		this.initializer = initializer;
 		this.syntaxType = syntaxType;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -478,17 +479,17 @@ public sealed class CollectedVarDeclarationStatement : CollectedStatementNode
 public sealed class CollectedSimpleStatement : CollectedStatementNode
 {
 	public readonly StatementNode statementNode;
-
+	
 	public CollectedSimpleStatement(StatementNode statementNode)
 	{
 		this.statementNode = statementNode;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -498,17 +499,17 @@ public sealed class CollectedSimpleStatement : CollectedStatementNode
 public sealed class CollectedAggregateStatement : CollectedStatementNode
 {
 	public readonly ImmutableArray<CollectedStatementNode> statements;
-
+	
 	public CollectedAggregateStatement(IEnumerable<CollectedStatementNode> statements)
 	{
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);

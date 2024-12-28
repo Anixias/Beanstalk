@@ -18,7 +18,7 @@ public sealed class FunctionSymbol : IFunctionSymbol
 	public Scope Body { get; }
 	public List<FunctionSymbol> Overloads { get; } = [];
 	public Type? EvaluatedType => GetFunctionType();
-
+	
 	public FunctionSymbol(string name, Scope body, IBuffer source, TextRange signatureRange)
 	{
 		Name = name;
@@ -26,15 +26,15 @@ public sealed class FunctionSymbol : IFunctionSymbol
 		SignatureRange = signatureRange;
 		Source = source;
 	}
-
+	
 	public bool SignatureMatches(FunctionSymbol functionSymbol)
 	{
 		if (Name != functionSymbol.Name)
 			return false;
-
+		
 		if (Parameters.Length != functionSymbol.Parameters.Length)
 			return false;
-
+		
 		for (var i = 0; i < Parameters.Length; i++)
 		{
 			var otherParameterType = functionSymbol.Parameters[i].VarSymbol.EvaluatedType;
@@ -42,17 +42,17 @@ public sealed class FunctionSymbol : IFunctionSymbol
 			{
 				if (otherParameterType is not null)
 					return false;
-
+				
 				continue;
 			}
 			
 			if (!parameterType.Equals(otherParameterType))
 				return false;
 		}
-
+		
 		return true;
 	}
-
+	
 	public FunctionType? GetFunctionType()
 	{
 		var parameterTypes = new List<Type>();

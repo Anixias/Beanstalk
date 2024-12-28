@@ -7,7 +7,7 @@ public sealed class FilteredLexer(IBuffer source) : ILexer
 	public IBuffer Source => lexer.Source;
 	
 	private readonly Lexer lexer = new(source);
-
+	
 	public ScanResult? ScanToken(int position)
 	{
 		var result = lexer.ScanToken(position);
@@ -15,10 +15,10 @@ public sealed class FilteredLexer(IBuffer source) : ILexer
 		{
 			result = lexer.ScanToken(scanResult.NextPosition);
 		}
-
+		
 		return result;
 	}
-
+	
 	private List<Token> ScanAllTokens()
 	{
 		var tokens = new List<Token>();
@@ -30,17 +30,17 @@ public sealed class FilteredLexer(IBuffer source) : ILexer
 			{
 				return tokens;
 			}
-
+			
 			tokens.Add(lexerResult.Token);
 			position = lexerResult.NextPosition;
 		}
 	}
-
+	
 	public IEnumerator<Token> GetEnumerator()
 	{
 		return ScanAllTokens().GetEnumerator();
 	}
-
+	
 	IEnumerator IEnumerable.GetEnumerator()
 	{
 		return GetEnumerator();

@@ -16,136 +16,196 @@ public struct Triple
 	public enum ArchType
 	{
 		UnknownArch,
-
+		
 		/// ARM (little endian): arm, armv.*, xscale
 		arm,
+		
 		/// ARM (big endian): armeb
 		armeb,
+		
 		/// AArch64 (little endian): aarch64
 		aarch64,
+		
 		/// AArch64 (big endian): aarch64_be
 		aarch64_be,
+		
 		/// AArch64 (little endian) ILP32: aarch64_32
 		aarch64_32,
+		
 		/// ARC: Synopsys ARC
 		arc,
+		
 		/// AVR: Atmel AVR microcontroller
 		avr,
+		
 		/// eBPF or extended BPF or 64-bit BPF (little endian)
 		bpfel,
+		
 		/// eBPF or extended BPF or 64-bit BPF (big endian)
 		bpfeb,
+		
 		/// CSKY: csky
 		csky,
+		
 		/// DXIL 32-bit DirectX bytecode
 		dxil,
+		
 		/// Hexagon: hexagon
 		hexagon,
+		
 		/// LoongArch (32-bit): loongarch32
 		loongarch32,
+		
 		/// LoongArch (64-bit): loongarch64
 		loongarch64,
+		
 		/// M68k: Motorola 680x0 family
 		m68k,
+		
 		/// MIPS: mips, mipsallegrex, mipsr6
 		mips,
+		
 		/// MIPSEL: mipsel, mipsallegrexe, mipsr6el
 		mipsel,
+		
 		/// MIPS64: mips64, mips64r6, mipsn32, mipsn32r6
 		mips64,
+		
 		/// MIPS64EL: mips64el, mips64r6el, mipsn32el, mipsn32r6el
 		mips64el,
+		
 		/// MSP430: msp430
 		msp430,
+		
 		/// PPC: powerpc
 		ppc,
+		
 		/// PPCLE: powerpc (little endian)
 		ppcle,
+		
 		/// PPC64: powerpc64, ppu
 		ppc64,
+		
 		/// PPC64LE: powerpc64le
 		ppc64le,
+		
 		/// R600: AMD GPUs HD2XXX - HD6XXX
 		r600,
+		
 		/// AMDGCN: AMD GCN GPUs
 		amdgcn,
+		
 		/// RISC-V (32-bit): riscv32
 		riscv32,
+		
 		/// RISC-V (64-bit): riscv64
 		riscv64,
+		
 		/// Sparc: sparc
 		sparc,
+		
 		/// Sparcv9: Sparcv9
 		sparcv9,
+		
 		/// Sparc: (endianness = little). NB: 'Sparcle' is a CPU variant
 		sparcel,
+		
 		/// SystemZ: s390x
 		systemz,
+		
 		/// TCE (http://tce.cs.tut.fi/): tce
 		tce,
+		
 		/// TCE little endian (http://tce.cs.tut.fi/): tcele
 		tcele,
+		
 		/// Thumb (little endian): thumb, thumbv.*
 		thumb,
+		
 		/// Thumb (big endian): thumbeb
 		thumbeb,
+		
 		/// X86: i[3-9]86
 		x86,
+		
 		/// X86-64: amd64, x86_64
 		x86_64,
+		
 		/// XCore: xcore
 		xcore,
+		
 		/// Tensilica: Xtensa
 		xtensa,
+		
 		/// NVPTX: 32-bit
 		nvptx,
+		
 		/// NVPTX: 64-bit
 		nvptx64,
+		
 		/// le32: generic little-endian 32-bit CPU (PNaCl)
 		le32,
+		
 		/// le64: generic little-endian 64-bit CPU (PNaCl)
 		le64,
+		
 		/// AMDIL
 		amdil,
+		
 		/// AMDIL with 64-bit pointers
 		amdil64,
+		
 		/// AMD HSAIL
 		hsail,
+		
 		/// AMD HSAIL with 64-bit pointers
 		hsail64,
+		
 		/// SPIR: standard portable IR for OpenCL 32-bit version
 		spir,
+		
 		/// SPIR: standard portable IR for OpenCL 64-bit version
 		spir64,
+		
 		/// SPIR-V with logical memory layout.
 		spirv,
+		
 		/// SPIR-V with 32-bit pointers
 		spirv32,
+		
 		/// SPIR-V with 64-bit pointers
 		spirv64,
+		
 		/// Kalimba: generic kalimba
 		kalimba,
+		
 		/// SHAVE: Movidius vector VLIW processors
 		shave,
+		
 		/// Lanai: Lanai 32-bit
 		lanai,
+		
 		/// WebAssembly with 32-bit pointers
 		wasm32,
+		
 		/// WebAssembly with 64-bit pointers
 		wasm64,
+		
 		/// 32-bit RenderScript
 		renderscript32,
+		
 		/// 64-bit RenderScript
 		renderscript64,
+		
 		/// NEC SX-Aurora Vector Engine
 		ve,
 		LastArchType = ve
 	}
-
+	
 	public enum SubArchType
 	{
 		NoSubArch,
-
+		
 		ARMSubArch_v9_5a,
 		ARMSubArch_v9_4a,
 		ARMSubArch_v9_3a,
@@ -179,18 +239,18 @@ public struct Triple
 		ARMSubArch_v5,
 		ARMSubArch_v5te,
 		ARMSubArch_v4t,
-
+		
 		AArch64SubArch_arm64e,
 		AArch64SubArch_arm64ec,
-
+		
 		KalimbaSubArch_v3,
 		KalimbaSubArch_v4,
 		KalimbaSubArch_v5,
-
+		
 		MipsSubArch_r6,
-
+		
 		PPCSubArch_spe,
-
+		
 		// SPIR-V sub-arch corresponds to its version.
 		SPIRVSubArch_v10,
 		SPIRVSubArch_v11,
@@ -199,11 +259,11 @@ public struct Triple
 		SPIRVSubArch_v14,
 		SPIRVSubArch_v15,
 	}
-
+	
 	public enum VendorType
 	{
 		UnknownVendor,
-
+		
 		Apple,
 		PC,
 		SCEI,
@@ -219,11 +279,11 @@ public struct Triple
 		OpenEmbedded,
 		LastVendorType = OpenEmbedded
 	}
-
+	
 	public enum OSType
 	{
 		UnknownOS,
-
+		
 		Darwin,
 		DragonFly,
 		FreeBSD,
@@ -231,6 +291,7 @@ public struct Triple
 		IOS,
 		KFreeBSD,
 		Linux,
+		
 		/// PS3
 		Lv2,
 		MacOSX,
@@ -242,45 +303,57 @@ public struct Triple
 		ZOS,
 		Haiku,
 		RTEMS,
+		
 		/// Native Client
 		NaCl,
 		AIX,
+		
 		/// NVIDIA CUDA
 		CUDA,
+		
 		/// NVIDIA OpenCL
 		NVCL,
+		
 		/// AMD HSA Runtime
 		AMDHSA,
 		PS4,
 		PS5,
 		ELFIAMCU,
+		
 		/// Apple tvOS
 		TvOS,
+		
 		/// Apple watchOS
 		WatchOS,
+		
 		/// Apple DriverKit
 		DriverKit,
 		Mesa3D,
+		
 		/// AMD PAL Runtime
 		AMDPAL,
+		
 		/// HermitCore Unikernel/Multikernel
 		HermitCore,
+		
 		/// GNU/Hurd
 		Hurd,
+		
 		/// Experimental WebAssembly OS
 		WASI,
 		Emscripten,
+		
 		/// DirectX ShaderModel
 		ShaderModel,
 		LiteOS,
 		Serenity,
 		LastOSType = Serenity
 	}
-
+	
 	public enum EnvironmentType
 	{
 		UnknownEnvironment,
-
+		
 		GNU,
 		GNUABIN32,
 		GNUABI64,
@@ -299,16 +372,18 @@ public struct Triple
 		MuslEABI,
 		MuslEABIHF,
 		MuslX32,
-
+		
 		MSVC,
 		Itanium,
 		Cygnus,
 		CoreCLR,
+		
 		/// Simulator variants of other systems, e.g., Apple's iOS
 		Simulator,
+		
 		/// Mac Catalyst variant of Apple's iOS deployment target.
 		MacABI,
-
+		
 		// Shader Stages
 		// The order of these values matters, and must be kept in sync with the
 		// language options enum in Clang. The ordering is enforced in
@@ -328,16 +403,16 @@ public struct Triple
 		Callable,
 		Mesh,
 		Amplification,
-
+		
 		OpenHOS,
-
+		
 		LastEnvironmentType = OpenHOS
 	}
-
+	
 	public enum ObjectFormatType
 	{
 		UnknownObjectFormat,
-
+		
 		COFF,
 		DXContainer,
 		ELF,
@@ -347,7 +422,7 @@ public struct Triple
 		Wasm,
 		XCOFF,
 	}
-
+	
 	private readonly string data = "";
 	public ArchType Arch { get; set; }
 	public SubArchType SubArch { get; set; }
@@ -355,12 +430,12 @@ public struct Triple
 	public OSType OS { get; set; }
 	public EnvironmentType Environment { get; set; }
 	public ObjectFormatType ObjectFormat { get; set; }
-
+	
 	public Triple(string triple)
 	{
 		data = triple;
 		var components = triple.Split('-');
-
+		
 		if (components.Length < 1)
 			return;
 		
@@ -369,21 +444,21 @@ public struct Triple
 		
 		if (components.Length < 2)
 			return;
-
+		
 		Vendor = ParseVendor(components[1]);
 		
 		if (components.Length < 3)
 			return;
-
+		
 		OS = ParseOS(components[2]);
 		
 		if (components.Length < 4)
 			return;
-
+		
 		Environment = ParseEnvironment(components[3]);
 		ObjectFormat = ParseFormat(components[3]);
 	}
-
+	
 	private static VendorType ParseVendor(string vendorName)
 	{
 		return vendorName switch
@@ -405,7 +480,7 @@ public struct Triple
 			_ => VendorType.UnknownVendor
 		};
 	}
-
+	
 	private static OSType ParseOS(string osName)
 	{
 		if (osName.StartsWith("darwin"))
@@ -518,10 +593,10 @@ public struct Triple
 		
 		if (osName.StartsWith("serenity"))
 			return OSType.Serenity;
-
+		
 		return OSType.UnknownOS;
 	}
-
+	
 	private static EnvironmentType ParseEnvironment(string environmentName)
 	{
 		if (environmentName.StartsWith("eabihf"))
@@ -571,82 +646,82 @@ public struct Triple
 		
 		if (environmentName.StartsWith("musleabi"))
 			return EnvironmentType.MuslEABI;
-
+		
 		if (environmentName.StartsWith("muslx32"))
 			return EnvironmentType.MuslX32;
-
+		
 		if (environmentName.StartsWith("musl"))
 			return EnvironmentType.Musl;
-
+		
 		if (environmentName.StartsWith("msvc"))
 			return EnvironmentType.MSVC;
-
+		
 		if (environmentName.StartsWith("itanium"))
 			return EnvironmentType.Itanium;
-
+		
 		if (environmentName.StartsWith("cygnus"))
 			return EnvironmentType.Cygnus;
-
+		
 		if (environmentName.StartsWith("coreclr"))
 			return EnvironmentType.CoreCLR;
-
+		
 		if (environmentName.StartsWith("simulator"))
 			return EnvironmentType.Simulator;
-
+		
 		if (environmentName.StartsWith("macabi"))
 			return EnvironmentType.MacABI;
-
+		
 		if (environmentName.StartsWith("pixel"))
 			return EnvironmentType.Pixel;
-
+		
 		if (environmentName.StartsWith("vertex"))
 			return EnvironmentType.Vertex;
-
+		
 		if (environmentName.StartsWith("geometry"))
 			return EnvironmentType.Geometry;
-
+		
 		if (environmentName.StartsWith("hull"))
 			return EnvironmentType.Hull;
-
+		
 		if (environmentName.StartsWith("domain"))
 			return EnvironmentType.Domain;
-
+		
 		if (environmentName.StartsWith("compute"))
 			return EnvironmentType.Compute;
-
+		
 		if (environmentName.StartsWith("library"))
 			return EnvironmentType.Library;
-
+		
 		if (environmentName.StartsWith("raygeneration"))
 			return EnvironmentType.RayGeneration;
-
+		
 		if (environmentName.StartsWith("intersection"))
 			return EnvironmentType.Intersection;
-
+		
 		if (environmentName.StartsWith("anyhit"))
 			return EnvironmentType.AnyHit;
-
+		
 		if (environmentName.StartsWith("closesthit"))
 			return EnvironmentType.ClosestHit;
-
+		
 		if (environmentName.StartsWith("miss"))
 			return EnvironmentType.Miss;
-
+		
 		if (environmentName.StartsWith("callable"))
 			return EnvironmentType.Callable;
-
+		
 		if (environmentName.StartsWith("mesh"))
 			return EnvironmentType.Mesh;
-
+		
 		if (environmentName.StartsWith("amplification"))
 			return EnvironmentType.Amplification;
-
+		
 		if (environmentName.StartsWith("ohos"))
 			return EnvironmentType.OpenHOS;
-
+		
 		return EnvironmentType.UnknownEnvironment;
 	}
-
+	
 	private static ObjectFormatType ParseFormat(string formatName)
 	{
 		if (formatName.EndsWith("xcoff"))
@@ -669,10 +744,10 @@ public struct Triple
 		
 		if (formatName.EndsWith("spirv"))
 			return ObjectFormatType.SPIRV;
-
+		
 		return ObjectFormatType.UnknownObjectFormat;
 	}
-
+	
 	private static ArchType ParseArch(string archName)
 	{
 		var archType = Parse();
@@ -681,10 +756,10 @@ public struct Triple
 		
 		if (archName.StartsWith("arm") || archName.StartsWith("thumb") || archName.StartsWith("aarch64"))
 			return ParseARMArch(archName);
-
+		
 		if (archName.StartsWith("bpf"))
 			return ParseBPFArch(archName);
-
+		
 		return archType;
 		
 		ArchType Parse()
@@ -699,88 +774,88 @@ public struct Triple
 				case "i886":
 				case "i986":
 					return ArchType.x86;
-
+				
 				case "amd64":
 				case "x86_64":
 				case "x86_64h":
 					return ArchType.x86_64;
-
+				
 				case "powerpc":
 				case "powerpcspe":
 				case "ppc":
 				case "ppc32":
 					return ArchType.ppc;
-
+				
 				case "powerpcle":
 				case "ppcle":
 				case "ppc32le":
 					return ArchType.ppcle;
-
+				
 				case "powerpc64":
 				case "ppu":
 				case "ppc64":
 					return ArchType.ppc64;
-
+				
 				case "powerpc64le":
 				case "ppc64le":
 					return ArchType.ppc64le;
-
+				
 				case "arm":
 				case "xscale":
 					return ArchType.arm;
-
+				
 				case "armeb":
 				case "xscaleeb":
 					return ArchType.armeb;
-
+				
 				case "aarch64":
 					return ArchType.aarch64;
-
+				
 				case "aarch64_be":
 					return ArchType.aarch64_be;
-
+				
 				case "aarch64_32":
 					return ArchType.aarch64_32;
-
+				
 				case "arc":
 					return ArchType.arc;
-
+				
 				case "arm64":
 				case "arm64e":
 				case "arm64ec":
 					return ArchType.aarch64;
-
+				
 				case "arm64_32":
 					return ArchType.aarch64_32;
-
+				
 				case "thumb":
 					return ArchType.thumb;
-
+				
 				case "thumbeb":
 					return ArchType.thumbeb;
-
+				
 				case "avr":
 					return ArchType.avr;
-
+				
 				case "m68k":
 					return ArchType.m68k;
-
+				
 				case "msp430":
 					return ArchType.msp430;
-
+				
 				case "mips":
 				case "mipseb":
 				case "mipsallegrex":
 				case "mipsisa32r6":
 				case "mipsr6":
 					return ArchType.mips;
-
+				
 				case "mipsel":
 				case "mipsallgrexel":
 				case "mipsisa32r6el":
 				case "mipsr6el":
 					return ArchType.mipsel;
-
+				
 				case "mips64":
 				case "mips64eb":
 				case "mipsn32":
@@ -788,82 +863,82 @@ public struct Triple
 				case "mips64r6":
 				case "mipsn32r6":
 					return ArchType.mips64;
-
+				
 				case "mips64el":
 				case "mipsn32el":
 				case "mipsisa64r6el":
 				case "mips64r6el":
 				case "mipsn32r6el":
 					return ArchType.mips64el;
-
+				
 				case "r600":
 					return ArchType.r600;
-
+				
 				case "amdgcn":
 					return ArchType.amdgcn;
-
+				
 				case "riscv32":
 					return ArchType.riscv32;
-
+				
 				case "riscv64":
 					return ArchType.riscv64;
-
+				
 				case "hexagon":
 					return ArchType.hexagon;
-
+				
 				case "s390x":
 				case "systemz":
 					return ArchType.systemz;
-
+				
 				case "sparc":
 					return ArchType.sparc;
-
+				
 				case "sparcel":
 					return ArchType.sparcel;
-
+				
 				case "sparcv9":
 				case "sparc64":
 					return ArchType.sparcv9;
-
+				
 				case "tce":
 					return ArchType.tce;
-
+				
 				case "tcele":
 					return ArchType.tcele;
-
+				
 				case "xcore":
 					return ArchType.xcore;
-
+				
 				case "nvptx":
 					return ArchType.nvptx;
-
+				
 				case "nvptx64":
 					return ArchType.nvptx64;
-
+				
 				case "le32":
 					return ArchType.le32;
-
+				
 				case "le64":
 					return ArchType.le64;
-
+				
 				case "amdil":
 					return ArchType.amdil;
-
+				
 				case "amdil64":
 					return ArchType.amdil64;
-
+				
 				case "hsail":
 					return ArchType.hsail;
-
+				
 				case "hsail64":
 					return ArchType.hsail64;
-
+				
 				case "spir":
 					return ArchType.spir;
-
+				
 				case "spir64":
 					return ArchType.spir64;
-
+				
 				case "spirv":
 				case "spirv1.0":
 				case "spirv1.1":
@@ -872,7 +947,7 @@ public struct Triple
 				case "spirv1.4":
 				case "spirv1.5":
 					return ArchType.spirv;
-
+				
 				case "spriv32":
 				case "spirv32v1.0":
 				case "spirv32v1.1":
@@ -881,7 +956,7 @@ public struct Triple
 				case "spirv32v1.4":
 				case "spirv32v1.5":
 					return ArchType.spirv32;
-
+				
 				case "spriv64":
 				case "spirv64v1.0":
 				case "spirv64v1.1":
@@ -926,23 +1001,21 @@ public struct Triple
 				
 				case "xtensa":
 					return ArchType.xtensa;
-
+				
 				default:
 					return archName.StartsWith("kalimba") ? ArchType.kalimba : ArchType.UnknownArch;
 			}
 		}
 	}
-
+	
 	public Triple(string ArchStr, string VendorStr, string OSStr)
 	{
-		
 	}
-
+	
 	public Triple(string ArchStr, string VendorStr, string OSStr, string EnvironmentStr)
 	{
-		
 	}
-
+	
 	public static bool operator ==(Triple left, Triple right)
 	{
 		if (left.Arch != right.Arch)
@@ -962,15 +1035,15 @@ public struct Triple
 		
 		if (left.ObjectFormat != right.ObjectFormat)
 			return false;
-
+		
 		return true;
 	}
-
+	
 	public static bool operator !=(Triple left, Triple right)
 	{
 		return !(left == right);
 	}
-
+	
 	private static uint GetArchPointerBitWidth(ArchType archType)
 	{
 		switch (archType)
@@ -1021,7 +1094,7 @@ public struct Triple
 			case ArchType.xcore:
 			case ArchType.xtensa:
 				return 32u;
- 
+			
 			case ArchType.aarch64:
 			case ArchType.aarch64_be:
 			case ArchType.amdgcn:
@@ -1049,11 +1122,11 @@ public struct Triple
 				return 64u;
 		}
 	}
-
+	
 	public readonly bool IsArch64Bit() => GetArchPointerBitWidth(Arch) == 64u;
 	public readonly bool IsArch32Bit() => GetArchPointerBitWidth(Arch) == 32u;
 	public readonly bool IsArch16Bit() => GetArchPointerBitWidth(Arch) == 16u;
-
+	
 	public static string GetArchName(ArchType archType, SubArchType subArchType = SubArchType.NoSubArch)
 	{
 		return archType switch
@@ -1067,7 +1140,7 @@ public struct Triple
 			_ => archType.ToString()
 		};
 	}
-
+	
 	public static string GetArchTypePrefix(ArchType archType)
 	{
 		switch (archType)
@@ -1112,7 +1185,7 @@ public struct Triple
 			
 			case ArchType.amdgcn:
 				return "amdgcn";
-				
+			
 			case ArchType.r600:
 				return "r600";
 			
@@ -1196,7 +1269,7 @@ public struct Triple
 				return "xtensa";
 		}
 	}
-
+	
 	public static string GetVendorTypeName(VendorType vendorType)
 	{
 		return vendorType switch
@@ -1218,7 +1291,7 @@ public struct Triple
 			_ => throw new Exception("Invalid VendorType")
 		};
 	}
-
+	
 	public static string GetOSTypeName(OSType osType)
 	{
 		return osType switch
@@ -1264,7 +1337,7 @@ public struct Triple
 			_ => throw new Exception("Invalid OSType")
 		};
 	}
-
+	
 	public static string GetEnvironmentTypeName(EnvironmentType environmentType)
 	{
 		return environmentType switch
@@ -1313,7 +1386,7 @@ public struct Triple
 			_ => throw new Exception("Invalid EnvironmentType")
 		};
 	}
-
+	
 	public static string GetObjectFormatTypeName(ObjectFormatType objectFormatType)
 	{
 		return objectFormatType switch
@@ -1330,29 +1403,32 @@ public struct Triple
 			_ => throw new Exception("Invalid ObjectFormatType")
 		};
 	}
-
+	
 	private static unsafe bool IsHostLittleEndian()
 	{
 		var n = 1;
 		return *(char*)&n == 1;
 	}
-
+	
 	public static ArchType ParseBPFArch(string archName)
 	{
 		switch (archName)
 		{
 			case "bpf" when IsHostLittleEndian():
 				return ArchType.bpfel;
+			
 			case "bpf":
 			case "bpf_be" or "bpfeb":
 				return ArchType.bpfeb;
+			
 			case "bpf_le" or "bpfel":
 				return ArchType.bpfel;
+			
 			default:
 				return ArchType.UnknownArch;
 		}
 	}
-
+	
 	public static ArchType GetArchTypeForLLVMName(string name)
 	{
 		return name switch
@@ -1425,12 +1501,12 @@ public struct Triple
 			_ => name.StartsWith("bpf") ? ParseBPFArch(name) : ArchType.UnknownArch
 		};
 	}
-
+	
 	public static ArchType ParseARMArch(string archName)
 	{
 		var arch = ArchType.UnknownArch;
 		var isa = ARMTargetParser.ParseArchISA(archName);
-
+		
 		switch (ARMTargetParser.ParseArchEndian(archName))
 		{
 			case ARMTargetParser.EndianKind.Little:
@@ -1451,6 +1527,7 @@ public struct Triple
 					case ARMTargetParser.ISAKind.Invalid:
 						break;
 				}
+				
 				break;
 			
 			case ARMTargetParser.EndianKind.Big:
@@ -1471,47 +1548,48 @@ public struct Triple
 					case ARMTargetParser.ISAKind.Invalid:
 						break;
 				}
+				
 				break;
 			
 			case ARMTargetParser.EndianKind.Invalid:
 				break;
 		}
-
+		
 		archName = ARMTargetParser.GetCanonicalArchName(archName);
 		if (archName == "")
 			return ArchType.UnknownArch;
-
+		
 		if (isa == ARMTargetParser.ISAKind.THUMB && (archName.StartsWith("v2") || archName.StartsWith("v3")))
 			return ArchType.UnknownArch;
 		
 		// Todo
 		return arch;
 	}
-
+	
 	public readonly bool IsMacOSX() => OS is OSType.Darwin or OSType.MacOSX;
 	public readonly bool IsiOS() => OS is OSType.IOS or OSType.TvOS;
 	public readonly bool IsWatchABI() => SubArch == SubArchType.ARMSubArch_v7k;
 	public readonly bool IsOSDarwin() => IsMacOSX() || IsiOS() || OS is OSType.WatchOS or OSType.DriverKit;
 	public readonly bool IsSimulatorEnvironment() => Environment == EnvironmentType.Simulator;
 	public readonly bool IsMacCatalystEnvironment() => Environment == EnvironmentType.MacABI;
-
+	
 	public readonly bool IsTargetMachineMac() =>
 		IsMacOSX() || (IsOSDarwin() && (IsSimulatorEnvironment() || IsMacCatalystEnvironment()));
-
+	
 	public readonly bool IsPS4()
 	{
 		return Arch == ArchType.x86_64 && Vendor == VendorType.SCEI && OS == OSType.PS4;
 	}
-
+	
 	public readonly bool IsPS5()
 	{
 		return Arch == ArchType.x86_64 && Vendor == VendorType.SCEI && OS == OSType.PS5;
 	}
-
+	
 	public readonly bool IsPS() => IsPS4() || IsPS5();
 	
 	public readonly bool IsAndroid() => Environment == EnvironmentType.Android;
-
+	
 	public readonly bool IsShaderStageEnvironment()
 	{
 		return Environment is EnvironmentType.Pixel or EnvironmentType.Vertex or EnvironmentType.Geometry
@@ -1520,7 +1598,7 @@ public struct Triple
 			or EnvironmentType.ClosestHit or EnvironmentType.Miss or EnvironmentType.Callable or EnvironmentType.Mesh
 			or EnvironmentType.Amplification;
 	}
-
+	
 	public readonly bool HasDLLImportExport() => OS == OSType.Win32 || IsPS();
 	public readonly unsafe sbyte* CString() => CodeGenerator.ConvertString(data);
 	public override string ToString() => data;
@@ -1581,12 +1659,13 @@ public struct Triple
 				return false;
 		}
 	}
-
+	
 	public static string GetDataLayout(string triple)
 	{
 		return triple switch
 		{
-			"i386-apple-ios" => "e-m:o-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:128-n8:16:32-S128",
+			"i386-apple-ios" =>
+				"e-m:o-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:128-n8:16:32-S128",
 			"powerpc64-ibm-aix" => "E-m:a-Fi64-i64:64-n32:64-S128-v256:256:256-v512:512:512",
 			"x86_64-unknown-haiku" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 			"bpfeb-unknown-none" => "E-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
@@ -1594,13 +1673,16 @@ public struct Triple
 			"aarch64-pc-windows-msvc" => "e-m:w-p:64:64-i32:32-i64:64-i128:128-n32:64-S128",
 			"riscv32-unknown-none" => "e-m:e-p:32:32-i64:64-n32-S128",
 			"armv6-unknown-freebsd-gnueabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
-			"x86_64-unknown-none-elf" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"x86_64-unknown-none-elf" =>
+				"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 			"powerpc-unknown-linux-gnuspe" => "E-m:e-p:32:32-Fn32-i64:64-n32",
-			"x86_64-pc-windows-msvc" => "e-m:w-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"x86_64-pc-windows-msvc" =>
+				"e-m:w-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 			"armv7a-none-eabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
 			"powerpc64le-unknown-linux-musl" => "e-m:e-Fn32-i64:64-n32:64-S128-v256:256:256-v512:512:512",
 			"mipsel-unknown-linux-gnu" => "e-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64",
-			"x86_64-unknown-linux-musl" => "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
+			"x86_64-unknown-linux-musl" =>
+				"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 			"armv7-unknown-linux-gnueabihf" => "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64",
 			"aarch64-unknown-openbsd" => "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
 			"riscv64-unknown-none" => "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128",

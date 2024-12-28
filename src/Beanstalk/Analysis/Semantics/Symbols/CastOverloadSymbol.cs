@@ -18,10 +18,10 @@ public sealed class CastOverloadSymbol : IFunctionSymbol
 		Parameter = parameter;
 		ReturnType = returnType;
 		Body = body;
-
+		
 		Name = GenerateName(isImplicit, parameter.VarSymbol.EvaluatedType!, returnType);
 	}
-
+	
 	public static string GenerateName(bool isImplicit, Type parameterType, Type returnType)
 	{
 		return $"${(isImplicit ? "i" : "e")}cast({parameterType}::{returnType})";

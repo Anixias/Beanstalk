@@ -7,28 +7,29 @@ public class CollectionException : Exception
 {
 	public string WorkingDirectory { get; }
 	public string FilePath { get; }
+	
 	public CollectionException(string message, Token? token, string workingDirectory, string filePath)
 		: base(FormatMessage(message, token))
 	{
 		WorkingDirectory = workingDirectory;
 		FilePath = filePath;
 	}
-
+	
 	public CollectionException(string message, IBuffer source, TextRange range, string workingDirectory,
 		string filePath) : base(FormatMessage(message, source, range))
 	{
 		WorkingDirectory = workingDirectory;
 		FilePath = filePath;
 	}
-
+	
 	private static string FormatMessage(string message, Token? token)
 	{
 		if (token is null)
 			return message;
-
+		
 		return $"[line {token.Line}, column {token.Column} at '{token.Text}'] {message}";
 	}
-
+	
 	private static string FormatMessage(string message, IBuffer source, TextRange range)
 	{
 		var (line, column) = source.GetLineColumn(range.Start);
@@ -54,13 +55,13 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 	private string currentWorkingDirectory = "";
 	private string currentFilePath = "";
 	private IBuffer? currentSource;
-
+	
 	public Collector(bool is64Bit)
 	{
 		scopeStack.Push(globalScope);
 		AddNativeTypes(globalScope, is64Bit);
 	}
-
+	
 	private static void AddNativeTypes(Scope scope, bool is64Bit)
 	{
 		scope.SymbolTable.Add(TypeSymbol.Int8);
@@ -86,7 +87,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		scope.SymbolTable.Add(TypeSymbol.Char);
 		scope.SymbolTable.Add(TypeSymbol.String);
 		scope.SymbolTable.Add(TypeSymbol.Bool);
-
+		
 		var nint = new AliasedSymbol(TokenType.KeywordNInt.ToString(), is64Bit
 			? TypeSymbol.Int64
 			: TypeSymbol.Int32);
@@ -97,21 +98,21 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		
 		scope.SymbolTable.Add(nint);
 		scope.SymbolTable.Add(nuint);
-
+		
 		if (TypeSymbol.String.SymbolTable.Lookup("length") is FieldSymbol stringLengthField)
 			stringLengthField.EvaluatedType = nuint.EvaluatedType;
 	}
-
+	
 	private CollectionException NewCollectionException(string message, Token? token = null)
 	{
 		return new CollectionException(message, token, currentWorkingDirectory, currentFilePath);
 	}
-
+	
 	private CollectionException NewCollectionException(string message, TextRange range)
 	{
 		return new CollectionException(message, currentSource!, range, currentWorkingDirectory, currentFilePath);
 	}
-
+	
 	public CollectedAst? Collect(Ast ast, string workingDirectory, string filePath)
 	{
 		try
@@ -119,26 +120,26 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			currentWorkingDirectory = workingDirectory;
 			currentFilePath = filePath;
 			currentSource = ast.Source;
-
+			
 			var root = ast.Root switch
 			{
 				StatementNode statementNode => statementNode.Accept(this),
 				_ => null
 			};
-
+			
 			if (scopeStack.Count != 1)
 				throw NewCollectionException("Invalid operation: Scope stack unbalanced");
-
+			
 			if (root is null)
 				return null;
-
+			
 			return new CollectedAst(root, ast.Source, workingDirectory, filePath);
 		}
 		catch (CollectionException e)
 		{
 			while (scopeStack.Count > 1)
 				scopeStack.Pop();
-
+			
 			exceptions.Add(e);
 			return null;
 		}
@@ -166,9 +167,9 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 					{
 						// The symbol exists but is not a module: error!
 						throw NewCollectionException($"Cannot define module named '{moduleStatement.scope}'; " +
-						                              "A symbol with that name is already declared in this scope");
+						                             "A symbol with that name is already declared in this scope");
 					}
-
+					
 					scope = moduleSymbol.Scope;
 				}
 				else
@@ -178,12 +179,12 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 					moduleSymbol = new ModuleSymbol(moduleIdentifier.Text, scope);
 					CurrentScope.AddSymbol(moduleSymbol);
 				}
-
+				
 				scopeStack.Push(scope);
 				moduleScopeCount++;
 			}
 		}
-
+		
 		var topLevelStatements = new List<CollectedStatementNode>();
 		foreach (var topLevelStatement in programStatement.topLevelStatements)
 		{
@@ -194,48 +195,48 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			catch (CollectionException e)
 			{
 				exceptions.Add(e);
-
+				
 				while (scopeStack.Count > moduleScopeCount + 1)
 				{
 					scopeStack.Pop();
 				}
 			}
 		}
-
+		
 		while (moduleScopeCount-- > 0)
 			scopeStack.Pop();
-
+		
 		return new CollectedProgramStatement(programStatement.importStatements, moduleSymbol, topLevelStatements);
 	}
-
+	
 	public CollectedStatementNode Visit(ImportStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(AggregateImportStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(DllImportStatement dllImportStatement)
 	{
 		dllImportStack.Push(dllImportStatement.dllPath);
-
+		
 		var statements = new List<CollectedStatementNode>();
-
+		
 		foreach (var statement in dllImportStatement.statements)
 		{
 			statements.Add(statement.Accept(this));
 		}
 		
 		dllImportStack.Pop();
-
+		
 		return new CollectedAggregateStatement(statements);
 	}
-
+	
 	public CollectedStatementNode Visit(ExternalFunctionStatement statement)
 	{
 		var externalFunctionSymbol = new ExternalFunctionSymbol(statement.identifier.Text, statement.attributes,
@@ -243,9 +244,9 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		{
 			DllImportSource = CurrentDllImport
 		};
-
+		
 		statement.identifier.Symbol = externalFunctionSymbol;
-
+		
 		if (CurrentScope.LookupSymbol(externalFunctionSymbol.Name) is ExternalFunctionSymbol existingFunctionSymbol)
 			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
 		else
@@ -253,7 +254,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		
 		return new CollectedExternalFunctionStatement(externalFunctionSymbol, statement);
 	}
-
+	
 	public CollectedStatementNode Visit(ModuleStatement moduleStatement)
 	{
 		var moduleScopeCount = 0;
@@ -268,9 +269,9 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				{
 					// The symbol exists but is not a module: error!
 					throw NewCollectionException($"Cannot define module named '{moduleStatement.scope}'; " +
-					                              "A symbol with that name is already declared in this scope");
+					                             "A symbol with that name is already declared in this scope");
 				}
-
+				
 				scope = moduleSymbol.Scope;
 			}
 			else
@@ -280,7 +281,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 				moduleSymbol = new ModuleSymbol(moduleIdentifier.Text, scope);
 				CurrentScope.AddSymbol(moduleSymbol);
 			}
-
+			
 			moduleIdentifier.Symbol = moduleSymbol;
 			scopeStack.Push(scope);
 			moduleScopeCount++;
@@ -294,10 +295,10 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		
 		while (moduleScopeCount-- > 0)
 			scopeStack.Pop();
-
+		
 		return new CollectedModuleStatement(moduleSymbol!, topLevelStatements);
 	}
-
+	
 	public CollectedStatementNode Visit(EntryStatement entryStatement)
 	{
 		var scope = new Scope(CurrentScope);
@@ -308,26 +309,26 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		{
 			statements.Add(statement.Accept(this));
 		}
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedEntryStatement(entryStatement, scope, statements);
 	}
-
+	
 	public CollectedStatementNode Visit(FunctionDeclarationStatement functionDeclarationStatement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = functionDeclarationStatement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		var functionSymbol = new FunctionSymbol(functionDeclarationStatement.identifier.Text, scope,
 			functionDeclarationStatement.identifier.Source, functionDeclarationStatement.signatureRange);
-
+		
 		functionDeclarationStatement.identifier.Symbol = functionSymbol;
-
+		
 		if (CurrentScope.LookupSymbol(functionSymbol.Name) is FunctionSymbol existingFunctionSymbol)
 		{
 			existingFunctionSymbol.Overloads.Add(existingFunctionSymbol);
@@ -344,39 +345,39 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 					functionDeclarationStatement.identifier);
 			}
 		}
-
+		
 		return new CollectedFunctionDeclarationStatement(functionDeclarationStatement, functionSymbol, body);
 	}
-
+	
 	public CollectedStatementNode Visit(ConstructorDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = statement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedConstructorDeclarationStatement(statement, scope, body);
 	}
-
+	
 	public CollectedStatementNode Visit(DestructorDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = statement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedDestructorDeclarationStatement(statement, scope, body);
 	}
-
+	
 	public CollectedStatementNode Visit(ExpressionStatement statement)
 	{
 		return new CollectedExpressionStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(BlockStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
@@ -387,18 +388,18 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		{
 			statements.Add(bodyStatement.Accept(this));
 		}
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedBlockStatement(scope, statements);
 	}
-
+	
 	public CollectedStatementNode Visit(IfStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(MutableVarDeclarationStatement statement)
 	{
 		var name = statement.identifier.Text;
@@ -416,11 +417,11 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
 			                             "defined in this scope", statement.identifier);
 		}
-
+		
 		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
 			statement.initializer);
 	}
-
+	
 	public CollectedStatementNode Visit(ImmutableVarDeclarationStatement statement)
 	{
 		var name = statement.identifier.Text;
@@ -438,11 +439,11 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
 			                             "defined in this scope", statement.identifier);
 		}
-
+		
 		return new CollectedVarDeclarationStatement(symbol, statement.identifier, statement.type,
 			statement.initializer);
 	}
-
+	
 	public CollectedStatementNode Visit(ConstVarDeclarationStatement statement)
 	{
 		var name = statement.identifier.Text;
@@ -459,16 +460,16 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
 			                             "defined in this scope", statement.identifier);
 		}
-
+		
 		return new CollectedConstDeclarationStatement(symbol, statement.type, statement.initializer, statement.range);
 	}
-
+	
 	public CollectedStatementNode Visit(ReturnStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(StructDeclarationStatement structDeclarationStatement)
 	{
 		var scope = new Scope(CurrentScope);
@@ -489,7 +490,7 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		
 		scopeStack.Push(scope);
 		typeStack.Push(structSymbol);
-
+		
 		var statements = new List<CollectedStatementNode>();
 		foreach (var topLevelStatement in structDeclarationStatement.statements)
 		{
@@ -500,49 +501,49 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		scopeStack.Pop();
 		return new CollectedStructDeclarationStatement(structSymbol, statements);
 	}
-
+	
 	public CollectedStatementNode Visit(InterfaceDeclarationStatement statement)
 	{
 		// Todo
 		return new CollectedSimpleStatement(statement);
 	}
-
+	
 	public CollectedStatementNode Visit(CastDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = statement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedCastDeclarationStatement(statement, scope, body);
 	}
-
+	
 	public CollectedStatementNode Visit(StringDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = statement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedStringDeclarationStatement(statement, scope, body);
 	}
-
+	
 	public CollectedStatementNode Visit(OperatorDeclarationStatement statement)
 	{
 		var scope = new Scope(CurrentScope);
 		scopeStack.Push(scope);
-
+		
 		var body = statement.body.Accept(this);
-
+		
 		scopeStack.Pop();
 		
 		return new CollectedOperatorDeclarationStatement(statement, scope, body);
 	}
-
+	
 	public CollectedStatementNode Visit(FieldDeclarationStatement statement)
 	{
 		var name = statement.identifier.Text;
@@ -550,10 +551,10 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 		if (CurrentScope.LookupSymbol(name, out FieldSymbol? _, out var existingSymbol))
 		{
 			throw NewCollectionException($"Cannot define a field named '{name}'; " +
-			                              $"There is already {existingSymbol.SymbolTypeName} with the same name " +
-			                              "defined in this scope", statement.identifier);
+			                             $"There is already {existingSymbol.SymbolTypeName} with the same name " +
+			                             "defined in this scope", statement.identifier);
 		}
-
+		
 		switch (statement.mutability)
 		{
 			case FieldDeclarationStatement.Mutability.Mutable:
@@ -586,10 +587,10 @@ public partial class Collector : StatementNode.IVisitor<CollectedStatementNode>
 			
 			default:
 				throw NewCollectionException("Invalid field mutability; This should never happen! " +
-				                              "Please report this to the compiler developer");
+				                             "Please report this to the compiler developer");
 		}
 	}
-
+	
 	public CollectedStatementNode Visit(DefineStatement statement)
 	{
 		var symbol = new DefSymbol(statement.identifier.Text);

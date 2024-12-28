@@ -17,7 +17,7 @@ public class ExternalFunctionSymbol : ISymbol
 	public Type? EvaluatedType => GetFunctionType();
 	public IReadOnlyDictionary<string, string> Attributes { get; }
 	public string? DllImportSource { get; init; }
-
+	
 	public ExternalFunctionSymbol(string name, IReadOnlyDictionary<string, string> attributes, IBuffer source,
 		TextRange signatureRange)
 	{
@@ -26,15 +26,15 @@ public class ExternalFunctionSymbol : ISymbol
 		Source = source;
 		SignatureRange = signatureRange;
 	}
-
+	
 	public bool SignatureMatches(ExternalFunctionSymbol externalFunctionSymbol)
 	{
 		if (Name != externalFunctionSymbol.Name)
 			return false;
-
+		
 		if (Parameters.Length != externalFunctionSymbol.Parameters.Length)
 			return false;
-
+		
 		for (var i = 0; i < Parameters.Length; i++)
 		{
 			var otherParameterType = externalFunctionSymbol.Parameters[i].VarSymbol.EvaluatedType;
@@ -42,17 +42,17 @@ public class ExternalFunctionSymbol : ISymbol
 			{
 				if (otherParameterType is not null)
 					return false;
-
+				
 				continue;
 			}
 			
 			if (!parameterType.Equals(otherParameterType))
 				return false;
 		}
-
+		
 		return true;
 	}
-
+	
 	public FunctionType? GetFunctionType()
 	{
 		var parameterTypes = new List<Type>();

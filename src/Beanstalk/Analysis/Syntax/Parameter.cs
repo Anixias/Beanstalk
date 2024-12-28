@@ -10,7 +10,7 @@ public readonly struct Parameter
 	public readonly bool isVariadic;
 	public readonly bool isMutable;
 	public readonly TextRange range;
-
+	
 	public Parameter(Token identifier, SyntaxType? type, ExpressionNode? defaultExpression, bool isVariadic,
 		bool isMutable, TextRange range)
 	{
@@ -21,12 +21,12 @@ public readonly struct Parameter
 		this.isMutable = isMutable;
 		this.range = range;
 	}
-
+	
 	public override string ToString()
 	{
 		if (type is not null)
 			return $"{identifier.Text}:{type}";
-
+		
 		return identifier.Text;
 	}
 }

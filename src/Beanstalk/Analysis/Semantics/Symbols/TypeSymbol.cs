@@ -7,7 +7,7 @@ public abstract class TypeSymbol : ISymbol
 {
 	private static uint nextID = 1u;
 	private uint nextFieldIndex;
-
+	
 	// Todo: Are type symbols compile-time constants?
 	public bool IsConstant => false;
 	public bool IsStatic { get; set; } = false;
@@ -28,12 +28,12 @@ public abstract class TypeSymbol : ISymbol
 		SymbolTable = symbolTable;
 		TypeID = increment ? nextID++ : 0u;
 	}
-
+	
 	public uint NextFieldIndex()
 	{
 		return nextFieldIndex++;
 	}
-
+	
 	public static readonly NativeSymbol Int8 = new(TokenType.KeywordInt8.ToString());
 	public static readonly NativeSymbol UInt8 = new(TokenType.KeywordUInt8.ToString());
 	public static readonly NativeSymbol Int16 = new(TokenType.KeywordInt16.ToString());
@@ -59,7 +59,7 @@ public abstract class TypeSymbol : ISymbol
 	public static readonly NativeSymbol Bool = new(TokenType.KeywordBool.ToString());
 	public static readonly GenericNativeSymbol Array = new("$Array");
 	public static readonly GenericNativeSymbol Nullable = new("$Nullable");
-
+	
 	static TypeSymbol()
 	{
 		BuildNumeric(Int8);
@@ -84,32 +84,32 @@ public abstract class TypeSymbol : ISymbol
 		
 		BuildString();
 	}
-
+	
 	private static void BuildString()
 	{
 		BuildAdd(String);
-
+		
 		var lengthSymbol = new FieldSymbol("length", false, false, String, 0u);
 		String.SymbolTable.Add(lengthSymbol);
 	}
-
+	
 	private static void BuildNumeric(TypeSymbol type)
 	{
 		BuildAdd(type);
 		BuildMultiply(type);
 	}
-
+	
 	private static void BuildAdd(TypeSymbol type)
 	{
 		BuildOperator(type, type.EvaluatedType, BinaryExpression.Operation.Add, type.EvaluatedType, type.EvaluatedType);
 	}
-
+	
 	private static void BuildMultiply(TypeSymbol type)
 	{
 		BuildOperator(type, type.EvaluatedType, BinaryExpression.Operation.Multiply, type.EvaluatedType,
 			type.EvaluatedType);
 	}
-
+	
 	private static void BuildOperator(TypeSymbol typeSymbol, Type left, BinaryExpression.Operation operation,
 		Type right, Type returnType)
 	{
@@ -122,17 +122,17 @@ public abstract class TypeSymbol : ISymbol
 		{
 			EvaluatedType = right
 		};
-
+		
 		var leftSymbol = new ParameterSymbol(leftVar, null, false, 0u);
 		var rightSymbol = new ParameterSymbol(rightVar, null, false, 1u);
-
+		
 		var operatorSymbol =
 			new BinaryOperatorOverloadSymbol(leftSymbol, operation, rightSymbol, returnType, new Scope(), true);
 		
 		typeSymbol.SymbolTable.Add(operatorSymbol);
 		typeSymbol.Operators.Add(operatorSymbol);
 	}
-
+	
 	private static void BuildOperator(TypeSymbol typeSymbol, UnaryExpression.Operation operation, Type operand,
 		Type returnType)
 	{
@@ -140,16 +140,16 @@ public abstract class TypeSymbol : ISymbol
 		{
 			EvaluatedType = operand
 		};
-
+		
 		var operandSymbol = new ParameterSymbol(operandVar, null, false, 0u);
-
+		
 		var operatorSymbol =
 			new UnaryOperatorOverloadSymbol(operandSymbol, operation, returnType, new Scope(), true);
 		
 		typeSymbol.SymbolTable.Add(operatorSymbol);
 		typeSymbol.Operators.Add(operatorSymbol);
 	}
-
+	
 	public BinaryOperatorOverloadSymbol? FindOperator(Type? leftType, Type? rightType,
 		BinaryExpression.Operation operation)
 	{
@@ -157,42 +157,42 @@ public abstract class TypeSymbol : ISymbol
 		{
 			if (operatorOverload is not BinaryOperatorOverloadSymbol symbol)
 				continue;
-
+			
 			if (symbol.Operation != operation)
 				continue;
 			
 			// Todo: Handle implicit casts (1-level deep)
-
+			
 			if (!Type.Matches(symbol.Left.EvaluatedType, leftType))
 				continue;
-
+			
 			if (!Type.Matches(symbol.Right.EvaluatedType, rightType))
 				continue;
-
+			
 			return symbol;
 		}
-
+		
 		return null;
 	}
-
+	
 	public UnaryOperatorOverloadSymbol? FindOperator(Type? operandType, UnaryExpression.Operation operation)
 	{
 		foreach (var operatorOverload in Operators)
 		{
 			if (operatorOverload is not UnaryOperatorOverloadSymbol symbol)
 				continue;
-
+			
 			if (symbol.Operation != operation)
 				continue;
 			
 			// Todo: Handle implicit casts (1-level deep)
-
+			
 			if (!Type.Matches(symbol.Operand.EvaluatedType, operandType))
 				continue;
-
+			
 			return symbol;
 		}
-
+		
 		return null;
 	}
 }

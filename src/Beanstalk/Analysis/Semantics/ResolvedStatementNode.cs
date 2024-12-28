@@ -47,7 +47,7 @@ public abstract class ResolvedStatementNode : IResolvedAstNode
 		void Visit(ResolvedSimpleStatement statement);
 		void Visit(ResolvedAggregateStatement resolvedAggregateStatement);
 	}
-
+	
 	public abstract void Accept(IVisitor visitor);
 	public abstract T Accept<T>(IVisitor<T> visitor);
 }
@@ -57,7 +57,7 @@ public sealed class ResolvedProgramStatement : ResolvedStatementNode
 	public readonly SymbolTable importedSymbols;
 	public readonly ModuleSymbol? moduleSymbol;
 	public readonly ImmutableArray<ResolvedStatementNode> topLevelStatements;
-
+	
 	public ResolvedProgramStatement(SymbolTable importedSymbols, ModuleSymbol? moduleSymbol,
 		IEnumerable<ResolvedStatementNode> topLevelStatements)
 	{
@@ -65,12 +65,12 @@ public sealed class ResolvedProgramStatement : ResolvedStatementNode
 		this.moduleSymbol = moduleSymbol;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -87,12 +87,12 @@ public sealed class ResolvedModuleStatement : ResolvedStatementNode
 		this.moduleSymbol = moduleSymbol;
 		this.topLevelStatements = topLevelStatements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -109,12 +109,12 @@ public sealed class ResolvedStructDeclarationStatement : ResolvedStatementNode
 		this.structSymbol = structSymbol;
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -131,12 +131,12 @@ public sealed class ResolvedFieldDeclarationStatement : ResolvedStatementNode
 		this.fieldSymbol = fieldSymbol;
 		this.initializer = initializer;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -153,12 +153,12 @@ public sealed class ResolvedConstDeclarationStatement : ResolvedStatementNode
 		this.constSymbol = constSymbol;
 		this.initializer = initializer;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -169,18 +169,18 @@ public sealed class ResolvedFunctionDeclarationStatement : ResolvedStatementNode
 {
 	public readonly FunctionSymbol functionSymbol;
 	public readonly ResolvedStatementNode body;
-
+	
 	public ResolvedFunctionDeclarationStatement(FunctionSymbol functionSymbol, ResolvedStatementNode body)
 	{
 		this.functionSymbol = functionSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -190,17 +190,17 @@ public sealed class ResolvedFunctionDeclarationStatement : ResolvedStatementNode
 public sealed class ResolvedExternalFunctionStatement : ResolvedStatementNode
 {
 	public readonly ExternalFunctionSymbol externalFunctionSymbol;
-
+	
 	public ResolvedExternalFunctionStatement(ExternalFunctionSymbol externalFunctionSymbol)
 	{
 		this.externalFunctionSymbol = externalFunctionSymbol;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -217,17 +217,17 @@ public sealed class ResolvedEntryStatement : ResolvedStatementNode
 		this.entrySymbol = entrySymbol;
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public ResolvedEntryStatement(ImmutableArray<ResolvedStatementNode> statements)
 	{
 		this.statements = statements;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -238,18 +238,18 @@ public sealed class ResolvedConstructorDeclarationStatement : ResolvedStatementN
 {
 	public readonly ConstructorSymbol constructorSymbol;
 	public readonly ResolvedStatementNode body;
-
+	
 	public ResolvedConstructorDeclarationStatement(ConstructorSymbol constructorSymbol, ResolvedStatementNode body)
 	{
 		this.constructorSymbol = constructorSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -266,12 +266,12 @@ public sealed class ResolvedDestructorDeclarationStatement : ResolvedStatementNo
 		this.destructorSymbol = destructorSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -288,12 +288,12 @@ public sealed class ResolvedStringDeclarationStatement : ResolvedStatementNode
 		this.stringFunctionSymbol = stringFunctionSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -304,19 +304,19 @@ public sealed class ResolvedOperatorDeclarationStatement : ResolvedStatementNode
 {
 	public readonly OperatorOverloadSymbol operatorOverloadSymbol;
 	public readonly ResolvedStatementNode body;
-
+	
 	public ResolvedOperatorDeclarationStatement(OperatorOverloadSymbol operatorOverloadSymbol,
 		ResolvedStatementNode body)
 	{
 		this.operatorOverloadSymbol = operatorOverloadSymbol;
 		this.body = body;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -331,12 +331,12 @@ public sealed class ResolvedExpressionStatement : ResolvedStatementNode
 	{
 		this.value = value;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -351,12 +351,12 @@ public sealed class ResolvedReturnStatement : ResolvedStatementNode
 	{
 		this.value = value;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -371,12 +371,12 @@ public sealed class ResolvedBlockStatement : ResolvedStatementNode
 	{
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -393,12 +393,12 @@ public sealed class ResolvedVarDeclarationStatement : ResolvedStatementNode
 		this.varSymbol = varSymbol;
 		this.initializer = initializer;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -413,12 +413,12 @@ public sealed class ResolvedSimpleStatement : ResolvedStatementNode
 	{
 		this.statement = statement;
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);
@@ -433,12 +433,12 @@ public sealed class ResolvedAggregateStatement : ResolvedStatementNode
 	{
 		this.statements = statements.ToImmutableArray();
 	}
-
+	
 	public override void Accept(IVisitor visitor)
 	{
 		visitor.Visit(this);
 	}
-
+	
 	public override T Accept<T>(IVisitor<T> visitor)
 	{
 		return visitor.Visit(this);

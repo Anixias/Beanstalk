@@ -15,22 +15,22 @@ public class ResolutionException : Exception
 		WorkingDirectory = workingDirectory;
 		FilePath = filePath;
 	}
-
+	
 	public ResolutionException(string message, IBuffer source, TextRange range, string workingDirectory,
 		string filePath) : base(FormatMessage(message, source, range))
 	{
 		WorkingDirectory = workingDirectory;
 		FilePath = filePath;
 	}
-
+	
 	private static string FormatMessage(string message, Token? token)
 	{
 		if (token is null)
 			return message;
-
+		
 		return $"[line {token.Line}, column {token.Column} at '{token.Text}'] {message}";
 	}
-
+	
 	private static string FormatMessage(string message, IBuffer source, TextRange range)
 	{
 		var (line, column) = source.GetLineColumn(range.Start);
@@ -59,12 +59,12 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 	private string currentWorkingDirectory = "";
 	private string currentFilePath = "";
 	private readonly Dictionary<NativeSymbol, SymbolTable> nativeSymbolTables = new();
-
+	
 	public Resolver(Collector collector)
 	{
 		scopeStack.Push(collector.globalScope);
 	}
-
+	
 	public ResolvedAst? Resolve(CollectedAst ast)
 	{
 		try
@@ -72,11 +72,12 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			currentWorkingDirectory = ast.WorkingDirectory;
 			currentFilePath = ast.FilePath;
 			currentSource = ast.Source;
-
+			
 			switch (ast.Root)
 			{
 				case CollectedStatementNode statementNode:
 					return new ResolvedAst(statementNode.Accept(this), ast.WorkingDirectory, ast.FilePath);
+				
 				default:
 					//CollectedExpressionNode expressionNode => new ResolvedAst(expressionNode.Accept(this)),
 					return null;
@@ -86,7 +87,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		{
 			while (scopeStack.Count > 1)
 				scopeStack.Pop();
-
+			
 			exceptions.Add(e);
 			return null;
 		}
@@ -97,7 +98,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			currentSource = StringBuffer.Empty;
 		}
 	}
-
+	
 	public void Verify()
 	{
 		VerifyFunctionOverloads(scopeStack.First());
@@ -109,7 +110,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		{
 			VerifyFunctionOverloads(childScope);
 		}
-
+		
 		foreach (var symbol in scope.SymbolTable.Values)
 		{
 			switch (symbol)
@@ -121,7 +122,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					{
 						functionList.Add(overload);
 					}
-
+					
 					for (var j = 0; j < functionList.Count; j++)
 					{
 						for (var i = j + 1; i < functionList.Count; i++)
@@ -135,9 +136,10 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 									right.Source, right.SignatureRange, currentWorkingDirectory, currentFilePath));
 						}
 					}
+					
 					break;
 				}
-
+				
 				case ExternalFunctionSymbol functionSymbol:
 				{
 					var functionList = new List<ExternalFunctionSymbol> { functionSymbol };
@@ -145,7 +147,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					{
 						functionList.Add(overload);
 					}
-
+					
 					for (var j = 0; j < functionList.Count; j++)
 					{
 						for (var i = j + 1; i < functionList.Count; i++)
@@ -159,20 +161,21 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 									right.Source, right.SignatureRange, currentWorkingDirectory, currentFilePath));
 						}
 					}
+					
 					break;
 				}
 			}
 		}
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedProgramStatement programStatement)
 	{
 		importedSymbols = programStatement.importedSymbols!;
 		var moduleSymbol = programStatement.moduleSymbol;
-
+		
 		if (moduleSymbol is not null)
 			scopeStack.Push(moduleSymbol.Scope);
-
+		
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in programStatement.topLevelStatements)
 		{
@@ -185,7 +188,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				exceptions.Add(e);
 			}
 		}
-
+		
 		if (moduleSymbol is not null)
 			scopeStack.Pop();
 		
@@ -193,11 +196,11 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		importedSymbols = null;
 		return program;
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedModuleStatement moduleStatement)
 	{
 		scopeStack.Push(moduleStatement.moduleSymbol.Scope);
-
+		
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in moduleStatement.topLevelStatements)
 		{
@@ -210,17 +213,17 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				exceptions.Add(e);
 			}
 		}
-
+		
 		scopeStack.Pop();
-
+		
 		return new ResolvedModuleStatement(moduleStatement.moduleSymbol, statements);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedStructDeclarationStatement structDeclarationStatement)
 	{
 		scopeStack.Push(structDeclarationStatement.structSymbol.Scope);
 		typeStack.Push(structDeclarationStatement.structSymbol);
-
+		
 		var statements = new List<ResolvedStatementNode>();
 		foreach (var statement in structDeclarationStatement.statements)
 		{
@@ -233,45 +236,45 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				exceptions.Add(e);
 			}
 		}
-
+		
 		typeStack.Pop();
 		scopeStack.Pop();
-
+		
 		return new ResolvedStructDeclarationStatement(structDeclarationStatement.structSymbol, statements);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedFieldDeclarationStatement statement)
 	{
 		if (!CurrentType.IsMutable && statement.fieldSymbol.IsMutable)
 			throw NewResolutionException(
 				$"Cannot declare field '{statement.fieldSymbol.Name}' as mutable because the parent type " +
 				$"'{CurrentType.Name}' is immutable", statement.range);
-
+		
 		var initializer = statement.initializer?.Accept(this);
 		statement.fieldSymbol.Initializer = initializer;
-
+		
 		if (statement.fieldSymbol.IsStatic)
 			CurrentType.HasStaticFields = true;
 		
 		return new ResolvedFieldDeclarationStatement(statement.fieldSymbol, initializer);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedConstDeclarationStatement statement)
 	{
 		var initializer = statement.initializer.Accept(this);
-
+		
 		if (!initializer.IsConstant)
 			throw NewResolutionException("Constant initializer must be a compile-time constant expression",
 				statement.initializer.range);
 		
 		return new ResolvedConstDeclarationStatement(statement.constSymbol, initializer);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedDefStatement statement)
 	{
 		return new ResolvedSimpleStatement(statement);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedEntryStatement entryStatement)
 	{
 		scopeStack.Push(entryStatement.entrySymbol!.Body);
@@ -288,12 +291,13 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				exceptions.Add(e);
 			}
 		}
+		
 		functionStack.Pop();
 		scopeStack.Pop();
 		
 		return new ResolvedEntryStatement(entryStatement.entrySymbol!, statements);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedFunctionDeclarationStatement functionDeclarationStatement)
 	{
 		scopeStack.Push(functionDeclarationStatement.functionSymbol!.Body);
@@ -304,7 +308,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedFunctionDeclarationStatement(functionDeclarationStatement.functionSymbol!, body);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedExternalFunctionStatement externalFunctionStatement)
 	{
 		if (externalFunctionStatement.externalFunctionSymbol.DllImportSource is { } dllImportSource)
@@ -317,7 +321,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedExternalFunctionStatement(externalFunctionStatement.externalFunctionSymbol);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedConstructorDeclarationStatement statement)
 	{
 		scopeStack.Push(statement.scope);
@@ -328,7 +332,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedConstructorDeclarationStatement(statement.constructorSymbol!, body);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedDestructorDeclarationStatement statement)
 	{
 		scopeStack.Push(statement.scope);
@@ -339,7 +343,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedDestructorDeclarationStatement(statement.destructorSymbol!, body);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedStringDeclarationStatement statement)
 	{
 		scopeStack.Push(statement.scope);
@@ -350,13 +354,13 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedStringDeclarationStatement(statement.stringFunctionSymbol!, body);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedCastDeclarationStatement statement)
 	{
 		// Todo
 		return new ResolvedSimpleStatement(statement);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedOperatorDeclarationStatement statement)
 	{
 		scopeStack.Push(statement.operatorOverloadSymbol!.Body);
@@ -367,12 +371,12 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		return new ResolvedOperatorDeclarationStatement(statement.operatorOverloadSymbol!, body);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedExpressionStatement statement)
 	{
 		return new ResolvedExpressionStatement(statement.statement.expression.Accept(this));
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedBlockStatement statement)
 	{
 		scopeStack.Push(statement.scope);
@@ -382,30 +386,30 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		{
 			statements.Add(bodyStatement.Accept(this));
 		}
-
+		
 		scopeStack.Pop();
 		return new ResolvedBlockStatement(statements);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedVarDeclarationStatement statement)
 	{
 		var type = statement.syntaxType?.Accept(this);
 		var initializer = statement.initializer?.Accept(this);
-
+		
 		if (type is null)
 		{
 			if (initializer is null)
 				throw NewResolutionException($"Type of variable '{statement.varSymbol.Name}' cannot be inferred",
 					statement.varToken);
-
+			
 			type = initializer.Type;
 		}
-
+		
 		statement.varSymbol.EvaluatedType = type;
-
+		
 		return new ResolvedVarDeclarationStatement(statement.varSymbol, initializer);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedSimpleStatement statement)
 	{
 		switch (statement.statementNode)
@@ -417,50 +421,50 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		// Todo
 		return new ResolvedSimpleStatement(statement);
 	}
-
+	
 	public ResolvedStatementNode Visit(CollectedAggregateStatement collectedAggregateStatement)
 	{
 		var statements = new List<ResolvedStatementNode>();
-
+		
 		foreach (var statement in collectedAggregateStatement.statements)
 		{
 			statements.Add(statement.Accept(this));
 		}
-
+		
 		return new ResolvedAggregateStatement(statements);
 	}
-
+	
 	public ResolvedExpressionNode Visit(TupleExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(ListExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(MapExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(InstantiationExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(FunctionCallExpression expression)
 	{
 		if (expression.caller.Accept(this) is not { } caller)
 			throw NewResolutionException($"Function '{expression.caller}' not found", expression.caller.range);
-
+		
 		var arguments = new List<ResolvedExpressionNode>();
 		foreach (var argument in expression.arguments)
 		{
 			arguments.Add(argument.Accept(this));
 		}
-
+		
 		switch (caller)
 		{
 			case ResolvedFunctionSymbolExpression functionExpression:
@@ -481,7 +485,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					default:
 						throw NewResolutionException("Invalid static method call target", expression.caller.range);
 				}
-				
+			
 			case ResolvedValueAccessExpression valueAccessExpression:
 				switch (valueAccessExpression.target)
 				{
@@ -499,16 +503,16 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				throw NewResolutionException("Invalid function call target", expression.caller.range);
 		}
 	}
-
+	
 	public ResolvedExpressionNode Visit(CastExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(AccessExpression expression)
 	{
 		var staticAccess = false;
-
+		
 		switch (expression.source)
 		{
 			case TokenExpression tokenExpression:
@@ -516,7 +520,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				if (!IsTokenValidAccessTarget(tokenExpression.token.Type))
 					throw NewResolutionException($"Invalid access target '{tokenExpression.token.Text}'",
 						tokenExpression.token);
-
+				
 				var sourceExpression = tokenExpression.Accept(this);
 				switch (sourceExpression)
 				{
@@ -524,7 +528,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					{
 						var target =
 							groupingSymbolExpression.importGroupingSymbol.Symbols.Lookup(expression.target.Text);
-
+						
 						return ResolveSymbolExpression(target, expression.target);
 					}
 					
@@ -532,12 +536,12 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						staticAccess = true;
 						break;
 				}
-
+				
 				// Todo: Support native types, array types, nullable types, etc.
-
+				
 				return ResolveAccess(sourceExpression, expression.source.range, expression.target, staticAccess);
 			}
-
+			
 			case AccessExpression sourceAccessExpression:
 			{
 				// Todo
@@ -548,7 +552,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					{
 						var target =
 							groupingSymbolExpression.importGroupingSymbol.Symbols.Lookup(expression.target.Text);
-
+						
 						return ResolveSymbolExpression(target, expression.target);
 					}
 					
@@ -559,15 +563,15 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				
 				return ResolveAccess(sourceExpression, expression.source.range, expression.target, staticAccess);
 			}
-
+			
 			case BinaryExpression sourceBinaryExpression:
 			{
 				if (sourceBinaryExpression.Accept(this) is not ResolvedBinaryExpression binaryExpression)
 					throw NewResolutionException("Invalid access target", expression.range);
-
+				
 				return ResolveAccess(binaryExpression, sourceBinaryExpression.range, expression.target, false);
 			}
-
+			
 			case FunctionCallExpression functionCallExpression:
 			{
 				switch (functionCallExpression.Accept(this))
@@ -575,12 +579,12 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					// Todo: Support all function call types
 					default:
 						throw NewResolutionException("Invalid access target", expression.range);
-
+					
 					case ResolvedConstructorCallExpression callExpression:
 						return ResolveAccess(callExpression, functionCallExpression.range, expression.target, false);
 				}
 			}
-
+			
 			case SyntaxType syntaxType:
 			{
 				// Todo
@@ -588,20 +592,20 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				var source = syntaxType.Accept(this);
 				break;
 			}
-
+			
 			default:
 				throw NewResolutionException("Invalid access target", expression.range);
 		}
 		
 		throw new NotImplementedException();
 	}
-
+	
 	private ResolvedExpressionNode ResolveAccess(ResolvedExpressionNode sourceExpression, TextRange sourceRange,
 		Token target, bool staticAccess)
 	{
 		if (sourceExpression.Type is not BaseType sourceType)
 			throw NewResolutionException("Unable to determine access source's type", sourceRange);
-
+		
 		switch (sourceType.typeSymbol)
 		{
 			case StructSymbol structSymbol:
@@ -612,7 +616,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						: target.Type == TokenType.KeywordString
 							? StringFunctionSymbol.InternalName
 							: target.Text);
-
+				
 				if (targetSymbol is null)
 					throw NewResolutionException($"Symbol '{target.Text}' not found",
 						target);
@@ -646,13 +650,13 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						/*case FunctionSymbol symbol:
 							if (!symbol.IsStatic)
 								throw cannotBeStatic;
-							
+						
 							break;*/
 					}
 					
 					return new ResolvedTypeAccessExpression(sourceType, targetSymbol);
 				}
-
+				
 				var mustBeStaticException = NewResolutionException(
 					$"Symbol '{targetSymbol.Name}' must be accessed from a static context. " +
 					$"Did you mean '{structSymbol.Name}.{target.Text}'?", target);
@@ -681,7 +685,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					/*case FunctionSymbol symbol:
 						if (!symbol.IsStatic)
 							throw mustBeStaticException;
-						
+					
 						break;*/
 					
 					default:
@@ -699,7 +703,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						: target.Type == TokenType.KeywordString
 							? StringFunctionSymbol.InternalName
 							: target.Text);
-
+				
 				if (targetSymbol is null)
 					throw NewResolutionException($"Symbol '{target.Text}' not found",
 						target);
@@ -733,13 +737,13 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						/*case FunctionSymbol symbol:
 							if (!symbol.IsStatic)
 								throw cannotBeStatic;
-							
+						
 							break;*/
 					}
 					
 					return new ResolvedTypeAccessExpression(sourceType, targetSymbol);
 				}
-
+				
 				var mustBeStaticException = NewResolutionException(
 					$"Symbol '{targetSymbol.Name}' must be accessed from a static context. " +
 					$"Did you mean '{nativeSymbol.Name}.{target.Text}'?", target);
@@ -768,7 +772,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 					/*case FunctionSymbol symbol:
 						if (!symbol.IsStatic)
 							throw mustBeStaticException;
-						
+					
 						break;*/
 					
 					default:
@@ -781,24 +785,24 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		
 		throw NewResolutionException("Invalid access target", sourceRange);
 	}
-
+	
 	private bool IsTokenValidAccessTarget(TokenType tokenType)
 	{
 		return TokenType.NativeDataTypes.Contains(tokenType) || tokenType == TokenType.Identifier ||
 		       tokenType == TokenType.KeywordThis;
 	}
-
+	
 	public ResolvedExpressionNode Visit(IndexExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(AssignmentExpression expression)
 	{
 		// Todo: Verify 'left' is a valid assignment target
 		var left = expression.left.Accept(this);
 		var right = expression.right.Accept(this);
-
+		
 		switch (left)
 		{
 			case ResolvedTypeAccessExpression leftExpression:
@@ -815,6 +819,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 									expression.left.range);
 							}
 						}
+						
 						break;
 					
 					default:
@@ -822,6 +827,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 							$"Symbol '{leftExpression.target.Name}' is not a valid assignment target",
 							expression.left.range);
 				}
+				
 				break;
 			}
 			
@@ -839,6 +845,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 									expression.left.range);
 							}
 						}
+						
 						break;
 					
 					default:
@@ -846,6 +853,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 							$"Symbol '{leftExpression.target.Name}' is not a valid assignment target",
 							expression.left.range);
 				}
+				
 				break;
 			}
 			
@@ -860,6 +868,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 							expression.left.range);
 					}
 				}
+				
 				break;
 			}
 			
@@ -871,6 +880,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 						"Immutable variables cannot be reassigned",
 						expression.left.range);
 				}
+				
 				break;
 			}
 			
@@ -891,7 +901,7 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			case ResolvedStringFunctionSymbolExpression:
 				throw NewResolutionException("String functions are not a valid assignment target",
 					expression.left.range);
-					
+			
 			default:
 				throw NewResolutionException(
 					"Invalid assignment target", expression.left.range);
@@ -900,71 +910,71 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		// Todo: Type check with implicit casts if needed
 		return new ResolvedAssignmentExpression(left, right);
 	}
-
+	
 	public ResolvedExpressionNode Visit(LambdaExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(ConditionalExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(BinaryExpression expression)
 	{
 		var left = expression.left.Accept(this);
 		var right = expression.right.Accept(this);
 		
 		// Todo: Handle 1-deep implicit casts
-
+		
 		var operatorSymbol = Type.FindOperator(left.Type, right.Type, expression.operation);
 		if (operatorSymbol is null)
 			throw NewResolutionException($"Cannot apply operator '{expression.op.Text}' for operands of type " +
 			                             $"'{left.Type?.ToString() ?? "null"}' and " +
 			                             $"'{right.Type?.ToString() ?? "null"}'", expression.op);
-
+		
 		if (operatorSymbol.hasError)
 			throw NewResolutionException(operatorSymbol.error!, expression.op);
 		
 		return new ResolvedBinaryExpression(left, right, operatorSymbol.result!, expression.operation);
 	}
-
+	
 	public ResolvedExpressionNode Visit(UnaryExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(SwitchExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(WithExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(BinaryOperationExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(UnaryOperationExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(PrimaryOperationExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(InterpolatedStringExpression expression)
 	{
 		throw new NotImplementedException();
 	}
-
+	
 	public ResolvedExpressionNode Visit(TokenExpression expression)
 	{
 		var token = expression.token;
@@ -1018,21 +1028,21 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			
 			return new ResolvedThisExpression(CurrentType.EvaluatedType);
 		}
-
+		
 		return new ResolvedLiteralExpression(token, type);
 	}
-
+	
 	private ResolvedExpressionNode ResolveSymbolExpression(ISymbol? symbol, Token token)
 	{
 		if (symbol is null)
 			throw NewResolutionException($"Unable to resolve symbol '{token.Text}'", token);
-
+		
 		switch (symbol)
 		{
 			case FieldSymbol fieldSymbol:
 				if (StaticContext && !fieldSymbol.IsStatic)
 					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
+				
 				if (fieldSymbol.IsStatic)
 				{
 					return new ResolvedFieldExpression(fieldSymbol);
@@ -1044,19 +1054,19 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			case ConstSymbol constSymbol:
 				if (StaticContext && !constSymbol.IsStatic)
 					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
+				
 				return new ResolvedConstExpression(constSymbol);
 			
 			case FunctionSymbol functionSymbol:
 				if (StaticContext && !functionSymbol.IsStatic)
 					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
+				
 				return new ResolvedFunctionSymbolExpression(functionSymbol);
 			
 			case StringFunctionSymbol stringFunctionSymbol:
 				if (StaticContext && !stringFunctionSymbol.IsStatic)
 					throw NewResolutionException($"Cannot access '{token.Text}' from a static context", token);
-
+				
 				return new ResolvedStringFunctionSymbolExpression(stringFunctionSymbol);
 			
 			case ExternalFunctionSymbol functionSymbol:
@@ -1078,65 +1088,82 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 				throw NewResolutionException($"Unknown symbol class for symbol '{token.Text}'", token);
 		}
 	}
-
+	
 	private TypeSymbol FindType(Token token)
 	{
 		if (token.Type == TokenType.KeywordInt)
 			return TypeSymbol.Int.LinkedSymbol as TypeSymbol ??
 			       throw NewResolutionException("Invalid operation: Int is linked incorrectly", token);
+		
 		if (token.Type == TokenType.KeywordInt8)
 			return TypeSymbol.Int8;
+		
 		if (token.Type == TokenType.KeywordInt16)
 			return TypeSymbol.Int16;
+		
 		if (token.Type == TokenType.KeywordInt32)
 			return TypeSymbol.Int32;
+		
 		if (token.Type == TokenType.KeywordInt64)
 			return TypeSymbol.Int64;
+		
 		if (token.Type == TokenType.KeywordInt128)
 			return TypeSymbol.Int128;
-
-
+		
 		if (token.Type == TokenType.KeywordUInt)
 			return TypeSymbol.UInt.LinkedSymbol as TypeSymbol ??
 			       throw NewResolutionException("Invalid operation: UInt is linked incorrectly", token);
+		
 		if (token.Type == TokenType.KeywordUInt8)
 			return TypeSymbol.UInt8;
+		
 		if (token.Type == TokenType.KeywordUInt16)
 			return TypeSymbol.UInt16;
+		
 		if (token.Type == TokenType.KeywordUInt32)
 			return TypeSymbol.UInt32;
+		
 		if (token.Type == TokenType.KeywordUInt64)
 			return TypeSymbol.UInt64;
+		
 		if (token.Type == TokenType.KeywordUInt128)
 			return TypeSymbol.UInt128;
-
+		
 		if (token.Type == TokenType.KeywordFloat)
 			return TypeSymbol.Float.LinkedSymbol as TypeSymbol ??
 			       throw NewResolutionException("Invalid operation: Float is linked incorrectly", token);
+		
 		if (token.Type == TokenType.KeywordFloat32)
 			return TypeSymbol.Float32;
+		
 		if (token.Type == TokenType.KeywordFloat64)
 			return TypeSymbol.Float64;
+		
 		if (token.Type == TokenType.KeywordFloat128)
 			return TypeSymbol.Float128;
-
+		
 		if (token.Type == TokenType.KeywordFixed)
 			return TypeSymbol.Fixed.LinkedSymbol as TypeSymbol ??
 			       throw NewResolutionException("Invalid operation: Fixed is linked incorrectly", token);
+		
 		if (token.Type == TokenType.KeywordFixed32)
 			return TypeSymbol.Fixed32;
+		
 		if (token.Type == TokenType.KeywordFixed64)
 			return TypeSymbol.Fixed64;
+		
 		if (token.Type == TokenType.KeywordFixed128)
 			return TypeSymbol.Fixed128;
-
+		
 		if (token.Type == TokenType.KeywordBool)
 			return TypeSymbol.Bool;
+		
 		if (token.Type == TokenType.KeywordChar)
 			return TypeSymbol.Char;
+		
 		if (token.Type == TokenType.KeywordString)
 			return TypeSymbol.String;
-
+		
 		if (token.Type != TokenType.Identifier && token.Type != TokenType.KeywordNInt &&
 		    token.Type != TokenType.KeywordNUInt)
 			throw NewResolutionException($"Token '{token.Text}' is not a valid type", token);
@@ -1144,82 +1171,81 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 		var symbol = LookupSymbolWithImports(token.Text);
 		if (symbol is not TypeSymbol typeSymbol)
 			throw NewResolutionException($"Symbol '{token.Text}' is not a valid type", token);
-			
+		
 		return typeSymbol;
-
 	}
-
+	
 	private ResolutionException NewResolutionException(string message, Token? token)
 	{
 		return new ResolutionException(message, token, currentWorkingDirectory, currentFilePath);
 	}
-
+	
 	private ResolutionException NewResolutionException(string message, TextRange range)
 	{
 		return new ResolutionException(message, currentSource, range, currentWorkingDirectory, currentFilePath);
 	}
-
+	
 	public Type Visit(TupleSyntaxType syntaxType)
 	{
 		var types = new List<Type>();
-
+		
 		foreach (var type in syntaxType.types)
 		{
 			types.Add(type.Accept(this));
 		}
-
+		
 		return new TupleType(types);
 	}
-
+	
 	public Type Visit(GenericSyntaxType syntaxType)
 	{
 		var typeParameters = new List<Type>();
-
+		
 		foreach (var typeParameter in syntaxType.typeParameters)
 		{
 			typeParameters.Add(typeParameter.Accept(this));
 		}
-
+		
 		return new GenericType(syntaxType.baseSyntaxType.Accept(this), typeParameters);
 	}
-
+	
 	public Type Visit(MutableSyntaxType syntaxType)
 	{
 		return new MutableType(syntaxType.baseSyntaxType.Accept(this));
 	}
-
+	
 	public Type Visit(ArraySyntaxType syntaxType)
 	{
 		return new ArrayType(syntaxType.baseSyntaxType.Accept(this));
 	}
-
+	
 	public Type Visit(NullableSyntaxType syntaxType)
 	{
 		return new NullableType(syntaxType.baseSyntaxType.Accept(this));
 	}
-
+	
 	public Type Visit(LambdaSyntaxType syntaxType)
 	{
 		var parameterTypes = new List<Type>();
-
+		
 		foreach (var typeParameter in syntaxType.parameterTypes)
 		{
 			parameterTypes.Add(typeParameter.Accept(this));
 		}
-
+		
 		return new FunctionType(parameterTypes, syntaxType.returnType?.Accept(this));
 	}
-
+	
 	public Type Visit(ReferenceSyntaxType syntaxType)
 	{
 		return new ReferenceType(syntaxType.baseSyntaxType.Accept(this), syntaxType.immutable);
 	}
-
+	
 	public Type Visit(BaseSyntaxType syntaxType)
 	{
 		return new BaseType(FindType(syntaxType.token));
 	}
-
+	
 	private void PopulateNativeSymbolTables()
 	{
 		nativeSymbolTables.Add(TypeSymbol.Int8, new SymbolTable());
@@ -1256,11 +1282,11 @@ public class Resolver : CollectedStatementNode.IVisitor<ResolvedStatementNode>,
 			
 			return symbol;
 		}
-
+		
 		var importedSymbol = importedSymbols!.Lookup(name);
 		if (importedSymbol is AliasedSymbol aliasedImport)
 			return aliasedImport.LinkedSymbol;
-
+		
 		return importedSymbol;
 	}
 }

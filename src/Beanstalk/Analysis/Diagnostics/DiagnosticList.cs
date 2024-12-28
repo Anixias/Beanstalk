@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+
 // ReSharper disable UseCollectionExpression
 
 namespace Beanstalk.Analysis.Diagnostics;
@@ -6,12 +7,12 @@ namespace Beanstalk.Analysis.Diagnostics;
 public sealed class DiagnosticList : IEnumerable<Diagnostic>
 {
 	public int Count => diagnostics.Count;
-
+	
 	public DiagnosticList Errors => new()
 	{
 		diagnostics.Where(d => d.severity == DiagnosticSeverity.Error).ToList()
 	};
-
+	
 	public DiagnosticList Warnings => new()
 	{
 		diagnostics.Where(d => d.severity == DiagnosticSeverity.Warning).ToList()
@@ -36,7 +37,7 @@ public sealed class DiagnosticList : IEnumerable<Diagnostic>
 	{
 		return diagnostics.OrderBy(d => d.line).ThenBy(d => d.column).GetEnumerator();
 	}
-
+	
 	IEnumerator IEnumerable.GetEnumerator()
 	{
 		return GetEnumerator();

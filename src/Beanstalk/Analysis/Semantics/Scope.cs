@@ -14,25 +14,25 @@ public sealed class Scope : IEnumerable<Scope>
 		Parent = parent;
 		parent?.AddChildScope(this);
 	}
-
+	
 	public void AddSymbol(ISymbol symbol)
 	{
 		SymbolTable.Add(symbol);
 	}
-
+	
 	public void AddOrShadowSymbol(ISymbol symbol)
 	{
 		SymbolTable.AddOrShadow(symbol);
 	}
-
+	
 	public ISymbol? LookupSymbol(string name)
 	{
 		if (SymbolTable.Lookup(name) is { } symbol)
 			return symbol;
-
+		
 		return Parent?.LookupSymbol(name);
 	}
-
+	
 	/// <summary>
 	/// Searches recursively for a symbol matching the given name and type
 	/// </summary>
@@ -49,29 +49,28 @@ public sealed class Scope : IEnumerable<Scope>
 	{
 		symbol = null;
 		existingSymbol = null;
-
+		
 		if (SymbolTable.Lookup(name) is not { } genericSymbol)
 			return Parent?.LookupSymbol(name, out symbol, out existingSymbol) ?? false;
-
+		
 		existingSymbol = genericSymbol;
 		if (genericSymbol is not T typedSymbol)
 			return false;
-			
+		
 		symbol = typedSymbol;
 		return true;
-
 	}
-
+	
 	public IEnumerator<Scope> GetEnumerator()
 	{
 		return childScopes.GetEnumerator();
 	}
-
+	
 	IEnumerator IEnumerable.GetEnumerator()
 	{
 		return GetEnumerator();
 	}
-
+	
 	private void AddChildScope(Scope scope)
 	{
 		childScopes.Add(scope);

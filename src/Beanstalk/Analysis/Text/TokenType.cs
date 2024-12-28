@@ -13,23 +13,23 @@ public sealed class TokenType
 	
 	private static readonly Dictionary<string, TokenType> Keywords = new();
 	private static readonly Dictionary<string, TokenType> Operators = new();
-
+	
 	private readonly string representation;
-
+	
 	private TokenType(string representation)
 	{
 		this.representation = representation;
 	}
-
+	
 	public override string ToString() => representation;
-
+	
 	private static TokenType CreateKeyword(string text)
 	{
 		var type = new TokenType(text)
 		{
 			IsKeyword = true
 		};
-
+		
 		Keywords.Add(text, type);
 		return type;
 	}
@@ -40,11 +40,11 @@ public sealed class TokenType
 		{
 			IsOperator = true
 		};
-
+		
 		Operators.Add(text, type);
 		return type;
 	}
-
+	
 	public static readonly TokenType EndOfFile = new("eof")
 	{
 		IsInvalid = true
@@ -54,64 +54,64 @@ public sealed class TokenType
 	{
 		IsIdentifier = true
 	};
-
+	
 	public static readonly TokenType Invalid = new("invalid")
 	{
 		IsInvalid = true
 	};
-
+	
 	public static readonly TokenType Whitespace = new("whitespace")
 	{
 		IsFiltered = true
 	};
-
+	
 	public static readonly TokenType LineComment = new("line comment")
 	{
 		IsFiltered = true
 	};
-
+	
 	public static readonly TokenType MultilineComment = new("block comment")
 	{
 		IsFiltered = true
 	};
-
+	
 	public static readonly TokenType DocumentationComment = new("documentation comment")
 	{
 		IsFiltered = true
 	};
-
+	
 	public static readonly TokenType NumberLiteral = new("number literal")
 	{
 		IsLiteral = true
 	};
-
+	
 	public static readonly TokenType InvalidNumberLiteral = new("invalid number literal")
 	{
 		IsLiteral = true,
 		IsInvalid = true
 	};
-
+	
 	public static readonly TokenType StringLiteral = new("string literal")
 	{
 		IsLiteral = true
 	};
-
+	
 	public static readonly TokenType InterpolatedStringLiteral = new("interpolated string literal")
 	{
 		IsLiteral = true
 	};
-
+	
 	public static readonly TokenType InvalidStringLiteral = new("invalid string literal")
 	{
 		IsLiteral = true,
 		IsInvalid = true
 	};
-
+	
 	public static readonly TokenType CharLiteral = new("char literal")
 	{
 		IsLiteral = true
 	};
-
+	
 	public static readonly TokenType InvalidCharLiteral = new("invalid char literal")
 	{
 		IsLiteral = true,
@@ -193,13 +193,13 @@ public sealed class TokenType
 		KeywordFloat, KeywordFloat32,
 		KeywordFloat64, KeywordFloat128,
 		KeywordFixed, KeywordFixed32,
-		KeywordFixed64, KeywordFixed128, 
+		KeywordFixed64, KeywordFixed128,
 		KeywordBool, KeywordString, KeywordChar
 	}.ToImmutableArray();
-
+	
 	public static readonly ImmutableArray<TokenType> ValidDataTypes =
 		NativeDataTypes.Append(Identifier).ToImmutableArray();
-
+	
 	public static TokenType OpReturnType => OpColonRight;
 	public static readonly TokenType OpEllipsis = CreateOperator("...");
 	public static readonly TokenType OpColonColon = CreateOperator("::");
@@ -245,12 +245,12 @@ public sealed class TokenType
 	public static readonly TokenType OpBar = CreateOperator("|");
 	public static readonly TokenType OpAmp = CreateOperator("&");
 	public static readonly TokenType OpHat = CreateOperator("^");
-
+	
 	public static TokenType? GetKeyword(string keyword)
 	{
 		return Keywords.GetValueOrDefault(keyword);
 	}
-
+	
 	public static TokenType? GetOperator(string @operator)
 	{
 		return Operators.GetValueOrDefault(@operator);

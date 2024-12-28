@@ -8,7 +8,7 @@ public sealed class DestructorSymbol : IFunctionSymbol
 	public bool IsConstant => false;
 	public string Name { get; }
 	public Scope Body { get; }
-
+	
 	public DestructorSymbol(Scope body)
 	{
 		Name = "$destructor";

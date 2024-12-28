@@ -14,7 +14,7 @@ internal struct ProgramArgs
 	public string? OutputPath { get; private set; }
 	public int? OptimizationLevel { get; private set; }
 	public Target? Target { get; private set; }
-
+	
 	public static ProgramArgs? Parse(string[] args)
 	{
 		var programArgs = new ProgramArgs();
@@ -31,9 +31,9 @@ internal struct ProgramArgs
 				return null;
 			}
 		}
-
+		
 		return programArgs;
-
+		
 		int ParseCommand(string command, int position)
 		{
 			switch (command)
@@ -41,21 +41,25 @@ internal struct ProgramArgs
 				case "-in":
 					programArgs.InputPath = Read();
 					break;
+				
 				case "-out":
 					programArgs.OutputPath = Read();
 					break;
+				
 				case "-opt":
 					programArgs.OptimizationLevel = int.Parse(Read());
 					break;
+				
 				case "-target":
 					programArgs.Target = new Target(Read());
 					break;
+				
 				default:
 					throw new ArgumentException($"Invalid parameter '{command}'.", nameof(command));
 			}
-
+			
 			return position;
-
+			
 			string Read() => args[position++];
 		}
 	}
@@ -72,29 +76,29 @@ internal static class Compiler
 		else
 			await Compile(args);
 	}
-
+	
 	private static void Print(object? obj)
 	{
 		Console.Write(obj?.ToString() ?? "null");
 	}
-
+	
 	private static void PrintLine()
 	{
 		Console.WriteLine();
 	}
-
+	
 	private static void PrintLine(object? obj)
 	{
 		Console.WriteLine(obj?.ToString() ?? "null");
 	}
-
+	
 	private static void PrintLineNumber(int line)
 	{
 		Console.ForegroundColor = ConsoleColor.DarkGray;
 		Print($"{line:0000} ");
 		Console.ResetColor();
 	}
-
+	
 	private static void RunRepl()
 	{
 		while (true)
@@ -118,7 +122,7 @@ internal static class Compiler
 					PrintLineNumber(++line);
 					continue;
 				}
-
+				
 				if (key.Key == ConsoleKey.Backspace)
 				{
 					if (inputStringBuilder.Length <= 0)
@@ -132,16 +136,16 @@ internal static class Compiler
 				inputStringBuilder.Append(key.KeyChar);
 				Print(key.KeyChar);
 			}
-
+			
 			var source = sourceStringBuilder.ToString();
 			if (string.IsNullOrWhiteSpace(source))
 				break;
-
+			
 			Interpret(source);
 			PrintLine();
 		}
 	}
-
+	
 	private readonly struct FileDiagnostics
 	{
 		public readonly string workingDirectory;
@@ -149,13 +153,13 @@ internal static class Compiler
 		public readonly DiagnosticList parseExceptions = [];
 		public readonly List<CollectionException> collectionExceptions = [];
 		public readonly List<ResolutionException> resolutionExceptions = [];
-
+		
 		public FileDiagnostics(string workingDirectory, string filePath)
 		{
 			this.workingDirectory = workingDirectory;
 			this.filePath = filePath;
 		}
-
+		
 		public void Print()
 		{
 			if (parseExceptions.ErrorCount > 0)
@@ -170,7 +174,7 @@ internal static class Compiler
 			if (resolutionExceptions.Count > 0)
 				PrintErrorList("Resolution Error(s)", resolutionExceptions);
 		}
-
+		
 		private void PrintErrorList(string errorLabel, IEnumerable<Exception> exceptions)
 		{
 			var relativePath = Path.GetRelativePath(workingDirectory, filePath);
@@ -185,7 +189,7 @@ internal static class Compiler
 				Console.ResetColor();
 			}
 		}
-
+		
 		private void PrintDiagnosticList(string label, IEnumerable<Diagnostic> diagnostics, DiagnosticSeverity severity)
 		{
 			var relativePath = Path.GetRelativePath(workingDirectory, filePath);
@@ -209,7 +213,7 @@ internal static class Compiler
 				Console.WriteLine($"------------ {relativePath} ------------");
 				Console.WriteLine($"{label}:");
 			}
-
+			
 			foreach (var diagnostic in diagnostics)
 			{
 				const int maxLineNumberLength = 8;
@@ -222,7 +226,7 @@ internal static class Compiler
 				var lineHeader = diagnostic.line == 0
 					? $"{"?",maxLineNumberLength}"
 					: $"{diagnostic.line.ToString(),maxLineNumberLength}";
-
+				
 				var messageHeader = $"{new string(' ', lineHeader.Length)} {lineBar} ";
 				var lineRange = diagnostic.source.GetLineRange(diagnostic.line);
 				var lineText = diagnostic.source.GetText(diagnostic.line);
@@ -243,7 +247,7 @@ internal static class Compiler
 						}
 						
 						var postRange = new TextRange(range.End, lineRange.End);
-
+						
 						if (diagnostic.line > 0)
 						{
 							Console.Write(diagnostic.source.GetText(preRange));
@@ -256,7 +260,7 @@ internal static class Compiler
 						{
 							Console.WriteLine();
 						}
-
+						
 						Console.ForegroundColor = ConsoleColor.DarkGray;
 						Console.Write(messageHeader);
 						Console.ForegroundColor = darkColor;
@@ -271,7 +275,7 @@ internal static class Compiler
 						else
 							Console.WriteLine();
 					}
-
+					
 					Console.ForegroundColor = ConsoleColor.DarkGray;
 					Console.Write(messageHeader);
 					Console.ForegroundColor = color;
@@ -281,14 +285,14 @@ internal static class Compiler
 					Console.WriteLine();
 				}
 			}
-
+			
 			lock (ConsoleLock)
 			{
 				Console.ResetColor();
 			}
 		}
 	}
-
+	
 	private static async Task Compile(string[] args)
 	{
 		var programArgs = ProgramArgs.Parse(args);
@@ -309,12 +313,12 @@ internal static class Compiler
 			await Console.Error.WriteLineAsync("Missing output path. Use the '-out <path>' argument.");
 			return;
 		}
-
+		
 		var optimizationLevel = programArgs.Value.OptimizationLevel ?? 0;
-
+		
 		string workingDirectory;
 		var files = new List<FileDiagnostics>();
-
+		
 		if (File.Exists(inputPath))
 		{
 			workingDirectory = Path.GetDirectoryName(inputPath)!;
@@ -326,11 +330,11 @@ internal static class Compiler
 			foreach (var file in Directory.EnumerateFiles(inputPath, "*.bs", SearchOption.AllDirectories))
 				files.Add(new FileDiagnostics(workingDirectory, file));
 		}
-
+		
 		var startTime = DateTime.Now;
 		var compilationTasks = files.Select(ParseFile).ToArray();
 		await Task.WhenAll(compilationTasks);
-
+		
 		var asts = new Ast[compilationTasks.Length];
 		var i = 0;
 		foreach (var task in compilationTasks)
@@ -340,29 +344,29 @@ internal static class Compiler
 				asts[i++] = ast;
 				continue;
 			}
-
+			
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
 			Console.ResetColor();
-
+			
 			return;
 		}
-
+		
 		if (!Analyze(programArgs.Value.Target?.Is64Bit() ?? Environment.Is64BitOperatingSystem, asts, files,
 			    out var resolvedAsts, out var dlls, out var dllImportFunctions))
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Console.Error.WriteLineAsync("Compilation failed.");
 			Console.ResetColor();
-
+			
 			return;
 		}
-
+		
 		var codeGenerator = new CodeGenerator
 		{
 			Debug = true
 		};
-
+		
 		outputPath = codeGenerator.Generate(resolvedAsts, dlls, dllImportFunctions, programArgs.Value.Target,
 			optimizationLevel, outputPath);
 		
@@ -370,10 +374,10 @@ internal static class Compiler
 		Console.ForegroundColor = ConsoleColor.Cyan;
 		await Console.Out.WriteLineAsync($"Compilation succeeded. ({duration} ms)");
 		Console.ResetColor();
-
+		
 		if (!File.Exists(outputPath))
 			return;
-
+		
 		if (Path.GetExtension(outputPath) != ".exe")
 			return;
 		
@@ -383,15 +387,15 @@ internal static class Compiler
 			Arguments = "",
 			WindowStyle = ProcessWindowStyle.Normal
 		};
-
+		
 		var process = new Process
 		{
 			StartInfo = processStartInfo
 		};
-
+		
 		process.Start();
 		await process.WaitForExitAsync();
-
+		
 		switch (process.ExitCode)
 		{
 			case 0:
@@ -407,7 +411,7 @@ internal static class Compiler
 				break;
 		}
 	}
-
+	
 	private static bool Analyze(bool is64Bit, IReadOnlyList<Ast> asts, IReadOnlyList<FileDiagnostics> files,
 		out List<ResolvedAst> resolvedAsts, out string[] dlls, out ExternalFunctionSymbol[] dllImportFunctions)
 	{
@@ -417,7 +421,7 @@ internal static class Compiler
 		var collector = new Collector(is64Bit);
 		var collectionError = false;
 		var collectedAsts = new List<CollectedAst>();
-
+		
 		for (var i = 0; i < asts.Count; i++)
 		{
 			var ast = asts[i];
@@ -438,16 +442,16 @@ internal static class Compiler
 			
 			file.Print();
 		}
-
+		
 		if (collectionError)
 			return false;
-
+		
 		for (var i = 0; i < collectedAsts.Count; i++)
 		{
 			var ast = collectedAsts[i];
 			var file = files[i];
 			collector.Collect(ast);
-
+			
 			foreach (var exception in collector.exceptions.Where(e =>
 				         e.WorkingDirectory == file.workingDirectory && e.FilePath == file.filePath))
 			{
@@ -456,20 +460,20 @@ internal static class Compiler
 			
 			file.Print();
 		}
-
+		
 		if (collector.exceptions.Count > 0)
 		{
 			return false;
 		}
-
+		
 		var resolver = new Resolver(collector);
 		var hadError = false;
-
+		
 		for (var i = 0; i < collectedAsts.Count; i++)
 		{
 			var ast = collectedAsts[i];
 			var file = files[i];
-
+			
 			try
 			{
 				if (resolver.Resolve(ast) is { } resolvedAst)
@@ -483,28 +487,28 @@ internal static class Compiler
 				Console.WriteLine($"{e.Message}\n{e.StackTrace}");
 				Console.ResetColor();
 			}
-
+			
 			foreach (var exception in resolver.exceptions.Where(e =>
 				         e.WorkingDirectory == file.workingDirectory && e.FilePath == file.filePath))
 			{
 				file.resolutionExceptions.Add(exception);
 			}
-
+			
 			file.Print();
 		}
-
+		
 		resolver.Verify();
-
+		
 		if (hadError || resolver.exceptions.Count > 0)
 		{
 			return false;
 		}
-
+		
 		dlls = resolver.dlls.ToArray();
 		dllImportFunctions = resolver.dllImportFunctions.ToArray();
 		return true;
 	}
-
+	
 	private static async Task<Ast?> ParseFile(FileDiagnostics file)
 	{
 		var source = await File.ReadAllTextAsync(file.filePath);
@@ -514,17 +518,17 @@ internal static class Compiler
 		
 		if (parseDiagnostics.Count <= 0)
 			return ast;
-
+		
 		file.parseExceptions.Add(parseDiagnostics);
 		file.Print();
-
+		
 		return ast;
 	}
-
+	
 	private static void Interpret(string source)
 	{
 		var lexer = new FilteredLexer(new StringBuffer(source));
-
+		
 		foreach (var token in lexer)
 		{
 			PrintLine($"\t{token}");

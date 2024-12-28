@@ -13,7 +13,7 @@ public sealed class Token(TokenType type, TextRange range, IBuffer source, objec
 	private (int, int) LineColumn { get; } = source.GetLineColumn(range.Start);
 	public int Line => LineColumn.Item1;
 	public int Column => LineColumn.Item2;
-
+	
 	public override string ToString()
 	{
 		if (Value is null)

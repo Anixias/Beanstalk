@@ -11,7 +11,7 @@ public sealed class EntrySymbol : IFunctionSymbol
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Scope Body { get; }
 	public Type? EvaluatedType => null;
-
+	
 	public EntrySymbol(IEnumerable<ParameterSymbol> parameters, Scope body)
 	{
 		Parameters = parameters.ToImmutableArray();

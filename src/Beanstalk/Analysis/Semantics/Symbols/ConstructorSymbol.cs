@@ -15,7 +15,7 @@ public sealed class ConstructorSymbol : IFunctionSymbol
 	public ImmutableArray<ParameterSymbol> Parameters { get; }
 	public Scope Body { get; }
 	public List<ConstructorSymbol> Overloads { get; } = [];
-
+	
 	public ConstructorSymbol(TypeSymbol owner, ParameterSymbol @this, IEnumerable<ParameterSymbol> parameters,
 		Scope body)
 	{
@@ -25,12 +25,12 @@ public sealed class ConstructorSymbol : IFunctionSymbol
 		Body = body;
 		EvaluatedType = new BaseType(owner);
 	}
-
+	
 	public bool SignatureMatches(ConstructorSymbol constructorSymbol)
 	{
 		if (Parameters.Length != constructorSymbol.Parameters.Length)
 			return false;
-
+		
 		for (var i = 0; i < Parameters.Length; i++)
 		{
 			var otherParameterType = constructorSymbol.Parameters[i].VarSymbol.EvaluatedType;
@@ -38,14 +38,14 @@ public sealed class ConstructorSymbol : IFunctionSymbol
 			{
 				if (otherParameterType is not null)
 					return false;
-
+				
 				continue;
 			}
 			
 			if (!parameterType.Equals(otherParameterType))
 				return false;
 		}
-
+		
 		return true;
 	}
 }
