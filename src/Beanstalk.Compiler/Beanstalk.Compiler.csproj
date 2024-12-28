@@ -13,10 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="LLVMSharp" Version="16.0.0"/>
-    </ItemGroup>
-
-    <ItemGroup>
         <Folder Include="Output\bin\"/>
     </ItemGroup>
 

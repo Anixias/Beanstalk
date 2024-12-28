@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Beanstalk.Analysis.Semantics;
 using Beanstalk.Analysis.Syntax;
+using LLVMSharp;
 using LLVMSharp.Interop;
 using ReferenceType = Beanstalk.Analysis.Semantics.ReferenceType;
 using Type = Beanstalk.Analysis.Semantics.Type;
