@@ -338,7 +338,9 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		Target? target, int optimizationLevel, string outputPath)
 	{
 		//LLVM.InitializeAllTargets();
+		// Todo: Initialize correct target
 		currentTarget = target ?? new Target(new string(LLVM.GetDefaultTargetTriple()));
+		// Todo: Use proper target machine API
 		var cpu = currentTarget.triple.Arch switch
 		{
 			Triple.ArchType.x86_64 => "x86-64",
@@ -423,6 +425,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		string linkerPath;
 		
 		// Todo: Change CLI arguments based on which exe is selected
+		// Todo: Make this more robust via toolchains that include the necessary bins and libs
 		switch (currentTarget.triple.OS)
 		{
 			case Triple.OSType.Win32:
@@ -462,6 +465,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		var beanstalkLibFileName = Path.GetFileName(beanstalkLib);
 		var beanstalkLibLinkArgs = $"-L{beanstalkLibDirectory} -l{beanstalkLibFileName}";*/
 		
+		// Todo: Remove libc, it won't be necessary!
 		var libCPath = Path.Combine(TempDirectory, "libc.lib");
 		
 		#region Compile LibC
@@ -534,6 +538,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			throw new Exception("LibC failed to archive");
 		#endregion
 		
+		// Todo: Standardize linking args, especially based on which linker is used
 		var linkArgs = $"\"{libCPath}\" -demangle:no";
 		
 		var targetArg = "";
