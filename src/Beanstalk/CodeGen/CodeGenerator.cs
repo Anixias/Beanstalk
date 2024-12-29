@@ -126,6 +126,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	private readonly Stack<OpaqueValue> thisStack = new();
 	private OpaqueValue CurrentThisValue => thisStack.Peek();
 	private LLVMOpaqueType* expectedType = OpaqueType.NullPtr;
+	private LLVMOpaqueAttributeRef* currentTargetCpuAttr = (LLVMOpaqueAttributeRef*)nint.Zero;
 	private static readonly string TempDirectory = Path.Combine(Path.GetTempPath(), "Beanstalk");
 	
 	private static readonly sbyte* EmptyString = ConvertString("");
@@ -338,6 +339,12 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	{
 		//LLVM.InitializeAllTargets();
 		currentTarget = target ?? new Target(new string(LLVM.GetDefaultTargetTriple()));
+		var cpu = currentTarget.triple.Arch switch
+		{
+			Triple.ArchType.x86_64 => "x86-64",
+			_ => null
+		};
+		
 		var passManager = LLVM.CreatePassManager();
 		
 		// Todo: Handle optimization levels correctly
@@ -357,8 +364,8 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 		outputPath = Path.Combine(binDirectory, Path.GetFileName(outputPath));
 		
 		var sourceFiles = new List<string> { };
-		if (GenerateBackend(dlls, dllImportFunctions) is { } backend)
-			sourceFiles.Add(backend);
+		//if (GenerateBackend(dlls, dllImportFunctions) is { } backend)
+		//	sourceFiles.Add(backend);
 		
 		foreach (var ast in asts)
 		{
@@ -375,7 +382,17 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			expectedType = null;
 			
 			LLVM.SetTarget(currentModule, currentTarget.triple.CString());
+			//var dataLayout = LLVM.CreateTargetDataLayout();
+			//LLVM.SetModuleDataLayout(currentModule, dataLayout);
 			LLVM.SetDataLayout(currentModule, ConvertString(Triple.GetDataLayout(currentTarget.triple.ToString())));
+			
+			if (cpu is not null)
+			{
+				const string targetCpuAttr = "target-cpu";
+				currentTargetCpuAttr = LLVM.CreateStringAttribute(currentContext, ConvertString(targetCpuAttr),
+					(uint)targetCpuAttr.Length,
+					ConvertString(cpu), (uint)cpu.Length);
+			}
 			
 			while (currentPass < CodeGenerationPass.Complete)
 			{
@@ -631,7 +648,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 						FileName = linker,
 						Arguments = $"{string.Join(' ', sourceFiles)} kernel32.lib {noStdArg} {targetArg} " +
 						            $"-out:{outputPath} {linkArgs} {entryArg} -incremental:no " +
-						            $"",
+						            $"-subsystem:console",
 						WindowStyle = ProcessWindowStyle.Hidden,
 						UseShellExecute = false
 					};
@@ -685,6 +702,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 	
 	private static sbyte* ConvertUnicodeString(string text, out uint length)
 	{
+		// Todo: This doesn't create an unmanaged array, and that's a problem!
 		var bytes = Encoding.UTF8.GetBytes($"{text}\0");
 		length = (uint)bytes.LongLength;
 		fixed (byte* p = bytes)
@@ -1233,25 +1251,31 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			return;
 		
 		// initDLLs declaration
-		var (initDllsType, initDllsFunction) = BuildInitDLLs(currentContext, currentModule);
+		//var (initDllsType, initDllsFunction) = BuildInitDLLs(currentContext, currentModule);
 		
 		// freeDLLs declaration
-		var (freeDllsType, freeDllsFunction) = BuildFreeDLLs(currentContext, currentModule);
+		//var (freeDllsType, freeDllsFunction) = BuildFreeDLLs(currentContext, currentModule);
 		
 		// Creation
-		var entryParams = new LLVMOpaqueType*[2];
-		entryParams[0] = LLVM.Int32Type();
-		entryParams[1] = LLVM.PointerType(LLVM.PointerType(LLVM.Int8Type(), 0u), 0u);
+		var entryParams = new[]
+		{
+			LLVM.Int32Type(), // i32 argc
+			LLVM.PointerType(LLVM.PointerType(LLVM.Int8Type(), 0u), 0u) // char** argv 
+		};
+		
 		var entryType = LLVM.FunctionType(LLVM.Int32Type(), ConvertArrayToPointer(entryParams), 2u, LLVMBool.False);
 		var entryPoint = LLVM.AddFunction(currentModule, ConvertString("main"), entryType);
+		LLVM.SetUnnamedAddress(entryPoint, LLVMUnnamedAddr.LLVMGlobalUnnamedAddr);
+		
+		if (currentTargetCpuAttr != (LLVMOpaqueAttributeRef*)nint.Zero)
+			LLVM.AddAttributeAtIndex(entryPoint, LLVMAttributeIndex.LLVMAttributeFunctionIndex, currentTargetCpuAttr);
 		
 		// Positioning
 		var entryBody = LLVM.AppendBasicBlockInContext(currentContext, entryPoint, EmptyString);
 		LLVM.PositionBuilderAtEnd(currentBuilder, entryBody);
-		
 		// DLL Initialize
-		var noArgs = ConvertArrayToPointer(new LLVMOpaqueValue*[] { });
-		LLVM.BuildCall2(currentBuilder, initDllsType.value, initDllsFunction.value, noArgs, 0u, EmptyString);
+		//var noArgs = ConvertArrayToPointer(new LLVMOpaqueValue*[] { });
+		//LLVM.BuildCall2(currentBuilder, initDllsType.value, initDllsFunction.value, noArgs, 0u, EmptyString);
 		
 		// Instructions
 		var context = new FunctionContext(entryStatement.entrySymbol!, entryType, entryPoint, false);
@@ -1262,7 +1286,7 @@ public unsafe partial class CodeGenerator : ResolvedStatementNode.IVisitor, Reso
 			if (statement is ResolvedReturnStatement)
 			{
 				// DLL Free
-				LLVM.BuildCall2(currentBuilder, freeDllsType.value, freeDllsFunction.value, noArgs, 0u, EmptyString);
+				//LLVM.BuildCall2(currentBuilder, freeDllsType.value, freeDllsFunction.value, noArgs, 0u, EmptyString);
 			}
 			
 			statement.Accept(this);

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using Beanstalk.Analysis.Diagnostics;
 using Beanstalk.Analysis.Semantics;
@@ -76,6 +77,9 @@ internal static class Compiler
 		else
 			await Compile(args);
 	}
+	
+	[DllImport("kernel32.dll")]
+	private static extern unsafe int FormatMessageW(int flags, nuint source, int messageId, int languageId, char* buffer, int size, nuint vargs);
 	
 	private static void Print(object? obj)
 	{
@@ -406,7 +410,18 @@ internal static class Compiler
 			
 			default:
 				Console.ForegroundColor = ConsoleColor.DarkRed;
-				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode}");
+				var msgBuffer = new char[256];
+				string msg;
+				unsafe
+				{
+					fixed (char* ptr = msgBuffer)
+					{
+						var chars = FormatMessageW(0x00001000 | 0x00000200, 0, process.ExitCode, 0, ptr, msgBuffer.Length, 0);
+						msg = new string(msgBuffer, 0, chars);
+					}
+				}
+				
+				await Console.Out.WriteLineAsync($"\nApplication finished with exit code {process.ExitCode} ({msg.Trim()})");
 				Console.ResetColor();
 				break;
 		}

@@ -43,7 +43,7 @@ Todo:
 		- the '?' means the function is only called if it is not null (ex: the variable stores a lambda)
 	- add '!' postfix unary operator that converts T? into T for remaining control flow branch
 */
-import bs.io.Console
+//import bs.io.Console
 
 module hello.World
 
@@ -91,6 +91,15 @@ import("kernel32.dll")
 	var fun SetConsoleOutputCodePage(codePage:uint32) =>
 		external(entry = "SetConsoleOutputCP")
 		
+	var fun GetConsoleOutputCodePage() :> uint32 =>
+		external(entry = "GetConsoleOutputCP")
+		
+	var fun GetConsoleCodePage() :> uint32 =>
+		external(entry = "GetConsoleCP")
+		
+	var fun GetLastError() :> int32 =>
+		external(entry = "GetLastError")
+		
 	fun GetStdHandle(handle:uint32) :> nuint =>
 		external(entry = "GetStdHandle")
 }
@@ -99,10 +108,11 @@ entry()
 {
 	SetConsoleOutputCodePage(CodePageUTF8)
 	let stdOut = GetStdHandle(StdOut)
-	WriteConsole(stdOut, "Hello, World!\n", 14u32, null, 0u64)
-	WriteConsole(stdOut, "This is a test", 14u32, null, 0u64)
+	WriteConsole(stdOut, "Hello, World!\n", 15u32, null, 0u64)
+	WriteConsole(stdOut, "This is a test", 15u32, null, 0u64)
 	
-	Console.Out.PrintLine("Hello, World!")
+	//Console.Out.PrintLine("Hello, World!")
 	
+	//GetConsoleOutputCodePage()
 	return 0
 }

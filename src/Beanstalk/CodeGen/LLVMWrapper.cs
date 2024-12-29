@@ -133,6 +133,7 @@ public unsafe partial class CodeGenerator
 		if (externalFunctionSymbol.DllImportSource is { } dllImportSource)
 		{
 			LLVM.SetDLLStorageClass(externalFunction, LLVMDLLStorageClass.LLVMDLLImportStorageClass);
+			LLVM.SetUnnamedAddress(externalFunction, LLVMUnnamedAddr.LLVMGlobalUnnamedAddr);
 		}
 		
 		valueSymbols.Add(externalFunctionSymbol, new OpaqueValue(externalFunction));
