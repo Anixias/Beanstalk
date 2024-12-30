@@ -165,7 +165,7 @@ public sealed class Parser
 			var imports = ParseImportStatements(tokens, ref position);
 			
 			ModuleStatement? module = null;
-			if (Peek(tokens, position) == TokenType.KeywordModule)
+			if (Peek(tokens, position) == TokenType.KeywordMod)
 				module = ParseModuleStatement(tokens, ref position, false);
 			
 			var statements = ParseTopLevelStatements(tokens, ref position);
@@ -286,7 +286,7 @@ public sealed class Parser
 	
 	private ModuleStatement ParseModuleStatement(IReadOnlyList<Token> tokens, ref int position, bool requireBody)
 	{
-		var startToken = Consume(tokens, ref position, null, TokenType.KeywordModule);
+		var startToken = Consume(tokens, ref position, null, TokenType.KeywordMod);
 		
 		var scope = new List<Token>();
 		var range = startToken.Range;
@@ -629,7 +629,7 @@ public sealed class Parser
 		[NotNullWhen(true)] out ConstructorDeclarationStatement? constructorDeclaration)
 	{
 		constructorDeclaration = null;
-		if (Peek(tokens, position) != TokenType.KeywordConstructor)
+		if (Peek(tokens, position) != TokenType.KeywordNew)
 			return false;
 		
 		constructorDeclaration = ParseConstructorDeclaration(tokens, ref position);
@@ -639,7 +639,7 @@ public sealed class Parser
 	private ConstructorDeclarationStatement ParseConstructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
-		var constructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordConstructor);
+		var constructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordNew);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 		
@@ -664,7 +664,7 @@ public sealed class Parser
 		[NotNullWhen(true)] out DestructorDeclarationStatement? destructorDeclaration)
 	{
 		destructorDeclaration = null;
-		if (Peek(tokens, position) != TokenType.KeywordDestructor)
+		if (Peek(tokens, position) != TokenType.KeywordFree)
 			return false;
 		
 		destructorDeclaration = ParseDestructorDeclaration(tokens, ref position);
@@ -674,7 +674,7 @@ public sealed class Parser
 	private DestructorDeclarationStatement ParseDestructorDeclaration(IReadOnlyList<Token> tokens,
 		ref int position)
 	{
-		var destructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordDestructor);
+		var destructorKeyword = Consume(tokens, ref position, null, TokenType.KeywordFree);
 		
 		Consume(tokens, ref position, null, TokenType.OpLeftParen);
 		Consume(tokens, ref position, null, TokenType.OpRightParen);
@@ -1074,7 +1074,7 @@ public sealed class Parser
 		var syncTokens = new[]
 		{
 			TokenType.EndOfFile,
-			TokenType.KeywordModule,
+			TokenType.KeywordMod,
 			TokenType.KeywordEntry,
 			TokenType.KeywordFun,
 			TokenType.KeywordDef,
@@ -1115,7 +1115,7 @@ public sealed class Parser
 	private StatementNode ParseTopLevelStatement(IReadOnlyList<Token> tokens, ref int position)
 	{
 		var peek = Peek(tokens, position);
-		if (peek == TokenType.KeywordModule)
+		if (peek == TokenType.KeywordMod)
 		{
 			return ParseModuleStatement(tokens, ref position, true);
 		}

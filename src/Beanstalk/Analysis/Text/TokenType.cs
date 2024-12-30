@@ -119,7 +119,7 @@ public sealed class TokenType
 	};
 	
 	public static readonly TokenType KeywordImport = CreateKeyword("import");
-	public static readonly TokenType KeywordModule = CreateKeyword("module");
+	public static readonly TokenType KeywordMod = CreateKeyword("mod");
 	public static readonly TokenType KeywordEntry = CreateKeyword("entry");
 	public static readonly TokenType KeywordLet = CreateKeyword("let");
 	public static readonly TokenType KeywordVar = CreateKeyword("var");
@@ -141,8 +141,7 @@ public sealed class TokenType
 	public static readonly TokenType KeywordElse = CreateKeyword("else");
 	public static readonly TokenType KeywordNew = CreateKeyword("new");
 	public static readonly TokenType KeywordStatic = CreateKeyword("static");
-	public static readonly TokenType KeywordConstructor = CreateKeyword("constructor");
-	public static readonly TokenType KeywordDestructor = CreateKeyword("destructor");
+	public static readonly TokenType KeywordFree = CreateKeyword("free");
 	public static readonly TokenType KeywordStruct = CreateKeyword("struct");
 	public static readonly TokenType KeywordInterface = CreateKeyword("interface");
 	public static readonly TokenType KeywordImplicit = CreateKeyword("implicit");
@@ -157,22 +156,22 @@ public sealed class TokenType
 	// Native data types
 	public static readonly TokenType KeywordInt = CreateKeyword("int");
 	public static readonly TokenType KeywordUInt = CreateKeyword("uint");
-	public static readonly TokenType KeywordNInt = CreateKeyword("nint");
-	public static readonly TokenType KeywordNUInt = CreateKeyword("nuint");
-	public static readonly TokenType KeywordInt8 = CreateKeyword("int8");
-	public static readonly TokenType KeywordUInt8 = CreateKeyword("uint8");
-	public static readonly TokenType KeywordInt16 = CreateKeyword("int16");
-	public static readonly TokenType KeywordUInt16 = CreateKeyword("uint16");
-	public static readonly TokenType KeywordInt32 = CreateKeyword("int32");
-	public static readonly TokenType KeywordUInt32 = CreateKeyword("uint32");
-	public static readonly TokenType KeywordInt64 = CreateKeyword("int64");
-	public static readonly TokenType KeywordUInt64 = CreateKeyword("uint64");
-	public static readonly TokenType KeywordInt128 = CreateKeyword("int128");
-	public static readonly TokenType KeywordUInt128 = CreateKeyword("uint128");
+	public static readonly TokenType KeywordNInt = CreateKeyword("isize");
+	public static readonly TokenType KeywordNUInt = CreateKeyword("usize");
+	public static readonly TokenType KeywordInt8 = CreateKeyword("i8");
+	public static readonly TokenType KeywordUInt8 = CreateKeyword("u8");
+	public static readonly TokenType KeywordInt16 = CreateKeyword("i16");
+	public static readonly TokenType KeywordUInt16 = CreateKeyword("u16");
+	public static readonly TokenType KeywordInt32 = CreateKeyword("i32");
+	public static readonly TokenType KeywordUInt32 = CreateKeyword("u32");
+	public static readonly TokenType KeywordInt64 = CreateKeyword("i64");
+	public static readonly TokenType KeywordUInt64 = CreateKeyword("u64");
+	public static readonly TokenType KeywordInt128 = CreateKeyword("i128");
+	public static readonly TokenType KeywordUInt128 = CreateKeyword("u128");
 	public static readonly TokenType KeywordFloat = CreateKeyword("float");
-	public static readonly TokenType KeywordFloat32 = CreateKeyword("float32");
-	public static readonly TokenType KeywordFloat64 = CreateKeyword("float64");
-	public static readonly TokenType KeywordFloat128 = CreateKeyword("float128");
+	public static readonly TokenType KeywordFloat32 = CreateKeyword("f32");
+	public static readonly TokenType KeywordFloat64 = CreateKeyword("f64");
+	public static readonly TokenType KeywordFloat128 = CreateKeyword("f128");
 	public static readonly TokenType KeywordFixed = CreateKeyword("fixed");
 	public static readonly TokenType KeywordFixed32 = CreateKeyword("fixed32");
 	public static readonly TokenType KeywordFixed64 = CreateKeyword("fixed64");
@@ -200,12 +199,11 @@ public sealed class TokenType
 	public static readonly ImmutableArray<TokenType> ValidDataTypes =
 		NativeDataTypes.Append(Identifier).ToImmutableArray();
 	
-	public static TokenType OpReturnType => OpColonRight;
+	public static TokenType OpReturnType => OpColon;
 	public static readonly TokenType OpEllipsis = CreateOperator("...");
 	public static readonly TokenType OpColonColon = CreateOperator("::");
 	public static readonly TokenType OpDoubleArrow = CreateOperator("=>");
 	public static readonly TokenType OpColon = CreateOperator(":");
-	public static readonly TokenType OpColonRight = CreateOperator(":>");
 	public static readonly TokenType OpLeftParen = CreateOperator("(");
 	public static readonly TokenType OpRightParen = CreateOperator(")");
 	public static readonly TokenType OpQuestionLeftBracket = CreateOperator("?[");
